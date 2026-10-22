@@ -1,0 +1,22 @@
+[
+  {
+    "file": "dataio.py",
+    "sha256": "34AA71CF5AC375216EB478FF912ABADC62FC46B3770A5384C2F17E2567C6845D"
+  },
+  {
+    "file": "securedata.py",
+    "sha256": "744E6772FA2B168518478DDA3A9E601085A2B400292CA855AA9ABDD88DE2AC50"
+  },
+  {
+    "file": "store.py",
+    "sha256": "C9D2B7884DD4D3344FD522053F9D4C1788635B28BC2FB9189A107E664210FEC7",
+    "compatibleSha256": [
+      "10A1E6E100312A17662D6F2EAF7E3D0DC8554D661DD58C8FEDBD4CBC5A667213"
+    ],
+    "compatibilityNote": "CulinaryOS 0.2.0 source archive: identical executable code; only the explanatory FIFO comment differs. Do not replace the installed file."
+  },
+  {
+    "file": "syncworker.py",
+    "sha256": "0E9F1A963C65220384F338D61A8E5E485A729187B15D9EF6127D0A12F8FFAD7D"
+  }
+]

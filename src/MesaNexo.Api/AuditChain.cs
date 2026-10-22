@@ -1,0 +1,23 @@
+using System.Text.Json.Nodes;
+using MesaNexo.Core;
+using static MesaNexo.Core.Rules;
+namespace MesaNexo.Api;
+public sealed partial class BranchService
+{
+    static JsonObject EvidenceValue(JsonObject d)
+    {
+        var o=new JsonObject();foreach(var key in new[]{"id","kind","siteId","tableId","visitId","unitId","name","productId","ingredientId","warehouseId","recipeVersionId","cost","costMethod","reference","type","requestedBy","actor","decidedBy","waiterId","reason","unlockReason","unlockBy","approvedBy","senderId","receiverId","status","amount","price","quantity","value","discount","method","expected","counted","difference","total","gross","tax","paid","balance","cash","card","transfer","at","closedAt"})if(d.TryGetPropertyValue(key,out var value))o[key]=value?.DeepClone();return o;
+    }
+    void AppendAudit(BranchState s,string eventId,string actor,string fingerprint,string type)
+    {
+        var immutable=new[]{"audit","recipeversion","stockmovement","cashadjustment"};
+        foreach(var prior in s.Original.Values){var d=prior.Data;if(immutable.Contains(d.S("kind"))||(d.S("kind")=="cash"&&d.S("status")=="closed"))Need(s.Records.TryGetValue(prior.RecordId,out var now)&&J.Canonical(d)==J.Canonical(now),"Registro histórico inalterable por la aplicación",409);}
+        var changes=s.Changes().Where(x=>!new[]{"meta","user","session","device","grant","invoicetoken","customer","address","fiscal"}.Contains(x.Obj("data").S("kind"))).ToArray();var details=new JsonArray();foreach(var c in changes.Take(20)){s.Original.TryGetValue(c.S("record_id"),out var before);var after=c.Obj("data");details.Add(J.O("record",c.S("record_id"),"before",before is null?null:EvidenceValue(before.Data),"after",EvidenceValue(after),"beforeHash",before is null?null:J.Hash(J.Canonical(before.Data)),"afterHash",J.Hash(J.Canonical(after))));}
+        var a=J.O("id",eventId,"siteId",siteId,"actor",actor,"operation",type,"at",J.Now(),"requestFingerprint",fingerprint,"sequence",s.Meta.L("auditSequence")+1,"previousHash",s.Meta.S("auditHead"),"changes",details,"changedCount",changes.Length,"changeDigest",J.Hash(J.Canonical(new JsonArray(changes.Select(c=>(JsonNode)J.O("record",c.S("record_id"),"hash",J.Hash(J.Canonical(c.Obj("data"))))).ToArray()))));
+        a["hash"]=J.Hash(J.Canonical(a));s.Meta["auditHead"]=a.S("hash");s.Meta["auditSequence"]=a.L("sequence");s.Add("audit",a);
+    }
+    public async Task<JsonObject> VerifyAudit(string token,CancellationToken ct=default)
+    {
+        var s=await Load(ct);Role(Authenticate(s,token,out _),"manager");string previous="";long seq=0;var valid=true;foreach(var a in s.List("audit").Where(x=>x.ContainsKey("sequence")).OrderBy(x=>x.L("sequence"))){var copy=(JsonObject)a.DeepClone();copy.Remove("hash");copy.Remove("kind");valid&=a.L("sequence")==++seq&&a.S("previousHash")==previous&&a.S("hash")==J.Hash(J.Canonical(copy));previous=a.S("hash");}valid&=seq==s.Meta.L("auditSequence")&&previous==s.Meta.S("auditHead");return J.O("valid",valid,"chainedRecords",seq,"legacyRecords",s.List("audit").Count(x=>!x.ContainsKey("sequence")),"scope","Detección local; conservar anclas y respaldos fuera del equipo");
+    }
+}

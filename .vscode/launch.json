@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Culinary Restaurant · React/CSS + Tauri",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File deploy/Start-Hybrid.ps1",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "Culinary: compilar Tauri"
+    },
+    {
+      "name": "Culinary Restaurant · Avalonia (compatibilidad)",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/MesaNexo.Desktop/bin/Debug/net10.0/CulinaryRestaurant.dll",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "Culinary: compilar",
+      "console": "internalConsole"
+    }
+  ]
+}

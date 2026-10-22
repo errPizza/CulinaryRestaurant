@@ -1,0 +1,22 @@
+[Unit]
+Description=Culinary Restaurant proveedor central (no servidor de sucursal)
+After=network.target
+[Service]
+Type=simple
+User=mesanexo-central
+Group=mesanexo-central
+StateDirectory=mesanexo-central
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/opt/mesanexo-central/MesaNexo.Central --provider-id IDENTIDAD-PROVEEDOR
+LoadCredential=central-data-key:/etc/mesanexo-central/secrets/data.key
+LoadCredential=tls-key:/etc/mesanexo-central/secrets/tls.key
+LoadCredential=tls-cert:/etc/mesanexo-central/secrets/tls.crt
+LoadCredential=release-signing-key:/etc/mesanexo-central/secrets/release-signing.pem
+ProtectSystem=strict
+ProtectHome=yes
+NoNewPrivileges=yes
+PrivateTmp=yes
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target

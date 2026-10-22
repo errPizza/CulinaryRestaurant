@@ -1,0 +1,1976 @@
+[
+  {
+    "test": "readiness rejects uninitialized store",
+    "result": "passed"
+  },
+  {
+    "test": "readiness checks real store and site identity",
+    "result": "passed"
+  },
+  {
+    "test": "snapshots never expose password hashes",
+    "result": "passed"
+  },
+  {
+    "test": "kitchen cannot access financial reports",
+    "result": "passed"
+  },
+  {
+    "test": "backend denies kitchen cash access",
+    "result": "passed"
+  },
+  {
+    "test": "provider operations isolated from branch",
+    "result": "passed"
+  },
+  {
+    "test": "protected draft survives session object persistence",
+    "result": "passed"
+  },
+  {
+    "test": "command creates individual durable units",
+    "result": "passed"
+  },
+  {
+    "test": "authenticated TLS SignalR snapshot retains kitchen financial restrictions",
+    "result": "passed"
+  },
+  {
+    "test": "SignalR reconnect retrieves a consistent durable snapshot",
+    "result": "passed"
+  },
+  {
+    "test": "kitchen receives real command without historical prices",
+    "result": "passed"
+  },
+  {
+    "test": "partial preparation persists exactly two notices",
+    "result": "passed"
+  },
+  {
+    "test": "overpayment rejected",
+    "result": "passed"
+  },
+  {
+    "test": "complete notice is durable and unique",
+    "result": "passed"
+  },
+  {
+    "test": "kitchen cannot confirm waiter delivery",
+    "result": "passed"
+  },
+  {
+    "test": "login to table to kitchen to delivery to payment to close complete",
+    "result": "passed"
+  },
+  {
+    "test": "card payments remain manual records",
+    "result": "passed"
+  },
+  {
+    "test": "lost response is shown as uncertain",
+    "result": "passed"
+  },
+  {
+    "test": "operation UUID saved before network confirmation",
+    "result": "passed"
+  },
+  {
+    "test": "client and storage restart reconcile lost response without resend",
+    "result": "passed"
+  },
+  {
+    "test": "restart did not duplicate command units",
+    "result": "passed"
+  },
+  {
+    "test": "concurrent terminals serialize table occupancy",
+    "result": "passed"
+  },
+  {
+    "test": "split and merge preserve units without kitchen resend",
+    "result": "passed"
+  },
+  {
+    "test": "previous waiter loses authority after transfer",
+    "result": "passed"
+  },
+  {
+    "test": "cancel cannot make paid account negative",
+    "result": "passed"
+  },
+  {
+    "test": "confirmed units preserve historical price",
+    "result": "passed"
+  },
+  {
+    "test": "reservation two-hour collision is enforced",
+    "result": "passed"
+  },
+  {
+    "test": "site identity verified before credentials",
+    "result": "passed"
+  },
+  {
+    "test": "TLS rejects mismatched SAN hostname",
+    "result": "passed"
+  },
+  {
+    "test": "TLS rejects server outside provisioned CA",
+    "result": "passed"
+  },
+  {
+    "test": "deactivating user revokes existing sessions",
+    "result": "passed"
+  },
+  {
+    "test": "central unavailable never implies WAN down",
+    "result": "passed"
+  },
+  {
+    "test": "Culinary Restaurant branding visible at 360px",
+    "result": "passed"
+  },
+  {
+    "test": "Culinary Restaurant branding visible at 834px",
+    "result": "passed"
+  },
+  {
+    "test": "Culinary Restaurant branding visible at 1440px",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Resumen del turno at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Mesas y cuentas at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Cocina en vivo at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Bandeja de pendientes at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Cat\u00E1logo at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Caja at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Reportes at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Equipo y dispositivos at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Restaurante at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Reservaciones at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Evaluaciones at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Promociones at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Soporte at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Historial at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Inventario at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Delivery y clientes at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Arqueo ciego at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Impresi\u00F3n at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Fiscal at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Resumen del turno at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Mesas y cuentas at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Cocina en vivo at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Bandeja de pendientes at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Cat\u00E1logo at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Caja at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Reportes at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Equipo y dispositivos at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Restaurante at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Reservaciones at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Evaluaciones at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Promociones at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Soporte at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Historial at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Inventario at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Delivery y clientes at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Arqueo ciego at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Impresi\u00F3n at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Fiscal at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Resumen del turno at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Mesas y cuentas at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "desktop header retains one row at 1440px like graphite prototype",
+    "result": "passed"
+  },
+  {
+    "test": "headings and amounts retain interface typeface inside button templates",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Cocina en vivo at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Bandeja de pendientes at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Cat\u00E1logo at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Caja at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Reportes at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Equipo y dispositivos at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Restaurante at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Reservaciones at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Evaluaciones at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Promociones at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Soporte at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Historial at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Inventario at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Delivery y clientes at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Arqueo ciego at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Impresi\u00F3n at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Fiscal at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "desktop header controls stay inside 1280px viewport",
+    "result": "passed"
+  },
+  {
+    "test": "desktop header controls stay inside 1360px viewport",
+    "result": "passed"
+  },
+  {
+    "test": "default Windows window retains compact desktop header",
+    "result": "passed"
+  },
+  {
+    "test": "account drawer at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "product customization at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "account drawer at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "product customization at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "account drawer at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "product customization at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native product editor opens as focused dialog",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 0",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 1",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 2",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 3",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 4",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 5",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 6",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 7",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 8",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 9",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 10",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 11",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 12",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 13",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 14",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 15",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 16",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 17",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 18",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 19",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 20",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 21",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 22",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 23",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 24",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 25",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 26",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 27",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 28",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 29",
+    "result": "passed"
+  },
+  {
+    "test": "Escape dismisses dialog",
+    "result": "passed"
+  },
+  {
+    "test": "native product editor retains configured historical tax rate for editing",
+    "result": "passed"
+  },
+  {
+    "test": "reduced motion keeps content visible immediately without transforms",
+    "result": "passed"
+  },
+  {
+    "test": "native entrance starts with reference opacity before first frame",
+    "result": "passed"
+  },
+  {
+    "test": "native entrance visibly interpolates opacity and translation between frames",
+    "result": "passed"
+  },
+  {
+    "test": "native entrance finishes visible at final layout position",
+    "result": "passed"
+  },
+  {
+    "test": "local server inaccessible produces no success",
+    "result": "passed"
+  },
+  {
+    "test": "provider snapshot excludes secret hashes",
+    "result": "passed"
+  },
+  {
+    "test": "permanent license cannot become usage subscription",
+    "result": "passed"
+  },
+  {
+    "test": "included support cannot be charged again",
+    "result": "passed"
+  },
+  {
+    "test": "provider retry is durably idempotent",
+    "result": "passed"
+  },
+  {
+    "test": "signed update verifies real bytes and bound recipient",
+    "result": "passed"
+  },
+  {
+    "test": "update for another branch rejected",
+    "result": "passed"
+  },
+  {
+    "test": "source-code purchase does not include provider updates",
+    "result": "passed"
+  },
+  {
+    "test": "receiver restart deduplicates persisted event and returns committed ACK",
+    "result": "passed"
+  },
+  {
+    "test": "same event ID with changed body rejected",
+    "result": "passed"
+  },
+  {
+    "test": "mTLS certificate cannot impersonate another branch",
+    "result": "passed"
+  },
+  {
+    "test": "real HTTPS mTLS receiver accepts provisioned branch certificate",
+    "result": "passed"
+  },
+  {
+    "test": "receiver denies client without mTLS certificate",
+    "result": "passed"
+  },
+  {
+    "test": "provider backup action creates an authenticated encrypted snapshot",
+    "result": "passed"
+  },
+  {
+    "test": "signed central policy applies to the correct local branch over mTLS",
+    "result": "passed"
+  },
+  {
+    "test": "same policy revision cannot be reapplied",
+    "result": "passed"
+  },
+  {
+    "test": "module withdrawal reaches backend authorization through signed policy",
+    "result": "passed"
+  },
+  {
+    "test": "branch ticket projected in same transaction as central event receipt",
+    "result": "passed"
+  },
+  {
+    "test": "provider reply is pending until branch durable acceptance",
+    "result": "passed"
+  },
+  {
+    "test": "signed provider reply persisted exactly once at branch",
+    "result": "passed"
+  },
+  {
+    "test": "branch echo durably acknowledges provider support reply",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Portafolio at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Planes y m\u00F3dulos at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Licencias y servicios at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Actualizaciones at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Soporte at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Respaldos at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Historial at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Portafolio at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Planes y m\u00F3dulos at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Licencias y servicios at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Actualizaciones at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Soporte at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Respaldos at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Historial at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Portafolio at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Planes y m\u00F3dulos at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Licencias y servicios at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Actualizaciones at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Soporte at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Respaldos at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Historial at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "separate public PWA serves branded responsive shell over verified TLS",
+    "result": "passed"
+  },
+  {
+    "test": "public host exposes no private operational state endpoint",
+    "result": "passed"
+  },
+  {
+    "test": "public catalog comes from authenticated branch event projection",
+    "result": "passed"
+  },
+  {
+    "test": "HTTPS checkout retry persists one pending order before branch acceptance",
+    "result": "passed"
+  },
+  {
+    "test": "outgoing mTLS stores proposal without issuing acceptance ACK",
+    "result": "passed"
+  },
+  {
+    "test": "cloud import cannot create sale before authorized local review",
+    "result": "passed"
+  },
+  {
+    "test": "signed cloud envelope rejects tenant tampering before domain mutation",
+    "result": "passed"
+  },
+  {
+    "test": "branch restart replays durable local ACK without duplicating order units",
+    "result": "passed"
+  },
+  {
+    "test": "outgoing mTLS ACK marks central order accepted only after local commit",
+    "result": "passed"
+  },
+  {
+    "test": "central deduplicates acceptance ACK after lost response",
+    "result": "passed"
+  },
+  {
+    "test": "customer status becomes locally accepted only after acknowledged durable receipt",
+    "result": "passed"
+  },
+  {
+    "test": "public host rejects cross-origin checkout request",
+    "result": "passed"
+  },
+  {
+    "test": "public table page resolves the QR token and shows the published menu",
+    "result": "passed"
+  },
+  {
+    "test": "unknown table token is rejected by the public page",
+    "result": "passed"
+  },
+  {
+    "test": "central keeps only the hash of the table code",
+    "result": "passed"
+  },
+  {
+    "test": "QR bill request reaches the waiter and is acknowledged",
+    "result": "passed"
+  },
+  {
+    "test": "customer sees the waiter was notified",
+    "result": "passed"
+  },
+  {
+    "test": "QR order waits for the waiter before reaching the kitchen",
+    "result": "passed"
+  },
+  {
+    "test": "waiter confirmation sends the QR order to the table account",
+    "result": "passed"
+  },
+  {
+    "test": "confirmed QR order is acknowledged to the customer",
+    "result": "passed"
+  },
+  {
+    "test": "rotating the table QR invalidates the printed code",
+    "result": "passed"
+  },
+  {
+    "test": "tampered commercial policy rejected before persistence",
+    "result": "passed"
+  },
+  {
+    "test": "central outage preserves locally authorized branch readiness",
+    "result": "passed"
+  },
+  {
+    "test": "central restore validates encrypted snapshot and revokes restored sessions",
+    "result": "passed"
+  },
+  {
+    "test": "central provider metadata encrypted under independent key",
+    "result": "passed"
+  },
+  {
+    "test": "migration export validates explicit synthetic copy and creates backup report",
+    "result": "passed"
+  },
+  {
+    "test": "migration excludes legacy passwords and retains source backup",
+    "result": "passed"
+  },
+  {
+    "test": "migration imports financial history into real encrypted CulinaryOS store",
+    "result": "passed"
+  },
+  {
+    "test": "migrated users cannot authenticate with demo credentials",
+    "result": "passed"
+  },
+  {
+    "test": "repeat migration cannot overwrite existing branch records",
+    "result": "passed"
+  },
+  {
+    "test": "legacy AES-GCM backup requires its original key and format",
+    "result": "passed"
+  },
+  {
+    "test": "wrong legacy key never produces an imported plaintext",
+    "result": "passed"
+  },
+  {
+    "test": "Windows DPAPI encrypts durable client pending operation",
+    "result": "passed"
+  },
+  {
+    "test": "Windows vault survives new client instance with same operation id",
+    "result": "passed"
+  },
+  {
+    "test": "same UUID returns original command receipt",
+    "result": "passed"
+  },
+  {
+    "test": "operation UUID reuse with different payload rejected",
+    "result": "passed"
+  },
+  {
+    "test": "held units cannot skip course release",
+    "result": "passed"
+  },
+  {
+    "test": "extras and cooking snapshotted in confirmed unit",
+    "result": "passed"
+  },
+  {
+    "test": "duplicate extras rejected atomically",
+    "result": "passed"
+  },
+  {
+    "test": "fractional unit quantity rejected",
+    "result": "passed"
+  },
+  {
+    "test": "unsupported cooking term rejected",
+    "result": "passed"
+  },
+  {
+    "test": "authorized product replacement clears incompatible extras/cooking and restarts preparation",
+    "result": "passed"
+  },
+  {
+    "test": "fractional percentage rounds to whole minor units",
+    "result": "passed"
+  },
+  {
+    "test": "accounts with discounts require reconciliation before split",
+    "result": "passed"
+  },
+  {
+    "test": "moving table preserves kitchen command and releases old table for cleaning",
+    "result": "passed"
+  },
+  {
+    "test": "fractional cent payment rejected",
+    "result": "passed"
+  },
+  {
+    "test": "unavailable unit cannot make paid balance negative",
+    "result": "passed"
+  },
+  {
+    "test": "account cannot close before preparation and delivery",
+    "result": "passed"
+  },
+  {
+    "test": "cash close reconciles payment tip income expense and withdrawal",
+    "result": "passed"
+  },
+  {
+    "test": "proposed reservation requires explicit acceptance",
+    "result": "passed"
+  },
+  {
+    "test": "closed visit review can be simulated only once",
+    "result": "passed"
+  },
+  {
+    "test": "support consent allows only audited business preview",
+    "result": "passed"
+  },
+  {
+    "test": "support revocation applies immediately at branch server",
+    "result": "passed"
+  },
+  {
+    "test": "full-history report uses recorded integer totals and tips",
+    "result": "passed"
+  },
+  {
+    "test": "client update blocked while installation session remains active",
+    "result": "passed"
+  },
+  {
+    "test": "client update permitted only after local accounts and device session close",
+    "result": "passed"
+  },
+  {
+    "test": "quick ticket opens without table",
+    "result": "passed"
+  },
+  {
+    "test": "command atomically reserves exact ingredient quantities before cooking",
+    "result": "passed"
+  },
+  {
+    "test": "printed bill locks consumption at backend",
+    "result": "passed"
+  },
+  {
+    "test": "printed bill reopening needs reason",
+    "result": "passed"
+  },
+  {
+    "test": "equal split conserves total tax and deterministic residual cent",
+    "result": "passed"
+  },
+  {
+    "test": "financial splitting never duplicates cooking units",
+    "result": "passed"
+  },
+  {
+    "test": "subfolio prevents overpayment",
+    "result": "passed"
+  },
+  {
+    "test": "cash payment records exact change",
+    "result": "passed"
+  },
+  {
+    "test": "sale close and frozen recipe consumption job commit atomically once",
+    "result": "passed"
+  },
+  {
+    "test": "restart and competing workers consume stock exactly once",
+    "result": "passed"
+  },
+  {
+    "test": "completed stock job is not consumed again",
+    "result": "passed"
+  },
+  {
+    "test": "recipe graph rejects indirect cycles",
+    "result": "passed"
+  },
+  {
+    "test": "inventory rejects cross-dimension unit conversion",
+    "result": "passed"
+  },
+  {
+    "test": "inventory disallows negative available stock",
+    "result": "passed"
+  },
+  {
+    "test": "warehouse transfer requires distinct identified receiver",
+    "result": "passed"
+  },
+  {
+    "test": "dual approval transfers preserve aggregate stock",
+    "result": "passed"
+  },
+  {
+    "test": "uncertain physical print is never automatically retried",
+    "result": "passed"
+  },
+  {
+    "test": "physical job handling never repeats commercial payment",
+    "result": "passed"
+  },
+  {
+    "test": "blind cashier API hides expected totals and reconstructable financial sources",
+    "result": "passed"
+  },
+  {
+    "test": "blind operator cannot bypass restriction through report/export endpoint",
+    "result": "passed"
+  },
+  {
+    "test": "blind session rejects legacy nonblind close endpoint",
+    "result": "passed"
+  },
+  {
+    "test": "simultaneous blind closes produce one immutable close",
+    "result": "passed"
+  },
+  {
+    "test": "closed blind report remains hidden from operator",
+    "result": "passed"
+  },
+  {
+    "test": "cash adjustment preserves close and personal user access",
+    "result": "passed"
+  },
+  {
+    "test": "owner close notification persists locally without WAN",
+    "result": "passed"
+  },
+  {
+    "test": "courier assignment records responsibility without inventing payment",
+    "result": "passed"
+  },
+  {
+    "test": "courier liability clears only after authorized reconciliation",
+    "result": "passed"
+  },
+  {
+    "test": "local delivery tariff includes polygon boundary",
+    "result": "passed"
+  },
+  {
+    "test": "invoice URL uses opaque expiring token without ticket identifiers",
+    "result": "passed"
+  },
+  {
+    "test": "offline fiscal request never invents stamp or fiscal UUID",
+    "result": "passed"
+  },
+  {
+    "test": "cancellation releases only unprepared stock and durably queues prepared waste",
+    "result": "passed"
+  },
+  {
+    "test": "prepared cancellation never silently restores stock",
+    "result": "passed"
+  },
+  {
+    "test": "weighted average and FIFO retain different exact historical consumption costs",
+    "result": "passed"
+  },
+  {
+    "test": "web coupon is never silently applied as automatic promotion",
+    "result": "passed"
+  },
+  {
+    "test": "claimed uncertain physical effect is not executed twice by print service double",
+    "result": "passed"
+  },
+  {
+    "test": "synthetic PAC transport keeps sandbox label and exact historical CFDI total",
+    "result": "passed"
+  },
+  {
+    "test": "financial audit identifies changed product with before and after values",
+    "result": "passed"
+  },
+  {
+    "test": "append-only audit hash chain verifies across restarts",
+    "result": "passed"
+  },
+  {
+    "test": "audit verification detects altered encrypted historical record with unchanged chain anchor",
+    "result": "passed"
+  },
+  {
+    "test": "unknown domain operations do not commit",
+    "result": "passed"
+  },
+  {
+    "test": "modifier group without options is rejected",
+    "result": "passed"
+  },
+  {
+    "test": "product keeps validated modifier groups",
+    "result": "passed"
+  },
+  {
+    "test": "required modifier blocks the command",
+    "result": "passed"
+  },
+  {
+    "test": "unknown modifier option is rejected",
+    "result": "passed"
+  },
+  {
+    "test": "modifier group maximum is enforced",
+    "result": "passed"
+  },
+  {
+    "test": "required cooking point blocks the command",
+    "result": "passed"
+  },
+  {
+    "test": "chosen modifiers add their price to the unit",
+    "result": "passed"
+  },
+  {
+    "test": "kitchen comments are sanitized and bounded",
+    "result": "passed"
+  },
+  {
+    "test": "dine-in command carries no take-out label",
+    "result": "passed"
+  },
+  {
+    "test": "kitchen sees modifiers without prices",
+    "result": "passed"
+  },
+  {
+    "test": "customer display banners are saved",
+    "result": "passed"
+  },
+  {
+    "test": "customer display accepts at most ten banners",
+    "result": "passed"
+  },
+  {
+    "test": "counter sale rejects insufficient cash",
+    "result": "passed"
+  },
+  {
+    "test": "counter sale charges the total and returns exact change",
+    "result": "passed"
+  },
+  {
+    "test": "take-out sale labels its command PARA LLEVAR",
+    "result": "passed"
+  },
+  {
+    "test": "cash sale pulses the cash drawer once",
+    "result": "passed"
+  },
+  {
+    "test": "card sale does not open the drawer",
+    "result": "passed"
+  },
+  {
+    "test": "prepaid sale stays open while food is pending",
+    "result": "passed"
+  },
+  {
+    "test": "prepaid counter sale closes itself after hand-over",
+    "result": "passed"
+  },
+  {
+    "test": "pickup time in the past is rejected",
+    "result": "passed"
+  },
+  {
+    "test": "pickup keeps scheduled time and name",
+    "result": "passed"
+  },
+  {
+    "test": "pickup command is labelled PARA LLEVAR for packing",
+    "result": "passed"
+  },
+  {
+    "test": "waiters are reassigned by zone only",
+    "result": "passed"
+  },
+  {
+    "test": "several tables merge into one master account",
+    "result": "passed"
+  },
+  {
+    "test": "linked tables stay occupied while the master account is open",
+    "result": "passed"
+  },
+  {
+    "test": "closing the master account releases every linked table",
+    "result": "passed"
+  },
+  {
+    "test": "zone reassignment requires an existing zone",
+    "result": "passed"
+  },
+  {
+    "test": "supplier is saved with normalized RFC and credit days",
+    "result": "passed"
+  },
+  {
+    "test": "duplicate supplier name is rejected",
+    "result": "passed"
+  },
+  {
+    "test": "invalid supplier RFC is rejected",
+    "result": "passed"
+  },
+  {
+    "test": "maximum below minimum is rejected",
+    "result": "passed"
+  },
+  {
+    "test": "ingredient keeps exact min/max and preferred supplier",
+    "result": "passed"
+  },
+  {
+    "test": "purchase order is numbered and totaled",
+    "result": "passed"
+  },
+  {
+    "test": "an order alone does not change stock",
+    "result": "passed"
+  },
+  {
+    "test": "receipt adds the quantity actually received at its cost",
+    "result": "passed"
+  },
+  {
+    "test": "receipt records differences against the order",
+    "result": "passed"
+  },
+  {
+    "test": "receipt creates a payable due after the supplier credit days",
+    "result": "passed"
+  },
+  {
+    "test": "last purchase cost is kept per kilogram",
+    "result": "passed"
+  },
+  {
+    "test": "an order cannot be received twice",
+    "result": "passed"
+  },
+  {
+    "test": "no suggestion while stock is above minimum",
+    "result": "passed"
+  },
+  {
+    "test": "suggestion refills to maximum and creates the supplier order",
+    "result": "passed"
+  },
+  {
+    "test": "pending suggested order is counted as incoming",
+    "result": "passed"
+  },
+  {
+    "test": "cancelled order no longer counts as incoming",
+    "result": "passed"
+  },
+  {
+    "test": "register pays suppliers only in cash",
+    "result": "passed"
+  },
+  {
+    "test": "partial payment keeps the payable open",
+    "result": "passed"
+  },
+  {
+    "test": "payment above the balance is rejected",
+    "result": "passed"
+  },
+  {
+    "test": "cash payment from the register settles the payable and records the expense",
+    "result": "passed"
+  },
+  {
+    "test": "physical count values shortage and surplus at average cost",
+    "result": "passed"
+  },
+  {
+    "test": "count leaves stock at the counted quantity",
+    "result": "passed"
+  },
+  {
+    "test": "variance separates theoretical consumption, waste and count differences",
+    "result": "passed"
+  },
+  {
+    "test": "variance rejects an inverted period",
+    "result": "passed"
+  },
+  {
+    "test": "duplicate expense account is rejected",
+    "result": "passed"
+  },
+  {
+    "test": "petty cash cannot go negative",
+    "result": "passed"
+  },
+  {
+    "test": "expenses are charged to their account from petty cash or register",
+    "result": "passed"
+  },
+  {
+    "test": "petty replenishment and register expense leave the drawer",
+    "result": "passed"
+  },
+  {
+    "test": "cash sale is blocked while the drawer is over the limit",
+    "result": "passed"
+  },
+  {
+    "test": "card sale is still allowed over the cash limit",
+    "result": "passed"
+  },
+  {
+    "test": "withdrawal cannot exceed the drawer",
+    "result": "passed"
+  },
+  {
+    "test": "partial withdrawal reports the remaining drawer cash",
+    "result": "passed"
+  },
+  {
+    "test": "crossing the cash limit queues an owner notice",
+    "result": "passed"
+  },
+  {
+    "test": "next cash sale waits for the withdrawal",
+    "result": "passed"
+  },
+  {
+    "test": "sequential PIN is rejected",
+    "result": "passed"
+  },
+  {
+    "test": "repeated-digit PIN is rejected",
+    "result": "passed"
+  },
+  {
+    "test": "a waiter cannot set another person\u0027s PIN",
+    "result": "passed"
+  },
+  {
+    "test": "a waiter sets their own PIN",
+    "result": "passed"
+  },
+  {
+    "test": "PIN hash never leaves the server; waiters only see who has a PIN",
+    "result": "passed"
+  },
+  {
+    "test": "a waiter cannot approve without a manager",
+    "result": "passed"
+  },
+  {
+    "test": "wrong PIN is refused and the failed attempt is kept",
+    "result": "passed"
+  },
+  {
+    "test": "manager PIN approves the request on the waiter\u0027s device",
+    "result": "passed"
+  },
+  {
+    "test": "every PIN attempt is logged with the requesting employee",
+    "result": "passed"
+  },
+  {
+    "test": "PIN cannot authorize operations outside the allowed list",
+    "result": "passed"
+  },
+  {
+    "test": "five wrong PINs lock the manager PIN for five minutes",
+    "result": "passed"
+  },
+  {
+    "test": "counter sale permission can be removed from a waiter",
+    "result": "passed"
+  },
+  {
+    "test": "merge permission can be removed from a waiter",
+    "result": "passed"
+  },
+  {
+    "test": "waiters do not see purchases, payables, expenses or PIN logs",
+    "result": "passed"
+  },
+  {
+    "test": "price list rejects adjustments below \u221290 %",
+    "result": "passed"
+  },
+  {
+    "test": "automatic dine-in list applies percent and fixed prices",
+    "result": "passed"
+  },
+  {
+    "test": "counter channel keeps catalog price when no list covers it",
+    "result": "passed"
+  },
+  {
+    "test": "a pinned base price and a manual event list apply to later commands only",
+    "result": "passed"
+  },
+  {
+    "test": "only a manager changes the price list of an account",
+    "result": "passed"
+  },
+  {
+    "test": "closing a customer\u0027s account earns 5 % cashback in the wallet",
+    "result": "passed"
+  },
+  {
+    "test": "wallet payment cannot exceed the balance",
+    "result": "passed"
+  },
+  {
+    "test": "counter sale paid with wallet debits the balance",
+    "result": "passed"
+  },
+  {
+    "test": "cash top-up enters the drawer as income",
+    "result": "passed"
+  },
+  {
+    "test": "wallet redemptions do not earn cashback",
+    "result": "passed"
+  },
+  {
+    "test": "wallet payment requires a linked customer",
+    "result": "passed"
+  },
+  {
+    "test": "wallet cannot go negative",
+    "result": "passed"
+  },
+  {
+    "test": "waiters can see wallet balances to charge them",
+    "result": "passed"
+  },
+  {
+    "test": "employee meal applies the staff discount and charges payroll",
+    "result": "passed"
+  },
+  {
+    "test": "kitchen sees employee meals labelled EMPLEADO",
+    "result": "passed"
+  },
+  {
+    "test": "monthly payroll cap is enforced",
+    "result": "passed"
+  },
+  {
+    "test": "a waiter registers their own meal paid by card",
+    "result": "passed"
+  },
+  {
+    "test": "a waiter cannot charge another employee\u0027s meal",
+    "result": "passed"
+  },
+  {
+    "test": "payroll charges are marked deducted per month",
+    "result": "passed"
+  },
+  {
+    "test": "X reading summarizes payments by method without closing",
+    "result": "passed"
+  },
+  {
+    "test": "X reading does not create a closing record",
+    "result": "passed"
+  },
+  {
+    "test": "Z close requires the cash drawer to be closed",
+    "result": "passed"
+  },
+  {
+    "test": "Z close is numbered, stores its totals and queues printing",
+    "result": "passed"
+  },
+  {
+    "test": "Z summary keeps a digest for tamper detection",
+    "result": "passed"
+  },
+  {
+    "test": "ABC ranks products by revenue into A, B and C",
+    "result": "passed"
+  },
+  {
+    "test": "ABC computes margin from the recipe cost",
+    "result": "passed"
+  },
+  {
+    "test": "table QR requires the public address first",
+    "result": "passed"
+  },
+  {
+    "test": "table QR link carries a random token in the fragment",
+    "result": "passed"
+  },
+  {
+    "test": "QR is stable until rotated",
+    "result": "passed"
+  },
+  {
+    "test": "only a manager prints table QR codes",
+    "result": "passed"
+  },
+  {
+    "test": "QR bill request notifies the table\u0027s waiter",
+    "result": "passed"
+  },
+  {
+    "test": "rotated QR codes are rejected",
+    "result": "passed"
+  },
+  {
+    "test": "QR order waits for the waiter\u0027s confirmation",
+    "result": "passed"
+  },
+  {
+    "test": "simulators refuse to run until activated",
+    "result": "passed"
+  },
+  {
+    "test": "live mode stays locked without contract and server credentials",
+    "result": "passed"
+  },
+  {
+    "test": "only a manager turns integrations on",
+    "result": "passed"
+  },
+  {
+    "test": "activating a simulator stores default settings",
+    "result": "passed"
+  },
+  {
+    "test": "PMS rejects duplicated rooms",
+    "result": "passed"
+  },
+  {
+    "test": "approved terminal charge records a card payment with authorization code",
+    "result": "passed"
+  },
+  {
+    "test": "declined card leaves no payment",
+    "result": "passed"
+  },
+  {
+    "test": "a terminal without response stays uncertain",
+    "result": "passed"
+  },
+  {
+    "test": "a new charge waits until the silent one is reconciled",
+    "result": "passed"
+  },
+  {
+    "test": "reconciling applies the silent charge once",
+    "result": "passed"
+  },
+  {
+    "test": "a reconciled charge cannot be applied again",
+    "result": "passed"
+  },
+  {
+    "test": "a silent charge on an account paid meanwhile is reversed, not doubled",
+    "result": "passed"
+  },
+  {
+    "test": "declined card at the counter is rejected",
+    "result": "passed"
+  },
+  {
+    "test": "a declined counter sale leaves no account behind",
+    "result": "passed"
+  },
+  {
+    "test": "counter card sale goes through the simulated terminal",
+    "result": "passed"
+  },
+  {
+    "test": "payment link is created and sent to the customer by simulated WhatsApp",
+    "result": "passed"
+  },
+  {
+    "test": "only one pending link per account",
+    "result": "passed"
+  },
+  {
+    "test": "paid webhook records an online payment",
+    "result": "passed"
+  },
+  {
+    "test": "a link cannot be paid twice",
+    "result": "passed"
+  },
+  {
+    "test": "payment arriving for a covered account is refunded",
+    "result": "passed"
+  },
+  {
+    "test": "failed online payment records nothing",
+    "result": "passed"
+  },
+  {
+    "test": "room without a registered guest is rejected",
+    "result": "passed"
+  },
+  {
+    "test": "guest surname must match the room",
+    "result": "passed"
+  },
+  {
+    "test": "room credit limit is enforced",
+    "result": "passed"
+  },
+  {
+    "test": "room charge posts to the simulated Opera folio as a room payment",
+    "result": "passed"
+  },
+  {
+    "test": "a room without limit takes the remaining balance",
+    "result": "passed"
+  },
+  {
+    "test": "simulated geocoder is deterministic and stays inside the radius",
+    "result": "passed"
+  },
+  {
+    "test": "address can be located by the simulated geocoder",
+    "result": "passed"
+  },
+  {
+    "test": "delivery stores distance and ETA from the simulated map",
+    "result": "passed"
+  },
+  {
+    "test": "dispatch notifies the customer by simulated WhatsApp",
+    "result": "passed"
+  },
+  {
+    "test": "pickup message waits until the whole order is ready",
+    "result": "passed"
+  },
+  {
+    "test": "customer is told once that the pickup order is ready",
+    "result": "passed"
+  },
+  {
+    "test": "simulated incoming call is matched to the customer by phone",
+    "result": "passed"
+  },
+  {
+    "test": "unknown caller is shown as a new number",
+    "result": "passed"
+  },
+  {
+    "test": "simulated Uber Eats order arrives pending",
+    "result": "passed"
+  },
+  {
+    "test": "waiters see platform orders to hand them off",
+    "result": "passed"
+  },
+  {
+    "test": "only a manager accepts platform orders",
+    "result": "passed"
+  },
+  {
+    "test": "accepted platform order reaches the kitchen labelled UBER EATS",
+    "result": "passed"
+  },
+  {
+    "test": "platform pays the order minus the 25 % commission",
+    "result": "passed"
+  },
+  {
+    "test": "handoff waits for the kitchen",
+    "result": "passed"
+  },
+  {
+    "test": "handing off to the platform courier closes the prepaid order",
+    "result": "passed"
+  },
+  {
+    "test": "rejected platform order creates no account",
+    "result": "passed"
+  },
+  {
+    "test": "disabled platforms receive no orders",
+    "result": "passed"
+  },
+  {
+    "test": "auto-accept sends platform orders straight to the kitchen",
+    "result": "passed"
+  },
+  {
+    "test": "menu sync publishes the available products",
+    "result": "passed"
+  },
+  {
+    "test": "simulated PAC applies the SAT generic RFC rule",
+    "result": "passed"
+  },
+  {
+    "test": "simulated stamp returns a UUID labelled without fiscal validity",
+    "result": "passed"
+  },
+  {
+    "test": "stamped invoice is e-mailed (simulated) to the receiver",
+    "result": "passed"
+  },
+  {
+    "test": "a stamped invoice blocks reopening the ticket",
+    "result": "passed"
+  },
+  {
+    "test": "simulated PAC cancels a simulated CFDI",
+    "result": "passed"
+  },
+  {
+    "test": "auto-stamp times new fiscal requests immediately",
+    "result": "passed"
+  },
+  {
+    "test": "owner notice is sent by simulated e-mail",
+    "result": "passed"
+  },
+  {
+    "test": "without the printer simulator jobs stay pending",
+    "result": "passed"
+  },
+  {
+    "test": "printer simulator resolves pending jobs as simulated",
+    "result": "passed"
+  },
+  {
+    "test": "drawer pulse is simulated, not physical",
+    "result": "passed"
+  },
+  {
+    "test": "test message validates the recipient",
+    "result": "passed"
+  },
+  {
+    "test": "test WhatsApp is recorded as simulated",
+    "result": "passed"
+  },
+  {
+    "test": "waiters only see which simulators are on, not logs, messages or guests",
+    "result": "passed"
+  },
+  {
+    "test": "waiters only see terminal charges of their own accounts",
+    "result": "passed"
+  },
+  {
+    "test": "every simulated operation is written to the integration log",
+    "result": "passed"
+  },
+  {
+    "test": "X reading separates online, room and platform payments",
+    "result": "passed"
+  },
+  {
+    "test": "central owner authorization binds tenant and membership",
+    "result": "passed"
+  },
+  {
+    "test": "owner cannot query another tenant branch",
+    "result": "passed"
+  },
+  {
+    "test": "login cannot switch to foreign branch",
+    "result": "passed"
+  },
+  {
+    "test": "mTLS fingerprint resolves one compound tenant branch scope",
+    "result": "passed"
+  },
+  {
+    "test": "unregistered certificate has no tenant scope",
+    "result": "passed"
+  },
+  {
+    "test": "public slug projects only its authorized tenant catalog even with equal product IDs",
+    "result": "passed"
+  },
+  {
+    "test": "cloud checkout remains pending before local durable acceptance",
+    "result": "passed"
+  },
+  {
+    "test": "repeated public checkout persists one order and command",
+    "result": "passed"
+  },
+  {
+    "test": "order capability cannot cross tenants",
+    "result": "passed"
+  },
+  {
+    "test": "order status requires correct opaque capability",
+    "result": "passed"
+  },
+  {
+    "test": "foreign branch cannot acknowledge order",
+    "result": "passed"
+  },
+  {
+    "test": "acceptance ACK is durable and deduplicated",
+    "result": "passed"
+  },
+  {
+    "test": "online order cannot enter local queue without verified provider payment",
+    "result": "passed"
+  },
+  {
+    "test": "owner analytics names source and synchronization lag",
+    "result": "passed"
+  },
+  {
+    "test": "analytics API service denies foreign tenant before reading projections",
+    "result": "passed"
+  },
+  {
+    "test": "central restart preserves locally accepted order status",
+    "result": "passed"
+  },
+  {
+    "test": "public invoice capability queues request without inventing fiscal stamp",
+    "result": "passed"
+  },
+  {
+    "test": "public invoice token is single use",
+    "result": "passed"
+  },
+  {
+    "test": "public coupon validates eligibility and rounds discount to exact minor units",
+    "result": "passed"
+  },
+  {
+    "test": "verified provider webhook cannot cross tenant branch boundary",
+    "result": "passed"
+  },
+  {
+    "test": "provider payment webhook and retry atomically queue one verified order",
+    "result": "passed"
+  },
+  {
+    "test": "delivery integration contract authenticates and deduplicates through commerce domain",
+    "result": "passed"
+  },
+  {
+    "test": "delivery hub rejects altered webhook before domain translation",
+    "result": "passed"
+  },
+  {
+    "test": "public order personal data is encrypted at rest",
+    "result": "passed"
+  },
+  {
+    "test": "tenant session revocation enforced by backend",
+    "result": "passed"
+  },
+  {
+    "test": "PAC adapter uses documented sandbox REST endpoint",
+    "result": "passed",
+    "transport": "synthetic HTTP handler; no external calls"
+  },
+  {
+    "test": "PAC adapter uses documented sandbox REST endpoint",
+    "result": "passed",
+    "transport": "synthetic HTTP handler; no external calls"
+  },
+  {
+    "test": "PAC transport failure never invents fiscal stamp",
+    "result": "passed",
+    "transport": "synthetic HTTP handler; no external calls"
+  },
+  {
+    "test": "PAC retry preserves original Folio and Date",
+    "result": "passed",
+    "transport": "synthetic HTTP handler; no external calls"
+  },
+  {
+    "test": "successful HTTP without TaxStamp is not reported as stamped",
+    "result": "passed",
+    "transport": "synthetic HTTP handler; no external calls"
+  },
+  {
+    "test": "PAC cancellation pending remains pending until provider confirmation",
+    "result": "passed",
+    "transport": "synthetic HTTP handler; no external calls"
+  },
+  {
+    "test": "Stripe webhook verifies raw body timestamp and HMAC",
+    "result": "passed",
+    "transport": "synthetic HTTP handler; no external calls"
+  },
+  {
+    "test": "Stripe webhook rejects tampered raw body",
+    "result": "passed",
+    "transport": "synthetic HTTP handler; no external calls"
+  },
+  {
+    "test": "Stripe webhook rejects expired signature",
+    "result": "passed",
+    "transport": "synthetic HTTP handler; no external calls"
+  },
+  {
+    "test": "FCM contract defaults to validation only and OAuth Bearer",
+    "result": "passed",
+    "transport": "synthetic HTTP handler; no external calls"
+  },
+  {
+    "test": "FCM adapter reads provider message identifier without claiming device delivery",
+    "result": "passed",
+    "transport": "synthetic HTTP handler; no external calls"
+  },
+  {
+    "test": "APNs contract uses sandbox HTTP2 topic and signed token",
+    "result": "passed",
+    "transport": "synthetic HTTP handler; no external calls"
+  },
+  {
+    "test": "APNs accepted identifier is distinct from device delivery",
+    "result": "passed",
+    "transport": "synthetic HTTP handler; no external calls"
+  },
+  {
+    "test": "AMI parser recognizes caller-ID event only; fixture is not a real call",
+    "result": "passed",
+    "transport": "synthetic HTTP handler; no external calls"
+  },
+  {
+    "test": "explicit schema migration creates service-owned encrypted backup before commit",
+    "result": "passed"
+  },
+  {
+    "test": "schema migration is idempotent without resetting records",
+    "result": "passed"
+  },
+  {
+    "test": "encrypted backup restores prior schema and users into isolated staging",
+    "result": "passed"
+  },
+  {
+    "test": "recovered original runtime retains pending outbox and branch readiness",
+    "result": "passed"
+  }
+]

@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+# One client per graphical user session. Closing it leaves the backend running.
+appdir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd -P)
+exec /usr/bin/flock -n -F "${XDG_RUNTIME_DIR:?Inicia una sesion grafica}/culinary-restaurant.lock" "$appdir/culinary-restaurant"

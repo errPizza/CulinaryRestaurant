@@ -1,0 +1,34 @@
+[
+  {
+    "test": "trusted running backend reused without recompiling its locked DLLs",
+    "result": "passed"
+  },
+  {
+    "test": "reuse does not change existing encrypted records",
+    "result": "passed"
+  },
+  {
+    "test": "stopped lab starts successfully from a fresh isolated build",
+    "result": "passed"
+  },
+  {
+    "test": "new API artifacts stay outside the shared Debug directory",
+    "result": "passed"
+  },
+  {
+    "test": "restart preserves initialized users and business records",
+    "result": "passed"
+  },
+  {
+    "test": "second launch reuses the same backend instead of spawning a duplicate",
+    "result": "passed"
+  },
+  {
+    "test": "untrusted occupied port is rejected instead of bypassing TLS or starting another backend",
+    "result": "passed"
+  },
+  {
+    "test": "rejected foreign service cannot reinitialize stored data",
+    "result": "passed"
+  }
+]

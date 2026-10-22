@@ -1,0 +1,19 @@
+{
+  "warning": "TEST VECTOR ONLY. Never use this key or nonce in production.",
+  "key_b64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+  "plaintext_utf8": "{\"amount_minor\":12500,\"currency\":\"MXN\",\"text\":\"Prueba de interoperabilidad\"}",
+  "context": {
+    "site_id": "vector-site",
+    "purpose": "record",
+    "record_id": "record-1",
+    "version": 1
+  },
+  "aad_utf8": "{\"context\":{\"purpose\":\"record\",\"record_id\":\"record-1\",\"site_id\":\"vector-site\",\"version\":1},\"header\":{\"alg\":\"xchacha20poly1305-ietf\",\"kid\":\"vector-v1\",\"v\":1}}",
+  "envelope": {
+    "v": 1,
+    "alg": "xchacha20poly1305-ietf",
+    "kid": "vector-v1",
+    "nonce": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYX",
+    "ciphertext": "5eBuEv+n49psKU+gpCCK0np1HZXN+j+ICmhN01POjHtkJPu8D0UlRqHw1i3tG3EyA8+HOyZUn3wn8v1J6pUrhNdSntFh9Q3hTTsEvIueirSd6XdXVniJtTQeJZk="
+  }
+}

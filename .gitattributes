@@ -1,0 +1,8 @@
+runtime/mesanexo_ipc.py text eol=lf
+deploy/install-runtime-extension.py text eol=lf
+deploy/culinaryos/*.py text eol=lf
+deploy/culinaryos/*.sh text eol=lf
+deploy/culinaryos/CulinaryRestaurant text eol=lf
+
+deploy/culinaryos/kiosk/** text eol=lf
+src/MesaNexo.Web/src-tauri/src/*.rs text eol=lf

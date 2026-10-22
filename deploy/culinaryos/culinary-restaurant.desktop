@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Culinary Restaurant
+Comment=Mesas, cocina y administracion del restaurante
+Exec=/opt/culinaryos-app/client/CulinaryRestaurant
+Icon=culinary-restaurant
+Terminal=false
+Categories=Office;
+StartupWMClass=culinary-restaurant

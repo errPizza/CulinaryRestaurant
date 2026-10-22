@@ -1,0 +1,8 @@
+{
+  "version":1,"mode":"server",
+  "ui_argv":["/opt/culinaryos-app/client/CulinaryRestaurant"],
+  "backend_argv":["/opt/culinaryos-app/backend/MesaNexo.Api","--site","IDENTIDAD-REAL","--port","8443"],
+  "port":8443,"readiness_socket":"/run/culinaryos-app/ready.sock",
+  "tls_ca_file":"/etc/culinaryos/site-ca.crt",
+  "credentials":{"tls-key":"/etc/culinaryos/secrets/app-tls.key","tls-cert":"/etc/culinaryos/secrets/app-tls.crt"}
+}

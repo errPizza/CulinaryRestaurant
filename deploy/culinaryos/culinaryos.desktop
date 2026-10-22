@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Culinary Restaurant
+Comment=Iniciar Culinary Restaurant con la sesion de CulinaryOS
+Exec=/usr/bin/python3 /usr/local/lib/culinaryos/apphost.py session
+Icon=culinary-restaurant
+Terminal=false
+OnlyShowIn=XFCE;

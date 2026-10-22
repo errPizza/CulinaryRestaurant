@@ -1,0 +1,10 @@
+{
+  "identifier": "main",
+  "description": "Only the packaged main window may call the narrow .NET bridge. No filesystem, shell or HTTP plugins.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default"
+  ]
+}

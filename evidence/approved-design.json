@@ -1,0 +1,31 @@
+{
+  "result": "passed",
+  "approvedByUser": true,
+  "approvalDate": "2026-10-16",
+  "appliedToClient": true,
+  "webScenariosPassed": 9,
+  "managerPagesChecked": [
+    "catalog",
+    "cash",
+    "inventory",
+    "delivery",
+    "printing",
+    "fiscal",
+    "reports",
+    "team",
+    "kitchen",
+    "history",
+    "reservations",
+    "reviews",
+    "promotions",
+    "settings",
+    "support"
+  ],
+  "desktopWidth": 1360,
+  "mobileWidth": 390,
+  "nativeSingleRevealControlVerified": true,
+  "nativeRevealScreenshot": "evidence/hybrid-native-secret.png",
+  "dialogFocusPreservesSelectedField": true,
+  "productionCredentialsUsed": false,
+  "externalAdaptersActivated": false
+}

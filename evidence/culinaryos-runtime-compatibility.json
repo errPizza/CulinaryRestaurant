@@ -1,0 +1,13 @@
+{
+  "file": "store.py",
+  "currentSha256": "c9d2b7884dd4d3344fd522053f9d4c1788635b28bc2fb9189a107e664210fec7",
+  "compatibleSha256": "10a1e6e100312a17662d6f2eaf7e3d0dc8554d661dd58c8fedbd4cbc5a667213",
+  "sourceArchive": "C:\\Users\\kikin\\Desktop\\CulinaryOS\\dist\\CulinaryOs-0.2.0-dev-source.zip",
+  "sourceArchiveSha256": "9fcc3a0eeac67cd77a87964ddf6251e3e55450763c668768f5e80d62310649b7",
+  "identicalPythonAst": true,
+  "onlyDifference": "One explanatory FIFO comment in Store.pending; no executable statements differ.",
+  "installedFileReplaced": false,
+  "hashValidationDisabled": false,
+  "diff": "--- historical/store.py\n+++ current/store.py\n@@ -104,7 +104,6 @@\n     def pending(self,now=None,limit=8):\n         now=time.time() if now is None else now\n         with self.connection() as db:\n-            # FIFO estricto: un evento pendiente bloquea posteriores hasta su ACK.\n             rows=db.execute(\"SELECT * FROM events WHERE acked IS NULL ORDER BY rowid LIMIT ?\",(limit,)).fetchall()\n         values=[]\n         for row in rows:\n",
+  "guestFingerprintConfirmed": false
+}

@@ -1,0 +1,1 @@
+<resources><style name="MesaTheme" parent="@style/Theme.AppCompat.DayNight.NoActionBar"><item name="android:windowActionBar">false</item><item name="android:windowNoTitle">true</item><item name="android:colorAccent">#F2B93B</item><item name="android:navigationBarColor">#202733</item><item name="android:statusBarColor">#202733</item></style></resources>

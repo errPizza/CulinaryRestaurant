@@ -1,0 +1,45 @@
+{
+  "appName": "Culinary Restaurant",
+  "version": "0.2.0",
+  "brandingEvidence": "branding.json",
+  "externalAdaptersActivation": "isolated-by-user-decision; no routes or activation commands",
+  "portalVisualEvidence": "portal-visual.json",
+  "nativeLayoutAssertionsPassed": 57,
+  "date": "2026-10-15",
+  "prototypeSourceFilesVerifiedUnchanged": 21,
+  "vendorRuntimeFilesVerifiedUnchanged": 4,
+  "integrationAssertionsPassed": 303,
+  "runtimeTestsPassed": 19,
+  "windowsPublishedStartup": {
+    "nativeStartup": true,
+    "framework": "Avalonia",
+    "windowTitle": "Culinary Restaurant",
+    "width": 1360,
+    "height": 900,
+    "platform": "Microsoft Windows 10.0.19045"
+  },
+  "packageChecks": {
+    "installer": "PE header verified; no installation performed",
+    "debian": "ar/tar payload and checksums checked by package_deb.py; dpkg not executed",
+    "android": "ZIP manifest, dex and CRC checked; see android-signature.txt for signature verification",
+    "browserEngineFilenameScan": "no matching engine filenames; native Avalonia architecture audited"
+  },
+  "notExecuted": [
+    "Debian VM integration, systemd, Unix socket and dpkg",
+    "Android device or emulator execution",
+    "iOS compilation or execution",
+    "Installer installation/uninstallation and full update cycle",
+    "Physical printer and physical power-cut recovery",
+    "PAC/bank/AMI/geocoding/FCM/APNs real or vendor sandbox execution"
+  ],
+  "privateStateExcluded": [
+    ".lab",
+    ".dotnet",
+    ".packages",
+    ".reference",
+    ".tools",
+    "bin",
+    "obj",
+    "private key files"
+  ]
+}

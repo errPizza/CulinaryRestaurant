@@ -1,0 +1,72 @@
+{
+  "purpose": "Review-only provider requirements; no runtime reads this file and no activation routes/commands exist",
+  "activation": "isolated-by-user-decision",
+  "credentialsIncluded": false,
+  "providers": {
+    "printer": {
+      "enabled": false,
+      "driver": "CUPS /usr/bin/lp",
+      "queue": "",
+      "drawerDriverOption": "",
+      "needs": "Administrator-verified queue and manufacturer option; physical validation"
+    },
+    "callerId": {
+      "enabled": false,
+      "contract": "Asterisk AMI TLS NewCallerid",
+      "host": "",
+      "port": 5039,
+      "username": "",
+      "secretFile": "",
+      "needs": "OS-trusted CA and hostname, least-privilege call events; no outbound call capability"
+    },
+    "geocoding": {
+      "enabled": false,
+      "contract": "Google Geocoding v3 JSON",
+      "apiKeyFile": "",
+      "needs": "Restricted server API key, provider consent, manually review coordinates"
+    },
+    "pac": {
+      "enabled": false,
+      "contract": "Facturama REST CFDI 4.0",
+      "environment": "sandbox",
+      "usernameFile": "",
+      "passwordFile": "",
+      "issuerConfigurationFile": "",
+      "needs": "Provider account, reviewed issuer/SAT catalog mappings, separate authorization before any network execution"
+    },
+    "stripe": {
+      "enabled": false,
+      "environment": "test",
+      "apiKeyFile": "",
+      "webhookSecretFile": "",
+      "needs": "Test account; signed event, exact intent/amount/currency/tenant binding. No payment route is activated"
+    },
+    "deliveryHub": {
+      "enabled": false,
+      "contract": "Culinary Hub v1 (own contract, not vendor compatibility)",
+      "sharedSecretFile": "",
+      "needs": "Agreed vendor contract and authenticated retries"
+    },
+    "fcm": {
+      "enabled": false,
+      "serviceAccountFile": "",
+      "projectId": "",
+      "validateOnly": true,
+      "needs": "Server OAuth and real device permission/registration, separately authorized"
+    },
+    "apns": {
+      "enabled": false,
+      "environment": "sandbox",
+      "teamId": "",
+      "keyId": "",
+      "topic": "",
+      "privateKeyFile": "",
+      "needs": "Apple credentials and real device token/permission"
+    },
+    "ownerEmail": {
+      "enabled": false,
+      "implementation": "not implemented; durable owner notice only",
+      "needs": "Provider contract and explicit send authorization"
+    }
+  }
+}

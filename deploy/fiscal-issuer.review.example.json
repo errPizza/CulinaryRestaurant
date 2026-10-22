@@ -1,0 +1,19 @@
+{
+  "purpose": "Review-only BuildCfdi mapping; no runtime activation",
+  "expeditionPlace": "REPLACE_WITH_5_DIGITS",
+  "paymentForm": "REVIEW_PER_TICKET",
+  "products": {
+    "REPLACE_PRODUCT_ID": {
+      "productCode": "REVIEW_SAT_8_DIGITS",
+      "unitCode": "REVIEW_SAT_UNIT",
+      "taxObject": "REVIEW_SAT",
+      "rateBps": 0
+    }
+  },
+  "delivery": {
+    "productCode": "REVIEW_SAT_8_DIGITS",
+    "unitCode": "REVIEW_SAT_UNIT",
+    "taxObject": "REVIEW_SAT",
+    "rateBps": 0
+  }
+}

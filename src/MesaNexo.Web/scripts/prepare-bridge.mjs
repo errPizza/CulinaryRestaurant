@@ -1,0 +1,12 @@
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import path from 'node:path';
+import fs from 'node:fs';
+const web=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),root=path.resolve(web,'../..');
+const platforms={win32:{rid:'win-x64',triple:'x86_64-pc-windows-msvc',suffix:'.exe'},linux:{rid:'linux-x64',triple:'x86_64-unknown-linux-gnu',suffix:''}};
+const target=platforms[process.platform];if(!target||process.arch!=='x64')throw new Error('El transporte de esta etapa admite Windows y Linux x64. Android/iOS requieren un puente móvil específico.');
+const output=path.join(root,'.lab','hybrid-bridge-'+target.rid),artifacts=path.join(root,'.lab','hybrid-bridge-build');
+const env={...process.env,DOTNET_CLI_HOME:path.join(root,'.dotnet'),NUGET_PACKAGES:path.join(root,'.packages'),DOTNET_NOLOGO:'1'};
+const publish=spawnSync('dotnet',['publish',path.join(root,'src/MesaNexo.Bridge'),'-c','Release','-r',target.rid,'--self-contained','true','-p:PublishSingleFile=true','-p:IncludeNativeLibrariesForSelfExtract=true','-p:ArtifactsPath='+artifacts,'-o',output,'--nologo'],{cwd:root,env,stdio:'inherit',windowsHide:true});
+if(publish.status!==0)process.exit(publish.status||1);
+const binaries=path.join(web,'src-tauri/binaries');fs.mkdirSync(binaries,{recursive:true});fs.copyFileSync(path.join(output,'culinary-bridge'+target.suffix),path.join(binaries,'culinary-bridge-'+target.triple+target.suffix));

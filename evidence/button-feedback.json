@@ -1,0 +1,58 @@
+[
+  {
+    "test": "rounded button surface and shadow have unclipped space at 360px",
+    "result": "passed"
+  },
+  {
+    "test": "rounded button surface and shadow have unclipped space at 1360px",
+    "result": "passed"
+  },
+  {
+    "test": "button gently enlarges on actual pointer hover",
+    "result": "passed"
+  },
+  {
+    "test": "native pointer press compresses the button",
+    "result": "passed"
+  },
+  {
+    "test": "animated mouse click executes its action exactly once",
+    "result": "passed"
+  },
+  {
+    "test": "keyboard click keeps the same single action behavior",
+    "result": "passed"
+  },
+  {
+    "test": "space key activates the button exactly once",
+    "result": "passed"
+  },
+  {
+    "test": "space key release retains the same click pop",
+    "result": "passed"
+  },
+  {
+    "test": "click pop visibly grows beyond the hover scale",
+    "result": "passed"
+  },
+  {
+    "test": "click pop returns smoothly to the hover size",
+    "result": "passed"
+  },
+  {
+    "test": "hover and pop never move surrounding controls",
+    "result": "passed"
+  },
+  {
+    "test": "reduced motion restores normal button size immediately",
+    "result": "passed"
+  },
+  {
+    "test": "reduced motion keeps clicks responsive without scaling",
+    "result": "passed"
+  },
+  {
+    "test": "disabled button performs no action or pop",
+    "result": "passed"
+  }
+]

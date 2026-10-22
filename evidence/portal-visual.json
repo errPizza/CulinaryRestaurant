@@ -1,0 +1,6 @@
+{
+  "status": "not-executed",
+  "reason": "CUA browser inventory empty; iab unavailable",
+  "fixture": "GET-only synthetic loopback, stopped",
+  "httpsIntegration": "CloudScenario real local TLS/mTLS in integration.json"
+}

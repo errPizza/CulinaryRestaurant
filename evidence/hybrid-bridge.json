@@ -1,0 +1,98 @@
+[
+  {
+    "test": "bridge rejects unknown commands",
+    "result": "passed"
+  },
+  {
+    "test": "bearer token stays outside the webview",
+    "result": "passed"
+  },
+  {
+    "test": "profile cannot change during an active session",
+    "result": "passed"
+  },
+  {
+    "test": "bridge reads actual encrypted runtime through trusted HTTPS",
+    "result": "passed"
+  },
+  {
+    "test": "committed receipt survives a missing renderer acknowledgement",
+    "result": "passed"
+  },
+  {
+    "test": "new mutation is blocked while renderer receipt is unacknowledged",
+    "result": "passed"
+  },
+  {
+    "test": "renderer cannot acknowledge a different UUID",
+    "result": "passed"
+  },
+  {
+    "test": "reconciliation returns the original committed operation after IPC response loss",
+    "result": "passed"
+  },
+  {
+    "test": "only confirmed matching receipt releases the mutation barrier",
+    "result": "passed"
+  },
+  {
+    "test": "draft is durably saved through the native vault",
+    "result": "passed"
+  },
+  {
+    "test": "confirmed command clears protected draft before pending receipt removal",
+    "result": "passed"
+  },
+  {
+    "test": "real payment keeps exact cents and cash change",
+    "result": "passed"
+  },
+  {
+    "test": "full bridge POS flow commits to encrypted runtime",
+    "result": "passed"
+  },
+  {
+    "test": "cached catalog is readable through the secure vault",
+    "result": "passed"
+  },
+  {
+    "test": "reduced motion preference survives native storage",
+    "result": "passed"
+  },
+  {
+    "test": "appearance follows the system until chosen",
+    "result": "passed"
+  },
+  {
+    "test": "dark appearance survives native storage",
+    "result": "passed"
+  },
+  {
+    "test": "unknown appearance is rejected",
+    "result": "passed"
+  },
+  {
+    "test": "signed updater cannot prepare a package with an active session",
+    "result": "passed"
+  },
+  {
+    "test": "installer cannot launch without a verified prepared package",
+    "result": "passed"
+  },
+  {
+    "test": "logout removes native session access",
+    "result": "passed"
+  },
+  {
+    "test": "CA fingerprint mismatch is rejected before credentials",
+    "result": "passed"
+  },
+  {
+    "test": "HTTP cannot replace trusted HTTPS",
+    "result": "passed"
+  },
+  {
+    "test": "DPAPI vault files do not expose plaintext credentials",
+    "result": "passed"
+  }
+]

@@ -1,0 +1,25 @@
+{
+  "bundle": {
+    "targets": [
+      "deb",
+      "appimage"
+    ],
+    "icon": [
+      "icons/icon.png"
+    ]
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Culinary Restaurant",
+        "width": 1360,
+        "height": 900,
+        "minWidth": 360,
+        "minHeight": 600,
+        "maximized": true,
+        "visible": false
+      }
+    ]
+  }
+}

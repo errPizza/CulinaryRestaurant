@@ -1,0 +1,574 @@
+[
+  {
+    "test": "Culinary Restaurant branding visible at 360px",
+    "result": "passed"
+  },
+  {
+    "test": "Culinary Restaurant branding visible at 834px",
+    "result": "passed"
+  },
+  {
+    "test": "Culinary Restaurant branding visible at 1440px",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Resumen del turno at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Mesas y cuentas at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Cocina en vivo at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Bandeja de pendientes at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Cat\u00E1logo at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Caja at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Reportes at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Equipo y dispositivos at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Restaurante at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Reservaciones at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Evaluaciones at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Promociones at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Soporte at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Historial at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Inventario at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Delivery y clientes at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Arqueo ciego at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Impresi\u00F3n at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Fiscal at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Resumen del turno at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Mesas y cuentas at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Cocina en vivo at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Bandeja de pendientes at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Cat\u00E1logo at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Caja at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Reportes at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Equipo y dispositivos at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Restaurante at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Reservaciones at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Evaluaciones at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Promociones at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Soporte at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Historial at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Inventario at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Delivery y clientes at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Arqueo ciego at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Impresi\u00F3n at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Fiscal at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Resumen del turno at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Mesas y cuentas at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "desktop header retains one row at 1440px like graphite prototype",
+    "result": "passed"
+  },
+  {
+    "test": "headings and amounts retain interface typeface inside button templates",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Cocina en vivo at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Bandeja de pendientes at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Cat\u00E1logo at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Caja at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Reportes at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Equipo y dispositivos at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Restaurante at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Reservaciones at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Evaluaciones at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Promociones at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Soporte at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Historial at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Inventario at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Delivery y clientes at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Arqueo ciego at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Impresi\u00F3n at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native layout Fiscal at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "desktop header controls stay inside 1280px viewport",
+    "result": "passed"
+  },
+  {
+    "test": "desktop header controls stay inside 1360px viewport",
+    "result": "passed"
+  },
+  {
+    "test": "default Windows window retains compact desktop header",
+    "result": "passed"
+  },
+  {
+    "test": "account drawer at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "product customization at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "account drawer at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "product customization at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "account drawer at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "product customization at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "native product editor opens as focused dialog",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 0",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 1",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 2",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 3",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 4",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 5",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 6",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 7",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 8",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 9",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 10",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 11",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 12",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 13",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 14",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 15",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 16",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 17",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 18",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 19",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 20",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 21",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 22",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 23",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 24",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 25",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 26",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 27",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 28",
+    "result": "passed"
+  },
+  {
+    "test": "dialog retains keyboard focus step 29",
+    "result": "passed"
+  },
+  {
+    "test": "Escape dismisses dialog",
+    "result": "passed"
+  },
+  {
+    "test": "native product editor retains configured historical tax rate for editing",
+    "result": "passed"
+  },
+  {
+    "test": "reduced motion keeps content visible immediately without transforms",
+    "result": "passed"
+  },
+  {
+    "test": "native entrance starts with reference opacity before first frame",
+    "result": "passed"
+  },
+  {
+    "test": "native entrance visibly interpolates opacity and translation between frames",
+    "result": "passed"
+  },
+  {
+    "test": "native entrance finishes visible at final layout position",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Portafolio at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Planes y m\u00F3dulos at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Licencias y servicios at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Actualizaciones at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Soporte at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Respaldos at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Historial at 360px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Portafolio at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Planes y m\u00F3dulos at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Licencias y servicios at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Actualizaciones at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Soporte at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Respaldos at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Historial at 834px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Portafolio at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Planes y m\u00F3dulos at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Licencias y servicios at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Actualizaciones at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Soporte at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Respaldos at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "provider layout Historial at 1440px fits horizontal viewport",
+    "result": "passed"
+  },
+  {
+    "test": "rounded button surface and shadow have unclipped space at 360px",
+    "result": "passed"
+  },
+  {
+    "test": "rounded button surface and shadow have unclipped space at 1360px",
+    "result": "passed"
+  },
+  {
+    "test": "button gently enlarges on actual pointer hover",
+    "result": "passed"
+  },
+  {
+    "test": "native pointer press compresses the button",
+    "result": "passed"
+  },
+  {
+    "test": "animated mouse click executes its action exactly once",
+    "result": "passed"
+  },
+  {
+    "test": "keyboard click keeps the same single action behavior",
+    "result": "passed"
+  },
+  {
+    "test": "space key activates the button exactly once",
+    "result": "passed"
+  },
+  {
+    "test": "space key release retains the same click pop",
+    "result": "passed"
+  },
+  {
+    "test": "click pop visibly grows beyond the hover scale",
+    "result": "passed"
+  },
+  {
+    "test": "click pop returns smoothly to the hover size",
+    "result": "passed"
+  },
+  {
+    "test": "hover and pop never move surrounding controls",
+    "result": "passed"
+  },
+  {
+    "test": "reduced motion restores normal button size immediately",
+    "result": "passed"
+  },
+  {
+    "test": "reduced motion keeps clicks responsive without scaling",
+    "result": "passed"
+  },
+  {
+    "test": "disabled button performs no action or pop",
+    "result": "passed"
+  }
+]

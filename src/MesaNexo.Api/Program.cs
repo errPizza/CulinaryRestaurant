@@ -1,0 +1,28 @@
+using System.Security.Cryptography.X509Certificates;
+using System.Text.Json.Nodes;
+using MesaNexo.Core;
+namespace MesaNexo.Api;
+public static class Program
+{
+    public static async Task<int> Main(string[] args)
+    {
+        try{
+            string? Arg(string key)=>args.SkipWhile(x=>x!="--"+key).Skip(1).FirstOrDefault();
+            if(Arg("decrypt-backup") is string legacy){await Migration.DecryptBackup(legacy,Arg("legacy-key")??throw new Exception(),Arg("output")??throw new Exception());Console.WriteLine("Copia descifrada y validada; protege la salida y continúa con el exportador.");return 0;}
+            var lab=args.Contains("--lab");var site=Arg("site")??(File.Exists("/etc/culinaryos/site.json")?JsonNode.Parse(File.ReadAllText("/etc/culinaryos/site.json"))!.S("site_id"):throw new InvalidOperationException("Especifica --site"));
+            var credentials=Environment.GetEnvironmentVariable("CREDENTIALS_DIRECTORY");
+            // Optional one-time Setup code delivered by systemd LoadCredential on a fresh CulinaryOS.
+            var setupFile=credentials is null?null:Path.Combine(credentials,"setup-code");var setupCode=setupFile is not null&&File.Exists(setupFile)?(await File.ReadAllTextAsync(setupFile)).Trim():null;
+            var options=new ApiOptions(site,Port:int.Parse(Arg("port")??"8443"),Bind:lab?"127.0.0.1":Arg("bind")??"0.0.0.0",Socket:Arg("socket")??"/run/culinaryos-data/store.sock",Credentials:credentials,LabPython:Arg("python"),LabScript:Arg("lab-script"),LabDirectory:Arg("lab-directory"),ReadySocket:lab?null:"/run/culinaryos-app/ready.sock",SetupCode:setupCode is {Length:>=32}?setupCode:null);
+            using var store=lab?new RuntimeStore(options.LabPython??throw new Exception(),options.LabScript??throw new Exception(),options.LabDirectory??throw new Exception(),site):new RuntimeStore(options.Socket);
+            var service=new BranchService(store,site,new Passwords());
+            if(args.Contains("--upgrade-schema")){Console.WriteLine((await service.UpgradeSchema()).ToJsonString());return 0;}
+            if(Arg("entitlement") is string entitlement){await service.ApplyEntitlement(entitlement,Arg("provider-public-key")??throw new Exception());Console.WriteLine("Contratación firmada aplicada localmente.");return 0;}
+            if(Arg("import-plan") is string plan){var result=await service.ImportPlan(plan,Arg("plan-sha256")??throw new Exception());Console.WriteLine(result.ToJsonString());return 0;}
+            if(Arg("initialize") is string initial){var config=JsonNode.Parse(await File.ReadAllTextAsync(initial))!.AsObject();await service.Initialize(config);Console.WriteLine("Sucursal inicializada. Retira el archivo de aprovisionamiento que contiene credenciales.");return 0;}
+            if(Arg("enrollment-file") is string enrollment){await service.RotateEnrollment((await File.ReadAllTextAsync(enrollment)).Trim());Console.WriteLine("Código de alta actualizado.");return 0;}
+            X509Certificate2 certificate=lab?LabCertificate.Create(options.LabDirectory!):X509Certificate2.CreateFromPemFile(Path.Combine(options.Credentials??throw new Exception("CREDENTIALS_DIRECTORY requerido"),"tls-cert"),Path.Combine(options.Credentials!,"tls-key"));
+            using(certificate){var policy=Arg("policy-url") is string policyUrl?new PolicyOptions(policyUrl,options.Credentials??throw new Exception(),Arg("provider-public-key")??throw new Exception()):null;await using var app=ApiHost.Build(options,store,certificate,policy,Arg("cloud-url") is string cloudUrl?new CloudOptions(cloudUrl,options.Credentials??throw new Exception(),Arg("provider-public-key")??throw new Exception()):null);await app.RunAsync();}return 0;
+        }catch(BusinessException e){Console.Error.WriteLine(e.Message);return 1;}catch(Exception){Console.Error.WriteLine("No se pudo iniciar Culinary Restaurant. Comprueba identidad, configuración, credenciales y runtime.");return 1;}
+    }
+}

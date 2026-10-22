@@ -1,0 +1,465 @@
+{
+  "version": "0.2.0",
+  "files": [
+    {
+      "path": "src/MesaNexo.Android/AndroidDiscovery.cs",
+      "sha256": "634a3efa18613d6865cc6ceb3322fe376aa126294ba9fbd10051ef34cbd132bd"
+    },
+    {
+      "path": "src/MesaNexo.Android/AndroidVault.cs",
+      "sha256": "3a5429c00616f66a8313085f319e93945c77060a7de42dc7e69268ef70f8c345"
+    },
+    {
+      "path": "src/MesaNexo.Android/Application.cs",
+      "sha256": "868d45b43e11f40036bdb2f99b2fc9843014c24c420d4378cc97c5c06e49378b"
+    },
+    {
+      "path": "src/MesaNexo.Android/MainActivity.cs",
+      "sha256": "f3e2c85c39512f4e712efe69aeb730767e042440a70c0c0b9f1f25e3924e4076"
+    },
+    {
+      "path": "src/MesaNexo.Android/MesaNexo.Android.csproj",
+      "sha256": "e576828ff0a42a903c7aee8e3d5ce801ceb3571f3804b157c54e364762d6f15b"
+    },
+    {
+      "path": "src/MesaNexo.Android/packages.lock.json",
+      "sha256": "273722bca83d7d52993d9f469177081c94a5ae66de57bf983a7aa428d592e0aa"
+    },
+    {
+      "path": "src/MesaNexo.Api/ApiHost.cs",
+      "sha256": "94dc8e0521901963934d403a7bab7d43cfc42a108cedf5bc0330b434502bbcd6"
+    },
+    {
+      "path": "src/MesaNexo.Api/AuditChain.cs",
+      "sha256": "66b085909b2083ea19da231c218001b5a920789334a9f85de14c18b226de629f"
+    },
+    {
+      "path": "src/MesaNexo.Api/BranchService.cs",
+      "sha256": "28085ef5b77499edecb3a1518a83b5108ce17cb49804fe94d712bd224e8ac170"
+    },
+    {
+      "path": "src/MesaNexo.Api/CloudInbox.cs",
+      "sha256": "71ea679f386c446606fb65ff6cc1e0da7b164eec18c23e78735097ab48775c60"
+    },
+    {
+      "path": "src/MesaNexo.Api/CloudPull.cs",
+      "sha256": "be228388d2552cc0a48336ca813d8ea020ecc082509c07b7ca3e9616dc427b7b"
+    },
+    {
+      "path": "src/MesaNexo.Api/Entitlements.cs",
+      "sha256": "5f96ad4bfb630b430a3dbda2da34cb8d7a6c0efc2fc51abd8328d449ccc5f08b"
+    },
+    {
+      "path": "src/MesaNexo.Api/FiscalProcessing.cs",
+      "sha256": "966ac24dfe0fcda8bb726fb3e2adbf7193865f8e7c66315030e15d5b8678903f"
+    },
+    {
+      "path": "src/MesaNexo.Api/Import.cs",
+      "sha256": "07d07b29679112d4569f1937287fa4d59f68e6abf98fe77771f98505760626e4"
+    },
+    {
+      "path": "src/MesaNexo.Api/InventoryWorker.cs",
+      "sha256": "7025b6b07361e1410ed2d1c86bb3eb5ec306c88086c7137ade61848ff29a2e04"
+    },
+    {
+      "path": "src/MesaNexo.Api/LiveHub.cs",
+      "sha256": "f1a4c9885c38057fef006f86eeef16bccf1fea072286fa7a3a842602beab9264"
+    },
+    {
+      "path": "src/MesaNexo.Api/MesaNexo.Api.csproj",
+      "sha256": "d6678da74e138d7dd8f3608b9df65eace9b5ffea40eaa8735d87aed93847d39b"
+    },
+    {
+      "path": "src/MesaNexo.Api/Migration.cs",
+      "sha256": "1053dbfd9f7ad2fe78cae51853422e51e6ee0b0c45bf099026079dd7e7c4b3b5"
+    },
+    {
+      "path": "src/MesaNexo.Api/packages.lock.json",
+      "sha256": "629eeda7b658200bdf56fb7b78c7ebe48652eedb29350502a9a84700be7f88a9"
+    },
+    {
+      "path": "src/MesaNexo.Api/Passwords.cs",
+      "sha256": "adf470bb5678e5d02898608e90534c5dbe1d5fb3220c14c1a11582c6f63c3068"
+    },
+    {
+      "path": "src/MesaNexo.Api/PolicyRefresh.cs",
+      "sha256": "aa0726cc06ea33b543419c61127a1a752d90982992bcfe21abd7c8820d14b15c"
+    },
+    {
+      "path": "src/MesaNexo.Api/PrintDriver.cs",
+      "sha256": "9a316453c451ad8f4fb0aaaf01a30b53a929bf5f572aa7c861a970e32c99391b"
+    },
+    {
+      "path": "src/MesaNexo.Api/Program.cs",
+      "sha256": "76c9041edaa590373847180894f5d966a46c1202e51538642923ece4c3bb7b98"
+    },
+    {
+      "path": "src/MesaNexo.Api/Reports.cs",
+      "sha256": "abc698efad3b226d7d3d130bf41275e3c75a646e1f34b31f160fbbe0036adb2e"
+    },
+    {
+      "path": "src/MesaNexo.Api/SchemaUpgrade.cs",
+      "sha256": "af5774af9cf97d2c0445a877f8de29007c313587b586d7d9118351799ffa010e"
+    },
+    {
+      "path": "src/MesaNexo.Api/Storage.cs",
+      "sha256": "3676b0ed68dc75c897e1e097679aa1df6caf6de3ff99bf478b71c34db6faf41c"
+    },
+    {
+      "path": "src/MesaNexo.Api/Telephony.cs",
+      "sha256": "bde3a09f3be0b673f2f9b0b62715b446a5f536cce4ecd7fa9b6855f6bd358569"
+    },
+    {
+      "path": "src/MesaNexo.Central/CentralStore.cs",
+      "sha256": "dd729b1bf1fa771725ec769c0b8a3f668a6c76b62bb1cbc91317a38501c7c300"
+    },
+    {
+      "path": "src/MesaNexo.Central/CommerceService.cs",
+      "sha256": "64ae186eb6516532547cd104d0648ab5cd1ac4c244af3c279c82a6af8b4b1204"
+    },
+    {
+      "path": "src/MesaNexo.Central/DeliveryHub.cs",
+      "sha256": "5b4f5865e4084827306c4e3df30eb556cfa1d027ee40679a5d709f115a084161"
+    },
+    {
+      "path": "src/MesaNexo.Central/MesaNexo.Central.csproj",
+      "sha256": "cc6a48ddd6a9e883898cb4b7b9f01911b06deceeb812052b0cce0adbe3cec37b"
+    },
+    {
+      "path": "src/MesaNexo.Central/packages.lock.json",
+      "sha256": "b9acaac44abab3b4a27f4a67436c3e89103aa0bd17681130f01cd8631937f507"
+    },
+    {
+      "path": "src/MesaNexo.Central/PaymentReceipts.cs",
+      "sha256": "f6db96b1585ae8471e1122a0625d38411006c7f27b795100f02c3563505e2909"
+    },
+    {
+      "path": "src/MesaNexo.Central/Program.cs",
+      "sha256": "c5f72d39bce6897e7ff9dab18efff415abdc911982d3fc311f958ae100f22ee0"
+    },
+    {
+      "path": "src/MesaNexo.Central/ProviderService.cs",
+      "sha256": "d86b09bed487bc54a77a6ced06389d2fdd08eacedc55ab95c21e70b85a13ee65"
+    },
+    {
+      "path": "src/MesaNexo.Central/PublicInvoice.cs",
+      "sha256": "7ecb433eda63557d3aeff77d6ca55680b56d9aee3a548618a2ba4b171fcc5968"
+    },
+    {
+      "path": "src/MesaNexo.Central/TenantEndpoints.cs",
+      "sha256": "4fb58d47803abb01e6aac9a42414da81167622e66772a26575760d520d524e2a"
+    },
+    {
+      "path": "src/MesaNexo.Central/TenantStore.cs",
+      "sha256": "0c248e184e69703f4745f65258c2b3a5541c7a2164bc75993fd0b104932b78b5"
+    },
+    {
+      "path": "src/MesaNexo.Client/Administration.cs",
+      "sha256": "199d4f229942c0c12ec397b9e0a3f9039f486637e9dfe6a62d1bd6d66fefc59b"
+    },
+    {
+      "path": "src/MesaNexo.Client/App.cs",
+      "sha256": "7378e8951138679a286cff409bb599ce5af003f87a33dae7d5e2675e0988da0e"
+    },
+    {
+      "path": "src/MesaNexo.Client/Brand.cs",
+      "sha256": "69b109392a242e0cb890d27274a71c86b218326732b53b26e26954f243a7029b"
+    },
+    {
+      "path": "src/MesaNexo.Client/Connection.cs",
+      "sha256": "9b63da67236b683e2843a6b4f907dc720426900d01dfe0bde5d3b665ca82bc0e"
+    },
+    {
+      "path": "src/MesaNexo.Client/Discovery.cs",
+      "sha256": "7523d25f975c1d5790d56f3fca2c627dedae4378e91add37832b255aee5387d0"
+    },
+    {
+      "path": "src/MesaNexo.Client/EcosystemPages.cs",
+      "sha256": "07977cf5ec2c8986bc12305c674bca26f34640ec1afae1884a7654efca46de1f"
+    },
+    {
+      "path": "src/MesaNexo.Client/Forms.cs",
+      "sha256": "d20982c5988ba06b230921daa80e810e548daf51964188697beeac800246cd2e"
+    },
+    {
+      "path": "src/MesaNexo.Client/LiveConnection.cs",
+      "sha256": "3825ac76de7fdfd939bd0fe3e83b4d6f29ace9f79a5e7f0d3c1587d2ea44b8e6"
+    },
+    {
+      "path": "src/MesaNexo.Client/MainView.cs",
+      "sha256": "fd19b0676417e94d1c97f3c2c905e588d956dfbcd8e5e829fb4be97efe748631"
+    },
+    {
+      "path": "src/MesaNexo.Client/MesaNexo.Client.csproj",
+      "sha256": "9478b895a4eb4fcee5575d95a206c872f03b27816aed377d0d2dcf9e9e2e5160"
+    },
+    {
+      "path": "src/MesaNexo.Client/packages.lock.json",
+      "sha256": "43642938c5be396b65b1c8360210017eab7cbc37163c3551904ea2e013827926"
+    },
+    {
+      "path": "src/MesaNexo.Client/ProductPicture.cs",
+      "sha256": "860314d4411bf0593c415247b2f1282cee6193cdc183c1e9aefef37063428f3a"
+    },
+    {
+      "path": "src/MesaNexo.Client/PrototypeAccount.cs",
+      "sha256": "1e8c28b890ec6be2558834f38c9b62b25eb0dceb17569ea59b86e8b0fde98ef0"
+    },
+    {
+      "path": "src/MesaNexo.Client/PrototypeAdministration.cs",
+      "sha256": "e9416e04b2d06d920d78b21c83ed0bca8ffdd7d7677977730698a485413f8bec"
+    },
+    {
+      "path": "src/MesaNexo.Client/PrototypeLabels.cs",
+      "sha256": "59b76628d582a601a16f566c80910c48557b2c000bddc4c60369fc6a4c38185f"
+    },
+    {
+      "path": "src/MesaNexo.Client/PrototypeProductDialog.cs",
+      "sha256": "a4de5e8894ee8f76386599272aea9e9e2881b74e92f8c8e1f6e57afdf1ed650d"
+    },
+    {
+      "path": "src/MesaNexo.Client/PrototypeService.cs",
+      "sha256": "fa95a46b70c52cf4e5224d16e010a812b32ab0b0892b8ef8f91463b22e505383"
+    },
+    {
+      "path": "src/MesaNexo.Client/PrototypeShell.cs",
+      "sha256": "885704f9c376017584aa83b62542867f0acfff3b1d9d06be3975087959c043eb"
+    },
+    {
+      "path": "src/MesaNexo.Client/PrototypeTheme.axaml",
+      "sha256": "a132d09d933b388e36cc0f2d979cc74c24867a33944bb92e29b84e8a7d99f09d"
+    },
+    {
+      "path": "src/MesaNexo.Client/Provider.cs",
+      "sha256": "ce2eaa44dc577cd9bfc02a47d01dac904d03fac92bfed70a86d71304d211fee5"
+    },
+    {
+      "path": "src/MesaNexo.Client/UpdateDialog.cs",
+      "sha256": "a4c990ac60b19b9305ef55a990aeb3b32b5ce446b6d1e7877fb0c8f92af6d40a"
+    },
+    {
+      "path": "src/MesaNexo.Client/Updates.cs",
+      "sha256": "a7b4cbd9ce272fe0a4dd7bca14c977269cefaa1c741f842ce0efede26af55937"
+    },
+    {
+      "path": "src/MesaNexo.Core/BlindCash.cs",
+      "sha256": "493e8ec400c44bf0289f4d64da94caaa0860fc715820532a3d83c37f374ad13c"
+    },
+    {
+      "path": "src/MesaNexo.Core/CloudProposals.cs",
+      "sha256": "2cbeed2356211284a51793e5ad09d00c2a3fb51d14aa3b278834fbf4281510e6"
+    },
+    {
+      "path": "src/MesaNexo.Core/Delivery.cs",
+      "sha256": "a234269592f9a7d9a7611ec944562883d6e3b8b7e3e12afd56cf99b513a4c022"
+    },
+    {
+      "path": "src/MesaNexo.Core/Fiscal.cs",
+      "sha256": "edba9fe2932af3e160b6ca27511bab3500eff820f3231450fe9695675a9c0cf4"
+    },
+    {
+      "path": "src/MesaNexo.Core/IntegrationContracts.cs",
+      "sha256": "c3134af0a067fbc7651b0ee1015a6caf016ccf8ed515221bbf31fdec43ec3b50"
+    },
+    {
+      "path": "src/MesaNexo.Core/Inventory.cs",
+      "sha256": "362dfaef881d145f9eb120dfeb8b3b1716df176b73e1268127fa21e1a69ebe8e"
+    },
+    {
+      "path": "src/MesaNexo.Core/Json.cs",
+      "sha256": "2d93b2820f9cb1c82adeb276553945a3c432e0ebc9e88f6d0e04261bce907334"
+    },
+    {
+      "path": "src/MesaNexo.Core/MesaNexo.Core.csproj",
+      "sha256": "70c34fafea2e093c458e3d2014ec7d305658813bd4e5ec4d80b6b87fddb1bdb2"
+    },
+    {
+      "path": "src/MesaNexo.Core/packages.lock.json",
+      "sha256": "a4364d81a6de2707d66fbced18fbbc926c882ab96e1d1aebbb17e871285b9d75"
+    },
+    {
+      "path": "src/MesaNexo.Core/PosExtensions.cs",
+      "sha256": "d0cea75636fe5e4ff8b999df01e7f06facb65c15706117156986fb7589d798f2"
+    },
+    {
+      "path": "src/MesaNexo.Core/Restaurant.cs",
+      "sha256": "eca682ac13d2e997690d1d193a4060289cf644d23a25b7e29d13241d52c64cef"
+    },
+    {
+      "path": "src/MesaNexo.Desktop/DesktopVault.cs",
+      "sha256": "9adae4c3dc5e22f0ccaea1484d86e2bf17caf91be799ceb788943b7f1fc2e3f4"
+    },
+    {
+      "path": "src/MesaNexo.Desktop/LinuxDiscovery.cs",
+      "sha256": "f28b1301e10b6a6cce0ce3ad619a89521743eda6c771d4b4c0f6ea3d7a6ad6cc"
+    },
+    {
+      "path": "src/MesaNexo.Desktop/MesaNexo.Desktop.csproj",
+      "sha256": "4974d062cfc3972c0608f2575dc6614ca84dfc2dc9c1e21a155c058d1b4b2df4"
+    },
+    {
+      "path": "src/MesaNexo.Desktop/packages.lock.json",
+      "sha256": "b22ff5f56dc916fd713b6db2cb30d73ecf7970ba96310cd534d4941703b8d1bc"
+    },
+    {
+      "path": "src/MesaNexo.Desktop/Program.cs",
+      "sha256": "97c1d029ff8abc2e48564bf7292d4e77123cd32176800e67f777be49a339be23"
+    },
+    {
+      "path": "src/MesaNexo.Integrations/ExternalAdapters.cs",
+      "sha256": "31538a94be679819965e3f9e04445468fe0522654f72f692f8a54d77357e3772"
+    },
+    {
+      "path": "src/MesaNexo.Integrations/MesaNexo.Integrations.csproj",
+      "sha256": "78edf796665b3742fb4716ed39a0b05808e686d348d8fe069cc267d5140c632d"
+    },
+    {
+      "path": "src/MesaNexo.Integrations/packages.lock.json",
+      "sha256": "29293532c2e286520e3b01200506e8e3f958a8909ca12716ea175d5e04e72863"
+    },
+    {
+      "path": "src/MesaNexo.Integrations/PaymentAdapters.cs",
+      "sha256": "21e97c641ceaa5a81f3c0ea54b5b71655cfa9a6b08cbe107573dcffd9cd9ea59"
+    },
+    {
+      "path": "src/MesaNexo.iOS/AppDelegate.cs",
+      "sha256": "da82758e07d0570da7fdee503ae2d1f37f07b10ed7ce0d22b73858c66eb1cb21"
+    },
+    {
+      "path": "src/MesaNexo.iOS/Assets.xcassets/AppIcon.appiconset/Contents.json",
+      "sha256": "96a50e606d8ee91b2191159d58103a3855c356fdf2aaf7ed1fcec0451933e9dc"
+    },
+    {
+      "path": "src/MesaNexo.iOS/Assets.xcassets/Contents.json",
+      "sha256": "81c54324c918dd55789178a4a2d951210270d905af16c1428f6192d454f76c8f"
+    },
+    {
+      "path": "src/MesaNexo.iOS/IosDiscovery.cs",
+      "sha256": "5ce53fddfbfebb0f4f0428e733bae77cc27e1efd02da9ad65f8ed54623f89511"
+    },
+    {
+      "path": "src/MesaNexo.iOS/IosVault.cs",
+      "sha256": "fa753474df0a85b9dcb2fa2bb42569d96eb30946aebf76403928771fb356b1a9"
+    },
+    {
+      "path": "src/MesaNexo.iOS/Main.cs",
+      "sha256": "1d4249911440d067308ee742c44128dbe77178e690cadcf07a885dfebc8fc0fc"
+    },
+    {
+      "path": "src/MesaNexo.iOS/MesaNexo.iOS.csproj",
+      "sha256": "d37cf064acf4434d453f8dab3d05c82dc342f0bf274e09c0a29ed78cfa9a8e07"
+    },
+    {
+      "path": "src/MesaNexo.Public/MesaNexo.Public.csproj",
+      "sha256": "cc57901d7f524f8d191203dd6f0d4646651541d4c4d3d89dfef3b330c06fbcd2"
+    },
+    {
+      "path": "src/MesaNexo.Public/packages.lock.json",
+      "sha256": "b79d20e14576483abe95a1fee598a9ea4f9e76d5b5e2fefb11b7f40222863a2c"
+    },
+    {
+      "path": "src/MesaNexo.Public/Program.cs",
+      "sha256": "651e2c49157d02fb2d1f873d6c251dd7a369d4272508b1338b4af5b399629a7f"
+    },
+    {
+      "path": "src/MesaNexo.Public/wwwroot/app.css",
+      "sha256": "85414f05b4947b65cc8ab9699c87a09c9b8e4f610e447147cf1912aedbdb9f45"
+    },
+    {
+      "path": "src/MesaNexo.Public/wwwroot/app.js",
+      "sha256": "3d33535f9c4f8d6ce26e8b752eaebeca65315f8262ca48d56f8acd84cc2b465a"
+    },
+    {
+      "path": "src/MesaNexo.Public/wwwroot/index.html",
+      "sha256": "c23d3cf9e9a6dbfc26fe23190a05a0c2f2be5def7addcaa5cbbc93d3afaecfda"
+    },
+    {
+      "path": "src/MesaNexo.Public/wwwroot/sw.js",
+      "sha256": "758f0fb2a2ad5ada208eac2858db206b0012b827e2d370e4f864f8004171e8de"
+    },
+    {
+      "path": "runtime/lab_host.py",
+      "sha256": "95593c69e2717e0798910210ffac35a2dc835fdc7d972cc60f583edf1031589c"
+    },
+    {
+      "path": "runtime/mesanexo_ipc.py",
+      "sha256": "a5a3baebe25733c08883aa893a355417ee3d95324943390c857d72b5b83f28e0"
+    },
+    {
+      "path": "deploy/application.policy.example.json",
+      "sha256": "28862ac1b2ba2cd17df3d04e804ea53f6f08901a3c804c8bb70229a16430e723"
+    },
+    {
+      "path": "deploy/application.server.example.json",
+      "sha256": "b222351d1e7d983a2699b73ba824b00b851080b7b262397d5c6fb6de639a4ed5"
+    },
+    {
+      "path": "deploy/application.terminal.example.json",
+      "sha256": "1a25a4af289aa30d0725e4e1c6503bd7e0b50e962a2522a48542aaf6606a69bf"
+    },
+    {
+      "path": "deploy/branch-init.example.json",
+      "sha256": "6da6eef5192062f62ab49885b62757281db5e5618c3694c00605b8a16c04ad94"
+    },
+    {
+      "path": "deploy/fiscal-issuer.review.example.json",
+      "sha256": "bd44488b6475077e9bb28991b96f118d9c417944e59cf1e55e0c8a631f3b28ee"
+    },
+    {
+      "path": "deploy/install-runtime-extension.py",
+      "sha256": "0f9dd6bdcbb6967fa9a7d689bc7336dd487bb1256d558241487a19f78ac3058f"
+    },
+    {
+      "path": "deploy/providers.review.example.json",
+      "sha256": "2e2877f2247dc32facb2f89cbc1815d00216f71fcc29386095304b269883c3a1"
+    },
+    {
+      "path": "tools/build.ps1",
+      "sha256": "bac8674249f8d87f2af97a91d27febd067e3033e91bf77373c14e98cc0c36438"
+    },
+    {
+      "path": "tools/fetch_update.py",
+      "sha256": "db2930db16cccb8ef0eed44f169dc6bfdd1d6285ecd3929718c8707f9e0ca424"
+    },
+    {
+      "path": "tools/migrate_prototype.py",
+      "sha256": "05bbe93eb35df9ded52d580cb530017dcc292084c32831a649fcec27d62ebc92"
+    },
+    {
+      "path": "tools/package_deb.py",
+      "sha256": "e28cbb081691ab050cb3cf711edcbfef811910a9bd1b989f8e61965f9e94cca6"
+    },
+    {
+      "path": "tools/package_delivery.py",
+      "sha256": "e21567ada922f8f44c9f6d9ed26ba29b6a4cd6d27d8c45f644d31ca700cec275"
+    },
+    {
+      "path": "tools/package_windows.ps1",
+      "sha256": "804c01595f5a29edd622f0236aa21a6f4ef334442e016581a41802f496c69d9c"
+    },
+    {
+      "path": "tools/Prepare-Branding.ps1",
+      "sha256": "a1eda58b892da3cad98049617459b8b98e838cd21e1996ae14ecb6549ae3bc00"
+    },
+    {
+      "path": "tools/Start-Lab.ps1",
+      "sha256": "36387ba6e377df1a335d6d8d215f0b6a2126b9b9c9984e4eb934164601ae1ef7"
+    },
+    {
+      "path": "tools/Test.ps1",
+      "sha256": "bcb556149877e39fe91abfd955ff5f6a767b97fd11ada92cc3a86e114c193667"
+    },
+    {
+      "path": "tools/Verify-Branding.ps1",
+      "sha256": "9ab1e289c671e2668192ac2ca4fa4c748f1865ddaaedacd2e51881efd2011717"
+    },
+    {
+      "path": ".vscode/launch.json",
+      "sha256": "c885d0264baa2f103a43a433a63d6da961649dccde46b62d9cee3217c39a5fb0"
+    },
+    {
+      "path": ".vscode/tasks.json",
+      "sha256": "3707c3e5c720b484561cea517e0ae2815ef91c38f5f28b9808f58fe01243b396"
+    }
+  ]
+}

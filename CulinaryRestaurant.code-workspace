@@ -1,0 +1,18 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/bin": true,
+      "**/obj": true,
+      ".packages": true,
+      ".dotnet": true,
+      ".lab": true,
+      ".tools": true
+    },
+    "dotnet.defaultSolution": "MesaNexo.slnx"
+  }
+}

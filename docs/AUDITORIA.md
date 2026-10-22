@@ -1,0 +1,16 @@
+# Auditoría del origen
+Se inspeccionaron README.md, backend/domain.ts (todos sus casos), backend/server.ts, backend/store.ts, shared/product-options.ts, src/main.tsx y componentes de servicio, src/studio.css, style.css, pruebas de dominio/API/UI/prioridades y capturas de evidence. Los SHA-256 de los archivos del prototipo constan en prototype-source-hashes.json. No se leyó config.json ni la clave de respaldo del origen.
+
+El prototipo es React/Electron, API Express independiente y SQLite FULL/WAL; guarda el restaurante completo como JSON dentro de una transacción. Contraseñas scrypt, tokens y credenciales de instalación como hashes; copias AES-256-GCM. Las unidades confirmadas guardan precios históricos enteros. command.send/payment.add tienen claves de reintento; las demás acciones no comparten una garantía general de idempotencia. El nativo exige operationId para toda mutación operativa y usa recibos duraderos.
+
+Roles: mesero gestiona sus cuentas y avisos, cocina prepara por unidad y estación, gerente administra su restaurante, owner opera un panel de proveedor separado sin datos de visitas salvo consentimiento de soporte. El prototipo filtra por restaurantId; en la versión nativa una instancia de sucursal tiene una sola siteId. El gerente no adquiere permisos Linux.
+
+Pantallas operativas: resumen, mesas/cuentas/panel lateral, pendientes, cocina/historial, catálogo/categorías/extras/cocción, reservaciones, evaluaciones privadas, caja/arqueo, reportes, usuarios/sesiones/dispositivos, promociones, configuración y soporte. Proveedor: portafolio, planes/módulos, licencias/servicios, releases/publicaciones por destinatario, soporte consentido, respaldos/restauración, historial.
+
+Simulaciones de origen: atención/cuenta del cliente, evaluación privada, consulta remota de soporte (sin control de SO), facturación y alojamiento no provisionados, tarjeta/transferencia solo registrados. La vista de seguimiento es interna, sin endpoint público. Los instaladores y la actualización NSIS del prototipo son reales pero carecen de firma de editor.
+
+Identidad visual: se contrastó la captura Grafito y Ámbar y las reglas finales del CSS; hay estilos anteriores verdes dentro de studio.css. La implementación usa grafito #222D3C, ámbar #F7BC35, fondo #E7E9ED y estados con texto. Usa controles Avalonia, no CSS/HTML incrustado.
+
+CulinaryOS: leídos RUNTIME-SUCURSAL, CIFRADO-V1, SINCRONIZACION-V1, RED-LOCAL, CERTIFICADOS-LOCALES, dataio.py, store.py, securedata.py, syncworker.py, apphost.py y discovery.py. LAB-VM demuestra almacén y red local activos en la VM del usuario; no demuestra la aplicación nueva, otra terminal o caída WAN. Las pruebas locales Windows no sustituyen systemd/Avahi/POSIX en Debian.
+
+El contrato original tiene únicamente health/get/put; no se le atribuyen consultas ni transacciones múltiples. runtime/mesanexo_ipc.py añade explícitamente scan_v1/transaction_v1/event_status_v1. Mantiene el mismo SQLite, conexiones/transacciones, anillo, AAD y outbox; no cambia el cifrado ni el sincronizador. vendor/culinaryos conserva los originales y sus hashes para pruebas reproducibles, no se despliega como almacén paralelo.

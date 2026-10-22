@@ -1,0 +1,86 @@
+[
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\backend\\domain.ts",
+        "sha256":  "D7AC5476DF5EBE03418F62A44AA5FEF209F2AA6C9261E13C07FE7EBB87C58805"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\backend\\server.ts",
+        "sha256":  "CA9A91848ACE6111609A166C0F1E9206BA8B93606AFD011FF027DAEC4A559D43"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\backend\\store.ts",
+        "sha256":  "E18C6A63F45B43A87E587F758BE6B4E2C24CFB2843289A385C83D5BC0BEA9EE8"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\src\\context-menu.tsx",
+        "sha256":  "7C53885E483F7EA6F740168FA6C395150A37A174E9DAA150997560819BBD3AA9"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\src\\main.tsx",
+        "sha256":  "63BD51DC8DE511920643E99D2949F01E6F8F212A858F1888422DBD813B62D60E"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\src\\motion.css",
+        "sha256":  "155A7BAEC7F1BF8CF6945CF35CD98C69F91E8953600A65054D882D422B064AFB"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\src\\motion.tsx",
+        "sha256":  "E541142A867850DE859B7764B2370135B9F5A83182055F311BF480C33725DB34"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\src\\order-product-dialog.css",
+        "sha256":  "3E7C215FDD538A26FF4DFC20C89B1C3D7A5FFCAA17926B1200E96D6D70D542A5"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\src\\order-product-dialog.tsx",
+        "sha256":  "DC0D7D029A6125753A71150D804F8E94232F85FF2CC94A9D3C2A0E4E1AAD4CC3"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\src\\preparation-notes.tsx",
+        "sha256":  "2D0940F7560911310028C7EBD8735F862E527B73EA1427AE58CC15535A2A7857"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\src\\service-board.tsx",
+        "sha256":  "92187DDDB012D9D108ACA7FD90A9511A7E4F63C18D4BEA0D155FDAEAAE58A5CE"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\src\\service-priorities.ts",
+        "sha256":  "757BA258D289BDE724804BB355DDE2937273B70CF2B1C6DC829132B9BF4EBD12"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\src\\studio-navigation.tsx",
+        "sha256":  "70CED2453ED87690455FE21697B2030EFB0FB7F40C70BE70C25F6F77B665C1C6"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\src\\studio.css",
+        "sha256":  "F0BA5AF1FECFB218EED3E69F2DF462A8F13F138A7CD89DD8C4708EADF49BAF68"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\src\\style.css",
+        "sha256":  "84A13C015BB06E394CF6F9402FF54678934D7EABB3F83C1ED7F787D2C5F7D180"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\shared\\product-options.ts",
+        "sha256":  "E68D8E18B38F2C7367126F7AD5FCF3F594AE98033D25E432472C0CA971197B19"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\tests\\api.test.ts",
+        "sha256":  "C30EAA5CEF99134F40D0EB467FA1D1CADE2F862FF97660B23DBE8DE75D16BD4C"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\tests\\domain.test.ts",
+        "sha256":  "29674D5621263BD20D2B45857F202B9E0301554B70B071C9969E72A03C59E6EB"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\tests\\service-priorities.test.ts",
+        "sha256":  "87E202439DA8D24F7E2CF5401703B027413D92316E209D876E704C4C5082F1A0"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\tests\\ui\\flows.spec.ts",
+        "sha256":  "0631C0C1830FC91394EC1D46A0FEC5CDF8E0824D86BB725C9991E4490E9F8790"
+    },
+    {
+        "path":  "C:\\Users\\kikin\\Desktop\\SoftwarePrototipo\\README.md",
+        "sha256":  "8C2CE78AEFEB64E2B0ABC0E97C7EEEA218F9F7B4D11E1BB78FFF2435342223E1"
+    }
+]

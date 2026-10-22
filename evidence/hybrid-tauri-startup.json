@@ -1,0 +1,15 @@
+{
+  "result": "passed",
+  "engine": "155.0.4283.62",
+  "nativeIPC": true,
+  "packagedAssets": true,
+  "secretVisibilityControls": true,
+  "singleRevealControl": true,
+  "loginEnabled": true,
+  "title": "Culinary Restaurant",
+  "logos": 1,
+  "loginArtworkImages": 0,
+  "localStorage": [],
+  "sessionStorage": [],
+  "overflow": false
+}

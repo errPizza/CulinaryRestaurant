@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Culinary Restaurant
+Comment=Operación interna del restaurante
+Exec=/opt/culinaryos-app/client/CulinaryRestaurant
+Icon=culinary-restaurant
+Terminal=false
+Categories=Office;Utility;
+StartupNotify=true

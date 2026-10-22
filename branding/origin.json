@@ -1,0 +1,11 @@
+{
+  "name": "Culinary Restaurant",
+  "source": "User-supplied orange and brown PNGs; exact matching files CR_Icon2.png (symbol) and CR_Icon1.png (wordmark) on Desktop.",
+  "symbolSha256": "48c5d07b9b7bdd4b86276946476035552c40d1cea4976539512dc36945ee085c",
+  "wordmarkSha256": "f07be0835d4e1a4474944103c35a3e61be7169f89deecc47c4512d63adbbd21d",
+  "usage": {
+    "symbol": "System icons, launchers, installers and compact headers",
+    "wordmark": "Full brand where space permits; removed from the login illustration area by user request"
+  },
+  "previousBrand": "branding/history/previous-57b4b172fa9f49809a01ea31acc8e0e0"
+}

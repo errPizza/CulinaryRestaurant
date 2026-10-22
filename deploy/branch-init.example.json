@@ -1,0 +1,7 @@
+{
+ "siteId":"IDENTIDAD-REAL","name":"NOMBRE-REAL","mode":"licencia",
+ "managerName":"NOMBRE-GERENTE","managerUsername":"USUARIO-PROPIO",
+ "managerPassword":"REEMPLAZAR-POR-CONTRASEÑA-PROPIA",
+ "enrollmentCode":"REEMPLAZAR-POR-CODIGO-ALEATORIO-UN-SOLO-USO",
+ "modules":[],"maxUsers":15,"maxTables":30
+}

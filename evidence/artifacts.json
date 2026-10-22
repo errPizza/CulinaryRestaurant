@@ -1,0 +1,32 @@
+[
+  {
+    "path": "artifacts/CulinaryRestaurant-0.2.0-dev-win-x64.exe",
+    "bytes": 52969849,
+    "sha256": "432077034049f2ed4247fc4fe912fda02a0f1077cd07e3b7d72dbf395988808f"
+  },
+  {
+    "path": "artifacts/CulinaryRestaurant-0.2.0-dev-amd64.deb",
+    "bytes": 95122570,
+    "sha256": "9858616c06677a993e76c1d905c92a271ea5bfb5a22acddb8633551a606c2481"
+  },
+  {
+    "path": "artifacts/android/CulinaryRestaurant-0.2.0-debug.apk",
+    "bytes": 20512504,
+    "sha256": "a15cb31d85a7463dc8aa959dfa38af7a8dd56e8f27391e1f960c8c1fc0b08d1e"
+  },
+  {
+    "path": "artifacts/CulinaryRestaurant-0.2.0-central-linux-x64.zip",
+    "bytes": 49412912,
+    "sha256": "7b6b2a5e38c0c0a57111f3d5e4ac02264e03b8ea4b15568e754e9faa1356408c"
+  },
+  {
+    "path": "artifacts/CulinaryRestaurant-0.2.0-public-linux-x64.zip",
+    "bytes": 50436382,
+    "sha256": "54d45c4cebb82b862e65dd31f1d883a6b94692088f872b2878308f6a720b8766"
+  },
+  {
+    "path": "artifacts/CulinaryRestaurant-0.2.0-source.zip",
+    "bytes": 8976583,
+    "sha256": "501672226328a42108ddf70b604e941f9f7212464c775208856282dac4b2ab4d"
+  }
+]

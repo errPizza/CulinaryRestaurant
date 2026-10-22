@@ -1,0 +1,18 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MesaNexo.Transport/MesaNexo.Transport.csproj" />
+    <Project Path="src/MesaNexo.Bridge/MesaNexo.Bridge.csproj" />
+    <Project Path="src/MesaNexo.Integrations/MesaNexo.Integrations.csproj" />
+    <Project Path="src/MesaNexo.Public/MesaNexo.Public.csproj" />
+    <Project Path="src/MesaNexo.Android/MesaNexo.Android.csproj" />
+    <Project Path="src/MesaNexo.Api/MesaNexo.Api.csproj" />
+    <Project Path="src/MesaNexo.Central/MesaNexo.Central.csproj" />
+    <Project Path="src/MesaNexo.Client/MesaNexo.Client.csproj" />
+    <Project Path="src/MesaNexo.Core/MesaNexo.Core.csproj" />
+    <Project Path="src/MesaNexo.Desktop/MesaNexo.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MesaNexo.Hybrid.Tests/MesaNexo.Hybrid.Tests.csproj" />
+    <Project Path="tests/MesaNexo.Tests/MesaNexo.Tests.csproj" />
+  </Folder>
+</Solution>

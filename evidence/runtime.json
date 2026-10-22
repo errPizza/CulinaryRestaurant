@@ -1,0 +1,15 @@
+{
+  "suite": "CulinaryOS runtime extension",
+  "tests": 19,
+  "failures": 0,
+  "errors": 0,
+  "successful": true,
+  "platform": "win32",
+  "fault_injection": [
+    "disk reserve failure",
+    "permission failure"
+  ],
+  "not_executed": [
+    "POSIX Unix socket and systemd on Windows"
+  ]
+}

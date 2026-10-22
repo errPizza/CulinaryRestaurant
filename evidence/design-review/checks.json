@@ -1,0 +1,15 @@
+{
+  "result": "passed",
+  "screens": [
+    "support",
+    "overview",
+    "tables"
+  ],
+  "desktopWidth": 1360,
+  "mobileWidth": 390,
+  "overflow": false,
+  "navigation": true,
+  "tableFilters": true,
+  "demoDialog": true,
+  "productionThemeApplied": false
+}

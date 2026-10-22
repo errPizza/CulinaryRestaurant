@@ -1,0 +1,10 @@
+{
+ "version":1,"mode":"server",
+ "ui_argv":["/opt/culinaryos-app/client/CulinaryRestaurant"],
+ "backend_argv":["/opt/culinaryos-app/backend/MesaNexo.Api","--site","IDENTIDAD-REAL","--port","8443","--policy-url","https://CENTRAL-REAL:9444/v1/entitlement","--provider-public-key","/etc/culinaryos/provider-public.pem"],
+ "port":8443,"readiness_socket":"/run/culinaryos-app/ready.sock","tls_ca_file":"/etc/culinaryos/site-ca.crt",
+ "credentials":{
+  "tls-key":"/etc/culinaryos/secrets/app-tls.key","tls-cert":"/etc/culinaryos/secrets/app-tls.crt",
+  "central-ca":"/etc/culinaryos/secrets/central-ca.crt","central-cert":"/etc/culinaryos/secrets/central-client.crt","central-key":"/etc/culinaryos/secrets/central-client.key"
+ }
+}

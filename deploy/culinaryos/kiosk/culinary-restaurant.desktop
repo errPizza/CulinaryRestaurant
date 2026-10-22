@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Culinary Restaurant
+Comment=Sesion exclusiva de Culinary Restaurant
+Exec=/opt/culinaryos-app/kiosk/session.sh
+TryExec=/opt/culinaryos-app/kiosk/session.sh
+Type=Application
+DesktopNames=CulinaryRestaurant
+X-LightDM-DesktopName=Culinary Restaurant
