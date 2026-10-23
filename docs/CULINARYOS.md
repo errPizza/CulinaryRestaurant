@@ -28,3 +28,23 @@ Se preservan los cuatro archivos vendor y sus hashes, CIFRADO-V1, claves y tabla
 La actualización de extensión en una instalación existente requiere mantenimiento y respaldo de la versión previa; el instalador de primera instalación no debe forzarse para sobrescribir una extensión ya instalada. Revisar capacidades y permisos de la versión desplegada, detener backend, sustituir sólo la extensión revisada mediante el procedimiento de administración de CulinaryOS y reiniciar el servicio correspondiente. Verificar health/identidad/snapshot antes de migrar esquema; ante fallo, restaurar la versión respaldada. Este procedimiento no se ejecutó en la VM.
 
 El API puede consumir propuestas nube por salida HTTPS/mTLS (`--cloud-url`) con credenciales del servicio y clave pública del proveedor revisada; no envía outbox ni abre otro listener. Señala central inaccesible por separado de LAN o servidor local caído. No se cambian firewall, arranque, mDNS de confianza ni claves maestras.
+
+## Impresora de tickets y cajón
+
+El backend imprime cuentas, cortes Z y aperturas de cajón en una impresora térmica ESC/POS cuando existe `/etc/culinaryos/printer.json` (o se pasa `--printer-config <archivo>`); sin ese archivo no imprime nada y los trabajos quedan pendientes, igual que antes. Ejemplo en `deploy/printer.example.json`:
+
+- `"uri": "tcp://10.77.0.20:9100"`: impresora de red en su puerto RAW (9100 en la mayoría de las térmicas Ethernet). Darle IP fija dentro de la red operativa.
+- `"uri": "file:///dev/usb/lp0"`: impresora USB. El usuario `culinaryos-app` necesita el grupo `lp` (`usermod -aG lp culinaryos-app` y reiniciar el backend).
+- `"columns"`: 48 para papel de 80 mm (fuente A), 32 para 58 mm.
+
+El cajón se conecta al puerto RJ11 de la impresora; el pulso usa el pin 2 (ESC p 0 25 250).
+
+Comportamiento:
+
+- Antes de reclamar un trabajo se consulta el estado de la impresora (DLE EOT). Sin papel, con la tapa abierta, fuera de línea o sin conexión, el trabajo queda pendiente sin tocarse y se reintenta cada pocos segundos; el cajón se abre aunque falte papel.
+- Un trabajo reclamado que se interrumpe (corte de conexión, papel agotado a la mitad) queda `uncertain` y nunca se reimprime solo: el gerente revisa el papel y usa reimprimir.
+- Una impresora USB o una de red que no responde a DLE EOT imprime igual; la evidencia del trabajo dice que el estado no se confirmó.
+- `/api/state` informa el estado en `connection.printer` (`lista`, `sin papel`, `tapa abierta`, `sin conexión`…).
+- Con la integración `printer` en modo simulado, los trabajos se marcan como simulados y no sale papel.
+
+Probado contra una impresora ESC/POS simulada por TCP (`tests/MesaNexo.Tests/PrintTests.cs`); falta probarlo con una impresora y un cajón físicos.
