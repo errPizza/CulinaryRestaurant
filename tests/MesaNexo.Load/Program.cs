@@ -151,7 +151,7 @@ static class Program
         var windows=new JsonArray();var started=Stopwatch.StartNew();var bad=0;var previous=0;var verdict="completó la duración prevista";
         while(started.Elapsed.TotalMinutes<minutes){
             await Task.Delay(TimeSpan.FromSeconds(sampleSeconds));
-            var samples=metrics.Drain();var watch=Stopwatch.StartNew();int records;try{records=(await service.Load()).Records.Count;}catch{records=-1;}var loadMs=(long)watch.Elapsed.TotalMilliseconds;
+            var samples=metrics.Drain();var watch=Stopwatch.StartNew();int records;try{records=(await service.Load()).Count;}catch{records=-1;}var loadMs=(long)watch.Elapsed.TotalMilliseconds;
             var state=Metrics.Summary(samples.Where(x=>x.Kind=="state"));var actions=Metrics.Summary(samples.Where(x=>x.Kind is not "state" and not "login"));
             var count=tickets.Count;var delta=count-previous;previous=count;var requests=samples.Count;var errors=samples.Count(x=>x.Outcome!="ok");
             windows.Add(J.O("seconds",(long)started.Elapsed.TotalSeconds,"records",records,"internalLoadMs",loadMs,"ticketsClosed",count,"ticketsInWindow",delta,"state",state,"actions",actions,"retries",Interlocked.Read(ref metrics.Retries)));
@@ -163,11 +163,12 @@ static class Program
         Console.WriteLine("Verificando integridad del almacén (puede tardar con muchos registros)...");
         JsonObject verification;var integrity=false;
         try{
-            // En proceso: el mismo dominio y almacén, sin el límite de 15 s del cliente HTTP.
-            var snapshot=await service.State(manager.Token);
-            var units=snapshot.A("units").Objects().GroupBy(x=>x.S("visitId")).ToDictionary(g=>g.Key,g=>g.Count());
-            var paid=snapshot.A("payments").Objects().GroupBy(x=>x.S("visitId")).ToDictionary(g=>g.Key,g=>g.Sum(x=>x.L("amount")));
-            var visits=snapshot.A("visits").Objects().ToDictionary(x=>x.S("id"),x=>x.S("status"));
+            // Un servicio nuevo sobre el mismo almacén no comparte la memoria del que atendió la carga: lee lo durable.
+            // (/api/state sólo devuelve las 500 cuentas cerradas más recientes, así que no sirve para contar todo.)
+            var durable=await new BranchService(runtime,Site,new Passwords()).Load();
+            var units=durable.List("unit").GroupBy(x=>x.S("visitId")).ToDictionary(g=>g.Key,g=>g.Count());
+            var paid=durable.List("payment").GroupBy(x=>x.S("visitId")).ToDictionary(g=>g.Key,g=>g.Sum(x=>x.L("amount")));
+            var visits=durable.List("visit").ToDictionary(x=>x.S("id"),x=>x.S("status"));
             var closed=tickets.ToArray();var audit=await service.VerifyAudit(manager.Token);
             var notClosed=closed.Count(x=>visits.GetValueOrDefault(x.VisitId)!="closed");var unitMismatch=closed.Count(x=>units.GetValueOrDefault(x.VisitId)!=x.Units);var paymentMismatch=closed.Count(x=>paid.GetValueOrDefault(x.VisitId)!=x.Paid);
             var duplicated=units.Count(x=>x.Value>3);

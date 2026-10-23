@@ -5,11 +5,11 @@ namespace MesaNexo.Core;
 public sealed partial class Restaurant
 {
     static readonly string[] TableRequestKinds=["waiter","bill","order"];
-    JsonObject? OpenVisitAt(BranchState s,string tableId)=>s.List("visit").FirstOrDefault(v=>v.S("status")=="open"&&(v.S("tableId")==tableId||v.A("linkedTableIds").Strings().Contains(tableId)));
+    JsonObject? OpenVisitAt(BranchState s,string tableId)=>s.Related("visit","status","open").FirstOrDefault(v=>(v.S("tableId")==tableId||v.A("linkedTableIds").Strings().Contains(tableId)));
     // Called by the cloud inbox in the same commit that stores the proposal; never creates sales or payments.
     public void ImportTableRequest(BranchState s,JsonObject proposal)
     {
-        var payload=proposal.Obj("command").Obj("payload");var kind=payload.S("kind");var table=s.List("table").FirstOrDefault(x=>x.S("id")==payload.S("tableId"));
+        var payload=proposal.Obj("command").Obj("payload");var kind=payload.S("kind");var table=s.Related("table","id",payload.S("tableId")).FirstOrDefault();
         if(table is null||!TableRequestKinds.Contains(kind)||table.S("qrHash")==""||table.S("qrHash")!=payload.S("qrHash")){Settle(proposal,"rejected-local","Código QR vencido o mesa inexistente","");return;}
         var visit=OpenVisitAt(s,table.S("id"));var name=table.S("name");
         if(kind=="order"){
@@ -34,10 +34,10 @@ public sealed partial class Restaurant
             Role(u,"mesero","manager");var proposal=s.Get("cloudproposal",p.S("id"));Need(proposal.Obj("command").S("type")=="table"&&proposal.S("status")=="pending-review","Pedido QR ya resuelto",409);var visit=Own(s,u,proposal.S("visitId"));var payload=proposal.Obj("command").Obj("payload");
             if(p.B("accept")){
                 var command=Act(s,u,"command.send",J.O("visitId",visit.S("id"),"items",payload.A("items").DeepClone()));
-                foreach(var row in payload.A("items").Objects())Need(s.List("unit").Where(x=>x.S("commandId")==command.S("id")&&x.S("productId")==row.S("productId")).All(x=>x.L("price")==row.L("quotedPrice")),"El precio cambió desde que el cliente lo vio; rechaza y pídele que lo envíe de nuevo",409);
+                foreach(var row in payload.A("items").Objects())Need(s.Related("unit","commandId",command.S("id")).Where(x=>x.S("productId")==row.S("productId")).All(x=>x.L("price")==row.L("quotedPrice")),"El precio cambió desde que el cliente lo vio; rechaza y pídele que lo envíe de nuevo",409);
                 Settle(proposal,"accepted-local","Confirmado por "+u.S("name"),visit.S("id"));
             }else Settle(proposal,"rejected-local",Text(p,"reason",200),visit.S("id"));
-            proposal["decidedBy"]=u.S("id");foreach(var n in s.List("notification").Where(n=>n.S("proposalId")==proposal.S("id")))n["attended"]=true;result=proposal.Obj("ack");break;}
+            proposal["decidedBy"]=u.S("id");foreach(var n in s.Related("notification","proposalId",proposal.S("id")))n["attended"]=true;result=proposal.Obj("ack");break;}
         default:return false;
         }return true;
     }
