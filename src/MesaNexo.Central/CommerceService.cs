@@ -2,6 +2,16 @@ using System.Text.Json.Nodes;
 using MesaNexo.Core;
 using static MesaNexo.Core.Rules;
 namespace MesaNexo.Central;
+// A branch's Deliverect location: the HMAC secret of its webhooks and Deliverect's channel ids for uber, rappi and didi.
+public sealed record DeliverectLocation(string Secret,Dictionary<string,string> Channels)
+{
+    // deliverect.json: {"<slug>": {"secret": "…", "channels": {"7": "uber", …}}}
+    public static Dictionary<string,DeliverectLocation> Load(string path)
+    {
+        var o=JsonNode.Parse(File.ReadAllText(path)) as JsonObject??throw new BusinessException(400,"Configuración de Deliverect inválida");
+        return o.Where(x=>x.Value is JsonObject).ToDictionary(x=>x.Key,x=>{var v=(JsonObject)x.Value!;return new DeliverectLocation(Text(v,"secret",300),v.Obj("channels").Where(c=>c.Value is not null&&new[]{"uber","rappi","didi"}.Contains(c.Value.ToString())).ToDictionary(c=>c.Key,c=>c.Value!.ToString()));});
+    }
+}
 // Business service only: no listener, deployment, credentials or external calls.
 public sealed class CommerceService(CentralStore store)
 {
@@ -28,6 +38,20 @@ public sealed class CommerceService(CentralStore store)
         return (lines,gross);
     }
     public JsonObject Invoice(string token,JsonObject receiver)=>store.SubmitInvoice(token,receiver);
+    // A Deliverect order (or its cancellation, status 100) for a branch, checked against the location's shared secret and
+    // queued as an "aggregator" proposal; the branch matches the items by PLU. A repeated webhook is the same request.
+    public JsonObject Deliverect(string slug,byte[] raw,string signature,DeliverectLocation location)
+    {
+        var o=MesaNexo.Integrations.DeliverectSignature.Verify(raw,signature,location.Secret);var scope=store.PublicScope(slug);
+        var id=Text(o,"_id",80);var cancel=o.L("status")==100;Need(o.L("decimalDigits",2)==2,"Importes con decimales distintos de 2");
+        var hash=J.Hash("deliverect:"+id+(cancel?":cancel":""));var requestId=Guid.ParseExact(hash[..32],"N").ToString();
+        var clientToken=Convert.ToHexStringLower(System.Security.Cryptography.HMACSHA256.HashData(System.Text.Encoding.UTF8.GetBytes(location.Secret),System.Text.Encoding.UTF8.GetBytes(requestId)));
+        static JsonObject Line(JsonObject x)=>J.O("plu",x.S("plu"),"name",x.S("name"),"price",x.L("price"),"quantity",x.L("quantity",1));
+        var items=new JsonArray(o.A("items").Objects().Take(50).Select(x=>{var line=Line(x);line["subItems"]=new JsonArray(x.A("subItems").Objects().Take(20).Select(y=>(JsonNode)Line(y)).ToArray());return (JsonNode)line;}).ToArray());
+        var channel=o.L("channel").ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var payload=J.O("requestId",requestId,"clientToken",clientToken,"deliverectId",id,"cancel",cancel,"platform",location.Channels.GetValueOrDefault(channel,""),"channelName",o.S("channelName"),"displayId",o.S("channelOrderDisplayId"),"customerName",o.Obj("customer").S("name"),"notes",o.S("note"),"items",items,"total",o.Obj("payment").L("amount"),"pickupTime",o.S("pickupTime"));
+        return store.StoreOrder(scope,payload,"aggregator");
+    }
     JsonObject Table(TenantScope scope,string token)
     {
         Need(System.Text.RegularExpressions.Regex.IsMatch(token,"^[0-9a-f]{32}$"),"Código de mesa inválido",404);var table=store.Mirror(scope,"table").FirstOrDefault(x=>x.S("qrHash")==J.Hash(token));Need(table is not null,"Este código de mesa ya no es válido; pide uno nuevo al personal",404);return table!;
