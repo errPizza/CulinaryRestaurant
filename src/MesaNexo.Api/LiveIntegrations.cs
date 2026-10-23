@@ -103,6 +103,7 @@ public static partial class LiveServices
     public static JsonArray Register(IServiceCollection services,IntegrationConfig config)
     {
         var terminals=new JsonArray();
+        Messaging(services,config);
         return terminals;
     }
     static void Worker(IServiceCollection services,string key,Func<BranchService,Func<CancellationToken,Task<bool>>> step,int idleMs=2000)=>services.AddSingleton<IHostedService>(sp=>{var branch=sp.GetRequiredService<BranchService>();return new IntegrationWorker(key,branch,step(branch),sp.GetRequiredService<ILogger<IntegrationWorker>>(),idleMs);});

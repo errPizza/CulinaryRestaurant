@@ -34,12 +34,15 @@ public sealed partial class Restaurant
     JsonObject? Simulated(BranchState s,string key)=>s.Related("integration","id",key).FirstOrDefault(x=>x.S("mode")=="simulated");
     JsonObject Simulator(BranchState s,string key,string name)=>(Simulated(s,key)??throw new BusinessException(400,"Activa la simulación de "+name+" en Integraciones")).Obj("settings");
     JsonObject Log(BranchState s,JsonObject u,string provider,string operation,string status,string summary,string reference="",bool simulated=true)=>Add(s,"integrationlog",J.O("provider",provider,"operation",operation,"status",status,"summary",Sanitize(summary,200),"reference",reference,"actor",u.S("id"),"at",J.Now(),"simulated",simulated));
-    // Simulated WhatsApp and e-mail: one message per event, reference and channel, stored as sent without contacting anyone.
-    JsonObject? Message(BranchState s,string channel,string to,string kind,string refId,string body)
+    // WhatsApp and e-mail: one message per event, reference and channel. Simulated, it is stored as sent without contacting anyone;
+    // live, it is queued for the messaging service. `values` are the body variables of the event's WhatsApp template, in order.
+    JsonObject? Message(BranchState s,string channel,string to,string kind,string refId,string body,params string[] values)
     {
-        var config=Simulated(s,"messaging")?.Obj("settings");to=to.Trim();if(config is null||!config.B(channel)||to=="")return null;
+        var config=Active(s,"messaging")?.Obj("settings");to=to.Trim();if(config is null||!config.B(channel,true)||to=="")return null;
         var prior=s.Related("message","event",kind).FirstOrDefault(x=>x.S("refId")==refId&&x.S("channel")==channel);if(prior is not null)return prior;
-        return Add(s,"message",J.O("channel",channel,"to",to,"event",kind,"refId",refId,"body",Sanitize(body,600),"status","simulated-sent","providerId",Ref(channel=="whatsapp"?"WAMID":"MSG"),"at",J.Now()));
+        var message=Add(s,"message",J.O("channel",channel,"to",to,"event",kind,"refId",refId,"body",Sanitize(body,600),"values",J.N(values.Select(v=>Sanitize(v,200)).ToArray()),"at",J.Now()));
+        if(IsLive(s,"messaging"))message["status"]="queued";else{message["status"]="simulated-sent";message["providerId"]=Ref(channel=="whatsapp"?"WAMID":"MSG");}
+        return message;
     }
     JsonObject IntegrationSettings(BranchState s,string key,JsonObject p)
     {
@@ -167,8 +170,8 @@ public sealed partial class Restaurant
             result=Add(s,"call",J.O("number",number,"name",Sanitize(p.S("name"),150),"customerId",customer?.S("id"),"at",J.Now(),"source","simulated-callerid","attended",false));Log(s,u,"callerid","call","ringing","Llamada de "+number+(customer is null?" · número nuevo":" · "+customer.S("name")));break;}
         case "call.attend":{Role(u,"mesero","manager");var call=s.Get("call",id);call["attended"]=true;call["attendedBy"]=u.S("id");call["attendedAt"]=J.Now();result=call;break;}
         case "message.test":{
-            Role(u,"manager");var config=Simulator(s,"messaging","mensajería");var channel=Choice(p,"channel","whatsapp","email");Need(config.B(channel),(channel=="whatsapp"?"WhatsApp":"El correo")+" está apagado en la mensajería");var to=Text(p,"to",150);
-            Need(channel=="email"?Regex.IsMatch(to,@"^[^@\s]+@[^@\s]+\.[^@\s]+$"):Digits(to).Length is >=10 and <=15,"Destinatario inválido");result=Message(s,channel,to,"test",J.Id(),"Mensaje de prueba de "+s.Meta.S("name")+". Simulado: no se envió a nadie.")!;break;}
+            Role(u,"manager");var config=Enabled(s,"messaging","la mensajería");var channel=Choice(p,"channel","whatsapp","email");Need(config.B(channel,true),(channel=="whatsapp"?"WhatsApp":"El correo")+" está apagado en la mensajería");var to=Text(p,"to",150);
+            Need(channel=="email"?Regex.IsMatch(to,@"^[^@\s]+@[^@\s]+\.[^@\s]+$"):Digits(to).Length is >=10 and <=15,"Destinatario inválido");result=Message(s,channel,to,"test",J.Id(),"Mensaje de prueba de "+s.Meta.S("name")+"."+(IsLive(s,"messaging")?"":" Simulado: no se envió a nadie."),s.Meta.S("name"))!;break;}
         case "aggregator.simulate":{
             Role(u,"manager");var config=Simulator(s,"aggregators","plataformas de reparto");var platform=Choice(p,"platform",config.A("platforms").Strings());
             var menu=s.List("product").Where(x=>x.B("visible")&&x.B("available")&&!x.A("modifiers").Objects().Any(g=>g.B("required"))&&!(x.B("supportsCooking")&&x.B("cookingRequired"))).OrderBy(x=>x.S("id"),StringComparer.Ordinal).ToArray();Need(menu.Length>0,"Publica al menos un producto disponible sin opciones obligatorias");
@@ -198,14 +201,16 @@ public sealed partial class Restaurant
     void IntegrationAfterAction(BranchState s,JsonObject u,string type,JsonObject p,JsonObject result)
     {
         if(type=="delivery.create"&&Simulated(s,"maps") is {} maps){var d=s.Get("delivery",result.S("id"));var a=d.Obj("addressSnapshot");if(d.S("mode")=="delivery"&&a.ContainsKey("lat")){var config=maps.Obj("settings");var km=Distance((double)Coordinate(config,"centerLat",90),(double)Coordinate(config,"centerLon",180),(double)Coordinate(a,"lat",90),(double)Coordinate(a,"lon",180));d["distanceKm"]=Math.Round((decimal)km,1);d["etaMinutes"]=Eta(km);}}
-        if(type=="delivery.dispatch"){var d=s.Get("delivery",p.S("id"));var c=s.Related("customer","id",d.S("customerId")).FirstOrDefault();var courier=s.Related("courier","id",d.S("courierId")).FirstOrDefault();if(c is not null)Message(s,"whatsapp",c.S("phone"),"dispatch",d.S("id"),"Hola "+c.S("name")+", tu pedido de "+s.Meta.S("name")+" ya va en camino"+(courier is null?"":" con "+courier.S("name"))+(d.L("etaMinutes")>0?". Llega en unos "+d.L("etaMinutes")+" minutos":"")+".");}
+        if(type=="delivery.dispatch"){var d=s.Get("delivery",p.S("id"));var c=s.Related("customer","id",d.S("customerId")).FirstOrDefault();var courier=s.Related("courier","id",d.S("courierId")).FirstOrDefault();if(c is not null)Message(s,"whatsapp",c.S("phone"),"dispatch",d.S("id"),"Hola "+c.S("name")+", tu pedido de "+s.Meta.S("name")+" ya va en camino"+(courier is null?"":" con "+courier.S("name"))+(d.L("etaMinutes")>0?". Llega en unos "+d.L("etaMinutes")+" minutos":"")+".",c.S("name"),s.Meta.S("name"),courier?.S("name")??"nuestro repartidor",d.L("etaMinutes")>0?d.L("etaMinutes")+" minutos":"poco tiempo");}
         if(type=="unit.state"&&p.S("status")=="ready"){
             var vid=s.Get("unit",p.S("id")).S("visitId");var d=s.Related("delivery","visitId",vid).FirstOrDefault(x=>x.S("mode")=="pickup");
-            if(d is not null&&!s.Related("unit","visitId",vid).Any(x=>!Final.Append("ready").Contains(x.S("status")))&&s.Related("customer","id",d.S("customerId")).FirstOrDefault() is {} c)Message(s,"whatsapp",c.S("phone"),"pickup-ready",d.S("id"),"Hola "+c.S("name")+", tu pedido de "+s.Meta.S("name")+" está listo para recoger.");
+            if(d is not null&&!s.Related("unit","visitId",vid).Any(x=>!Final.Append("ready").Contains(x.S("status")))&&s.Related("customer","id",d.S("customerId")).FirstOrDefault() is {} c)Message(s,"whatsapp",c.S("phone"),"pickup-ready",d.S("id"),"Hola "+c.S("name")+", tu pedido de "+s.Meta.S("name")+" está listo para recoger.",c.S("name"),s.Meta.S("name"));
         }
         if(type=="fiscal.request"&&Simulated(s,"pac")?.Obj("settings").B("autoStamp")==true)StampSimulated(s,u,s.Get("fiscal",result.S("id")));
-        var owner=Simulated(s,"messaging")?.Obj("settings").S("ownerEmail")??"";
+        var settings=Active(s,"messaging")?.Obj("settings");var owner=settings?.S("ownerEmail")??"";var ownerPhone=settings?.S("ownerPhone")??"";
         if(owner!="")foreach(var n in s.Related("ownernotice","messageId","").Take(5).ToArray())if(Message(s,"email",owner,"owner-notice",n.S("id"),OwnerText(s,n)) is {} sent)n["messageId"]=sent.S("id");
+        // Only the last day's notices: giving the owner's number later does not send the branch's whole history.
+        if(ownerPhone!="")foreach(var n in s.Related("ownernotice","whatsappId","").Where(x=>DateTimeOffset.TryParse(x.S("at"),out var at)&&at>DateTimeOffset.UtcNow.AddDays(-1)).Take(5).ToArray())if(Message(s,"whatsapp",ownerPhone,"owner-notice",n.S("id"),OwnerText(s,n),s.Meta.S("name"),OwnerText(s,n)) is {} sent)n["whatsappId"]=sent.S("id");
         if(Simulated(s,"printer") is not null)foreach(var job in s.Related("printjob","status","pending").Take(20).ToArray()){job["status"]="simulated";job["attemptId"]=J.Id();job["driver"]="simulated-escpos";job["evidence"]=job.S("type")=="drawer"?"Pulso RJ11 simulado · el cajón físico no se abrió":"Impresión simulada · no salió papel";job["resolvedAt"]=J.Now();}
     }
     static readonly Dictionary<string,string> ProviderOfKind=new(){["message"]="messaging",["terminaltxn"]="terminal",["paylink"]="onlinepay",["pmspost"]="pms",["aggregatororder"]="aggregators",["address"]="maps"};
