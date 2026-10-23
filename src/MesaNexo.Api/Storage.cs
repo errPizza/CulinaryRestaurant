@@ -24,8 +24,10 @@ public sealed class RuntimeStore:IBranchStore,IDisposable
             string raw;
             if(process is not null){
                 if(process.HasExited)throw new StoreException("COS-DATA-UNAVAILABLE");
-                await process.StandardInput.BaseStream.WriteAsync(bytes,ct);await process.StandardInput.BaseStream.FlushAsync(ct);
-                raw=await ReadLine(process.StandardOutput.BaseStream,ct);
+                // Single shared pipe: once a request is written its reply must be consumed even if the caller cancels,
+                // otherwise the next caller reads this reply and the framing is permanently shifted.
+                await process.StandardInput.BaseStream.WriteAsync(bytes,CancellationToken.None);await process.StandardInput.BaseStream.FlushAsync(CancellationToken.None);
+                raw=await ReadLine(process.StandardOutput.BaseStream,CancellationToken.None);
             }else{
                 using var deadline=CancellationTokenSource.CreateLinkedTokenSource(ct);deadline.CancelAfter(TimeSpan.FromSeconds(5));
                 using var socket=new Socket(AddressFamily.Unix,SocketType.Stream,ProtocolType.Unspecified);await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath!),deadline.Token);

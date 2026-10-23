@@ -13,6 +13,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MesaNexo.Hybrid.Tests/MesaNexo.Hybrid.Tests.csproj" />
+    <Project Path="tests/MesaNexo.Load/MesaNexo.Load.csproj" />
     <Project Path="tests/MesaNexo.Tests/MesaNexo.Tests.csproj" />
   </Folder>
 </Solution>
