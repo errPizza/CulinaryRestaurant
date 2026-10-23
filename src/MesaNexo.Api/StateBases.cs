@@ -14,10 +14,10 @@ public sealed class StateBases(bool keepStates=false)
         if(id==""||!sessions.TryGetValue(session,out var entry))return null;
         lock(entry){foreach(var x in entry.Recent)if(x.Id==id)return (x.Fingerprint,x.State);}return null;
     }
-    public string Remember(string session,StateFingerprint fingerprint,JsonObject state)
+    public string Remember(string session,StateFingerprint fingerprint,JsonObject? state)
     {
         var id=J.Id();var entry=sessions.GetOrAdd(session,_=>new());
-        lock(entry){entry.Recent.AddFirst((id,fingerprint,keepStates?(JsonObject)state.DeepClone():null));while(entry.Recent.Count>2)entry.Recent.RemoveLast();entry.Seen=DateTimeOffset.UtcNow;}
+        lock(entry){entry.Recent.AddFirst((id,fingerprint,keepStates?state:null));while(entry.Recent.Count>2)entry.Recent.RemoveLast();entry.Seen=DateTimeOffset.UtcNow;}
         if(Interlocked.Increment(ref calls)%200==0)foreach(var (key,value) in sessions)if(DateTimeOffset.UtcNow-value.Seen>TimeSpan.FromMinutes(30))sessions.TryRemove(key,out _);
         return id;
     }

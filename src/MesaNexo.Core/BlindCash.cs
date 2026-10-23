@@ -22,9 +22,9 @@ public sealed partial class Restaurant
         c["status"]="closed";c["denominations"]=denominations.DeepClone();c["counted"]=counted;c["expected"]=expectedCash;c["difference"]=counted-expectedCash;c["card"]=J.O("counted",Amount(p,"card"),"expected",expectedCard,"difference",Amount(p,"card")-expectedCard);c["transfer"]=J.O("counted",Amount(p,"transfer"),"expected",expectedTransfer,"difference",Amount(p,"transfer")-expectedTransfer);c["closedAt"]=J.Now();c["closedBy"]=u.S("id");
         Add(s,"ownernotice",J.O("type","blind-cash-closed","cashId",id,"status","pending","at",J.Now()));result=J.O("id",id,"status","closed","notification","queued");return true;
     }
-    void FilterBlindSnapshot(BranchState s,JsonObject u,JsonObject output)
+    void FilterBlindSnapshot(BranchState s,JsonObject u,StateParts output)
     {
-        if(u.S("role")!="cajero")return;foreach(var key in output.Select(p=>p.Key).ToArray())if(!new[]{"user","sessionId","siteId","restaurant"}.Contains(key))output.Remove(key);
+        if(u.S("role")!="cajero")return;foreach(var key in output.Keys.ToArray())if(!new[]{"user","sessionId","siteId","restaurant"}.Contains(key))output.Remove(key);
         output["restaurant"]=J.O("name",s.Meta.S("name"),"revision",s.Meta.L("revision"),"modules",new JsonArray());
         output["cashs"]=new JsonArray(s.List("cash").Where(c=>c.B("blind")&&c.S("operatorId")==u.S("id")).TakeLast(50).Select(c=>(JsonNode)J.O("id",c.S("id"),"status",c.S("status"),"blind",true,"openedAt",c.S("openedAt"),"closedAt",c.S("closedAt"))).ToArray());
     }

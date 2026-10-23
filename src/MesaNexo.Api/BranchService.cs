@@ -9,7 +9,7 @@ namespace MesaNexo.Api;
 public sealed partial class BranchService(IBranchStore store,string siteId,IPasswordHasher passwords)
 {
     static readonly Dictionary<string,int> Bounded=new(){["audit"]=500};
-    readonly SemaphoreSlim writer=new(1,1);readonly AsyncLocal<bool> writing=new();CommittedState? committed;
+    readonly SemaphoreSlim writer=new(1,1);readonly AsyncLocal<bool> writing=new();CommittedState? committed;long inflight;
     Tuple<DateTimeOffset,JsonNode>? health;
     public string CloudState{get;internal set;}="unconfigured";
     public event Action<long>? RevisionChanged;
@@ -43,10 +43,11 @@ public sealed partial class BranchService(IBranchStore store,string siteId,IPass
     async Task<CommittedState> Current(CancellationToken ct)
     {
         var meta=await store.CallAsync(J.O("op","get","record_id","mn_meta_site"),ct);var version=meta?.L("version")??0;
+        Interlocked.Exchange(ref validated,Environment.TickCount64);
         var c=Volatile.Read(ref committed);if(c is not null&&c.Version>=version)return c;
-        // The store can be one commit ahead while this service's writer is still publishing it: wait for the
-        // writer instead of rebuilding. Inside the writer nothing is in flight, so a newer store is another process.
-        if(c is not null&&!writing.Value){await writer.WaitAsync(ct);writer.Release();c=Volatile.Read(ref committed);if(c is not null&&c.Version>=version)return c;}
+        // The store is one commit ahead while this service's own commit is being published. Nobody has been told that
+        // commit happened yet, so the published state is still a consistent answer; anything else is another process.
+        if(c is not null&&version==c.Version+1&&version==Interlocked.Read(ref inflight))return c;
         // First use, or another process committed: rebuild, never replacing a newer state published meanwhile.
         var loaded=await Read(ct);
         while(true){var seen=Volatile.Read(ref committed);if(seen is not null&&seen.Version>=loaded.Version)return seen;if(Interlocked.CompareExchange(ref committed,loaded,seen)==seen)return loaded;}
@@ -54,7 +55,11 @@ public sealed partial class BranchService(IBranchStore store,string siteId,IPass
     void Invalidate()=>Volatile.Write(ref committed,null);
     // A writable state: it clones only the records it reaches. Commit rejects it if anything committed since.
     public async Task<BranchState> Load(CancellationToken ct=default)=>new(await Current(ct));
-    async Task<BranchState> View(CancellationToken ct)=>new(await Current(ct),true);
+    // Reads skip asking the store while its version was confirmed within the last second (every commit and every
+    // Load confirms it), so polling never queues behind writes. Only another process writing the store is seen up to
+    // a second late by reads; writes always confirm, and the store rejects any stale record version anyway.
+    long validated;
+    async Task<BranchState> View(CancellationToken ct)=>new(Volatile.Read(ref committed) is {} c&&Environment.TickCount64-Interlocked.Read(ref validated)<1000?c:await Current(ct),true);
     public JsonObject Authenticate(BranchState s,string token,out JsonObject session)
     {
         var hash=J.Hash(token);session=s.Related("session","tokenHash",hash).FirstOrDefault(x=>!x.B("revoked")&&DateTimeOffset.Parse(x.S("expires"))>DateTimeOffset.UtcNow)??throw new BusinessException(401,"Inicia sesión de nuevo");
@@ -79,7 +84,7 @@ public sealed partial class BranchService(IBranchStore store,string siteId,IPass
             AppendAudit(s,eventId,actor,fingerprint,type);
             s.Meta["revision"]=revision=s.Meta.L("revision")+1;
             var receipt=J.O("actor",actor,"fingerprint",fingerprint,"operation",type,"result",result,"at",J.Now());
-            var changes=s.Changes().ToArray();JsonNode response;
+            var changes=s.Changes().ToArray();JsonNode response;Interlocked.Exchange(ref inflight,current.Version+1);
             try{response=(await store.CallAsync(J.O("op","transaction_v1","protocol",1,"event_id",eventId,"receipt",receipt,"changes",new JsonArray(changes.Select(x=>(JsonNode)x.DeepClone()).ToArray())),ct))!;}
             // Rejections the store makes before writing leave it as it was; anything else may have committed, so reload.
             catch(StoreException e)when(e.Code is "COS-DATA-INVALID" or "COS-DATA-FULL" or "COS-DATA-IDEMPOTENCY"){throw;}
@@ -87,9 +92,9 @@ public sealed partial class BranchService(IBranchStore store,string siteId,IPass
             if(response.B("duplicate")){Invalidate();return (JsonObject)response.Obj("receipt").Obj("result").DeepClone();}
             // Re-parsed exactly as a store read returns it, so values set as int, decimal, etc. read back the same way.
             var stored=changes.Select(c=>new StoredRecord(c.S("record_id"),c.L("expected_version")+1,JsonNode.Parse(c.Obj("data").ToJsonString())!.AsObject())).ToArray();
-            Volatile.Write(ref committed,current.With(stored,stored.Single(x=>x.RecordId=="mn_meta_site").Version,Bounded));
+            Volatile.Write(ref committed,current.With(stored,stored.Single(x=>x.RecordId=="mn_meta_site").Version,Bounded));Interlocked.Exchange(ref validated,Environment.TickCount64);
             result=(JsonObject)response.Obj("receipt").Obj("result").DeepClone();
-        }finally{if(owned)writer.Release();}
+        }finally{Interlocked.Exchange(ref inflight,0);if(owned)writer.Release();}
         try{RevisionChanged?.Invoke(revision);}catch{}
         return result;
     }
@@ -129,17 +134,17 @@ public sealed partial class BranchService(IBranchStore store,string siteId,IPass
     // or the whole state when the base is unknown here (restart, expired, another session). Without it: whole state.
     public async Task<JsonObject> State(string token,CancellationToken ct=default,string? since=null)
     {
-        var state=await FullState(token,ct);if(since is null)return state;
-        var session=state.S("sessionId");var fingerprint=StateDelta.Fingerprint(state);var before=bases.Find(session,since);
-        var reply=before is null?state:StateDelta.Diff(before.Value.Fingerprint,state,fingerprint);
-        if(before is {State:{} baseState}&&J.Canonical(StateDelta.Apply((JsonObject)baseState.DeepClone(),reply))!=J.Canonical(state))throw new InvalidOperationException("COS-APP-DELTA-MISMATCH: el delta no reconstruye el estado");
+        var parts=await StateParts(token,ct);if(since is null)return parts.Materialize();
+        var session=parts.S("sessionId");var fingerprint=StateDelta.Fingerprint(parts);var before=bases.Find(session,since);
+        var reply=before is null?parts.Materialize():StateDelta.Diff(before.Value.Fingerprint,parts,fingerprint);
+        if(before is {State:{} baseState}&&J.Canonical(StateDelta.Apply((JsonObject)baseState.DeepClone(),reply))!=J.Canonical(parts.Materialize()))throw new InvalidOperationException("COS-APP-DELTA-MISMATCH: el delta no reconstruye el estado");
         if(before is not null)reply["since"]=since;
-        reply["stateBase"]=bases.Remember(session,fingerprint,state);return reply;
+        reply["stateBase"]=bases.Remember(session,fingerprint,VerifyDelta?parts.Materialize():null);return reply;
     }
-    async Task<JsonObject> FullState(string token,CancellationToken ct)
+    async Task<StateParts> StateParts(string token,CancellationToken ct)
     {
-        var s=await View(ct);var before=VerifyViews?Fingerprint(s.Committed):null;var u=Authenticate(s,token,out var sess);var watch=Profile?System.Diagnostics.Stopwatch.StartNew():null;var result=Domain.Snapshot(s,u,sess.S("id"));
-        if(watch is not null){var built=watch.Elapsed.TotalMilliseconds;var bytes=System.Text.Encoding.UTF8.GetByteCount(result.ToJsonString());Console.Error.WriteLine($"PROFILE_STATE {u.S("role")} snapshot={built:0.0} serialize={watch.Elapsed.TotalMilliseconds-built:0.0} bytes={bytes} records={s.Committed.Count}");}
+        var viewWatch=Profile?System.Diagnostics.Stopwatch.StartNew():null;var s=await View(ct);var viewed=viewWatch?.Elapsed.TotalMilliseconds;var before=VerifyViews?Fingerprint(s.Committed):null;var u=Authenticate(s,token,out var sess);var watch=Profile?System.Diagnostics.Stopwatch.StartNew():null;var result=Domain.Parts(s,u,sess.S("id"));
+        if(watch is not null)Console.Error.WriteLine($"PROFILE_STATE {u.S("role")} view={viewed:0.0} parts={watch.Elapsed.TotalMilliseconds:0.0} records={s.Committed.Count}");
         if(before is not null&&Fingerprint(s.Committed)!=before)throw new InvalidOperationException("COS-APP-VIEW-MUTATED: una lectura modificó el estado compartido");
         // The outbox count is informative; refreshing it every two seconds keeps polling off the store.
         var cached=Volatile.Read(ref health);if(cached is null||DateTimeOffset.UtcNow-cached.Item1>TimeSpan.FromSeconds(2))Volatile.Write(ref health,cached=Tuple.Create(DateTimeOffset.UtcNow,(await store.CallAsync(J.O("op","health"),ct))!));

@@ -41,11 +41,29 @@ public sealed partial class Restaurant(IPasswordHasher passwords)
     // A reservation holds a free table for two hours around its start.
     string TableStatus(BranchState s,JsonObject t)=>!new[]{"free","reserved"}.Contains(t.S("status"))?t.S("status"):s.Related("reservation","tableId",t.S("id")).Any(r=>r.S("status")=="confirmed"&&DateTimeOffset.TryParse(r.S("start"),out var at)&&Math.Abs((at-DateTimeOffset.UtcNow).TotalHours)<2)?"reserved":"free";
     void ReconcileReservations(BranchState s){foreach(var t in s.List("table").Where(t=>new[]{"free","reserved"}.Contains(t.S("status"))))t["status"]=TableStatus(s,t);}
+    // Elements already projected for /api/state, reused while what they were built from is unchanged: the record's
+    // committed version plus, for some variants, a stamp of what else they read. Entries no snapshot used during the
+    // last 500 snapshots are dropped.
+    sealed class Projected(string stamp,StateItem item,long used){public string Stamp=>stamp;public StateItem Item=>item;public long Used=used;}
+    readonly System.Collections.Concurrent.ConcurrentDictionary<(string Variant,string Key),Projected> projected=new();long snapshots;
+    StateItem Project(BranchState s,string variant,JsonObject record,Func<JsonObject,JsonObject> build,Func<string>? stamp=null)
+    {
+        // A writable state may hold edits that are not committed: its records are never cached.
+        if(!s.ReadOnly){var fresh=build(record);return new(fresh.S("id"),fresh,StateDelta.Hash(fresh));}
+        var key=BranchState.Key(record.S("kind"),record.S("id"));var full=(s.Committed.TryGet(key,out var stored)?stored.Version:-1)+"|"+stamp?.Invoke();var now=Volatile.Read(ref snapshots);
+        if(projected.TryGetValue((variant,key),out var hit)&&hit.Stamp==full){Volatile.Write(ref hit.Used,now);return hit.Item;}
+        var node=build(record);var item=new StateItem(node.S("id"),node,StateDelta.Hash(node));projected[(variant,key)]=new(full,item,now);return item;
+    }
+    static JsonObject Without(JsonObject x,string field){var c=(JsonObject)x.DeepClone();c.Remove(field);return c;}
+    public JsonObject Snapshot(BranchState s,JsonObject u,string session)=>Parts(s,u,session).Materialize();
     // Reads the shared committed state, so nothing here may modify s. History is preserved in storage;
     // the API returns open visits, the newest 500 others and only the units of the visits it returns.
-    public JsonObject Snapshot(BranchState s,JsonObject u,string session)
+    public StateParts Parts(BranchState s,JsonObject u,string session)
     {
-        Usage(s,u);var role=u.S("role");var me=u.S("id");var outp=J.O("user",SafeUser(u),"sessionId",session,"restaurant",s.Meta,"siteId",s.Meta.S("siteId"));
+        var generation=Interlocked.Increment(ref snapshots);if(generation%500==0)foreach(var (k,v) in projected)if(v.Used<generation-500)projected.TryRemove(k,out _);
+        Usage(s,u);var role=u.S("role");var me=u.S("id");var meta=(JsonObject)s.Meta.DeepClone();meta.Remove("enrollmentHash");
+        var outp=new StateParts();outp["user"]=SafeUser(u);outp["sessionId"]=session;outp["restaurant"]=meta;outp["siteId"]=s.Meta.S("siteId");
+        string Version(JsonObject x)=>x.S("id")+":"+(s.Committed.TryGet(BranchState.Key(x.S("kind"),x.S("id")),out var r)?r.Version:-1);
         var visible=role=="mesero"?s.Related("visit","waiterId",me).Where(v=>u.Obj("permissions").B("shiftReports",true)||v.S("status")=="open").Select(x=>x.S("id")).ToHashSet():null;
         bool Visible(string visitId)=>visible is null||visible.Contains(visitId);
         var shown=s.Related("visit","status","open").Where(v=>Visible(v.S("id"))).Concat(s.Latest("visit",500,v=>v.S("status")!="open"&&Visible(v.S("id")))).ToArray();
@@ -58,22 +76,25 @@ public sealed partial class Restaurant(IPasswordHasher passwords)
                 "audit" or "command" or "notification" or "session" or "payment" or "movement"=>s.Latest(kind,500),
                 "request" when role=="mesero"=>s.List(kind).Where(x=>Visible(x.S("visitId"))),
                 _=>s.List(kind)};
-            if(kind=="table")values=values.Select(t=>{var status=TableStatus(s,t);if(status==t.S("status"))return t;var c=(JsonObject)t.DeepClone();c["status"]=status;return c;});
-            if(kind=="user")values=values.Select(SafeUser);
-            if(kind=="grant")values=values.Select(x=>{var c=(JsonObject)x.DeepClone();c.Remove("tokenHash");return c;});
-            if(kind=="device")values=values.Select(x=>{var c=(JsonObject)x.DeepClone();c.Remove("secretHash");return c;});
-            if(kind=="session")values=values.Select(x=>{var c=(JsonObject)x.DeepClone();c.Remove("tokenHash");return c;});
             if(role!="manager"&&new[]{"review","audit","grant","device","ticket","session"}.Contains(kind))values=[];
-            if(role!="manager"&&kind=="user")values=values.Select(x=>J.O("id",x.S("id"),"name",x.S("name"),"role",x.S("role"),"active",x.B("active"),"hasPin",x.S("role")=="manager"&&x.B("hasPin")));
             if(role=="mesero"&&new[]{"cash","movement"}.Contains(kind))values=[];
             if(role=="cocina"&&new[]{"payment","cash","movement","reservation","notification","request"}.Contains(kind))values=[];
-            if(kind=="visit")values=values.Select(v=>{
-                if(role=="cocina")return J.O("id",v.S("id"),"tableId",v.S("tableId"),"waiterId",v.S("waiterId"),"status",v.S("status"),"openedAt",v.S("openedAt"));
-                var c=(JsonObject)v.DeepClone();foreach(var p in Totals(s,v))c[p.Key]=p.Value?.DeepClone();c.Remove("trackingKey");return c;});
-            if(kind=="unit"&&role=="cocina")values=values.Select(x=>{var c=(JsonObject)x.DeepClone();c.Remove("price");c.Remove("basePrice");c.Remove("promoId");c["extras"]=new JsonArray(x.A("extras").Objects().Select(e=>(JsonNode)J.O("name",e.S("name"))).ToArray());c["modifiers"]=new JsonArray(x.A("modifiers").Objects().Select(m=>(JsonNode)J.O("group",m.S("group"),"name",m.S("name"))).ToArray());return c;});
-            outp[kind+"s"]=new JsonArray(values.Select(x=>(JsonNode)x.DeepClone()).ToArray());
+            // How each record becomes an element: the variant names the projection, the stamp what else it reads.
+            Func<JsonObject,JsonObject> build=x=>(JsonObject)x.DeepClone();Func<JsonObject,string>? stamp=null;var variant=kind;
+            switch(kind){
+                case "table":build=t=>{var c=(JsonObject)t.DeepClone();c["status"]=TableStatus(s,t);return c;};stamp=t=>TableStatus(s,t);break;
+                case "user" when role=="manager":build=SafeUser;variant="user:safe";break;
+                case "user":build=x=>{var safe=SafeUser(x);return J.O("id",safe.S("id"),"name",safe.S("name"),"role",safe.S("role"),"active",safe.B("active"),"hasPin",safe.S("role")=="manager"&&safe.B("hasPin"));};variant="user:public";break;
+                case "grant" or "session":build=x=>Without(x,"tokenHash");break;
+                case "device":build=x=>Without(x,"secretHash");break;
+                case "visit" when role=="cocina":build=v=>J.O("id",v.S("id"),"tableId",v.S("tableId"),"waiterId",v.S("waiterId"),"status",v.S("status"),"openedAt",v.S("openedAt"));variant="visit:cocina";break;
+                case "visit":build=v=>{var c=Without(v,"trackingKey");foreach(var p in Totals(s,v))c[p.Key]=p.Value?.DeepClone();return c;};variant="visit:totals";
+                    stamp=v=>string.Join(",",s.Related("unit","visitId",v.S("id")).Select(Version))+";"+string.Join(",",s.Related("payment","visitId",v.S("id")).Select(Version));break;
+                case "unit" when role=="cocina":build=x=>{var c=(JsonObject)x.DeepClone();c.Remove("price");c.Remove("basePrice");c.Remove("promoId");c["extras"]=new JsonArray(x.A("extras").Objects().Select(e=>(JsonNode)J.O("name",e.S("name"))).ToArray());c["modifiers"]=new JsonArray(x.A("modifiers").Objects().Select(m=>(JsonNode)J.O("group",m.S("group"),"name",m.S("name"))).ToArray());return c;};variant="unit:cocina";break;
+            }
+            outp.Items(kind+"s",values.Select(x=>Project(s,variant,x,build,stamp is null?null:()=>stamp(x))));
         }
-        outp.Obj("restaurant").Remove("enrollmentHash");FilterEcosystemSnapshot(s,u,outp);return outp;
+        FilterEcosystemSnapshot(s,u,outp);return outp;
     }
     public JsonObject Act(BranchState s,JsonObject u,string type,JsonObject p)
     {

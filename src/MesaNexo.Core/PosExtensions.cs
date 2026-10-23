@@ -74,16 +74,19 @@ public sealed partial class Restaurant
         return TryFront(s,u,type,p,out result)||TryBackoffice(s,u,type,p,out result)||TryLoyalty(s,u,type,p,out result)||TryClosings(s,u,type,p,out result)||TryTableQr(s,u,type,p,out result)||TryIntegrations(s,u,type,p,out result)||TryCloudProposal(s,u,type,p,out result)||TryPos(s,u,type,p,out result)||TryInventory(s,u,type,p,out result)||TryCash(s,u,type,p,out result)||TryDelivery(s,u,type,p,out result)||TryFiscal(s,u,type,p,out result);
     }
     void AfterEcosystem(BranchState s,JsonObject u,string type,JsonObject p,JsonObject result) {InventoryAfterAction(s,u,type,p,result);FrontAfterAction(s,u,type,p,result);BackofficeAfterAction(s,type,p);IntegrationAfterAction(s,u,type,p,result);}
-    void FilterEcosystemSnapshot(BranchState s,JsonObject u,JsonObject output)
+    void FilterEcosystemSnapshot(BranchState s,JsonObject u,StateParts output)
     {
         // Only the newest 500 of a kind are returned; reach just those unless a role filter must run first.
-        foreach(var kind in EcosystemKinds){var values=u.S("role")!="manager"&&kind is "cloudproposal" or "folio"?s.List(kind):s.Latest(kind,500);if(u.S("role")!="manager"){
-            if(new[]{"cloudproposal","printjob","warehouse","ingredient","recipe","recipeversion","stock","stocklayer","stockmovement","stockjob","unitstock","transfer","ownernotice","cashadjustment","fiscal","invoicetoken","supplier","purchase","payable","payablepayment","stockcount","expenseaccount","expense","pettymove","pinauth","staffcharge","zreport"}.Contains(kind))values=kind=="cloudproposal"&&u.S("role")=="mesero"?values.Where(x=>x.Obj("command").S("type")=="table"&&x.S("status")=="pending-review"&&x.S("visitId")!=""&&s.Get("visit",x.S("visitId")).S("waiterId")==u.S("id")).Select(x=>J.O("id",x.S("id"),"visitId",x.S("visitId"),"tableId",x.S("tableId"),"status",x.S("status"),"command",J.O("type","table","payload",J.O("kind","order","items",x.Obj("command").Obj("payload").A("items").DeepClone(),"notes",x.Obj("command").Obj("payload").S("notes"))),"receivedAt",x.S("receivedAt"))):[];
+        foreach(var kind in EcosystemKinds){var values=u.S("role")!="manager"&&kind is "cloudproposal" or "folio"?s.List(kind):s.Latest(kind,500);Func<JsonObject,JsonObject> build=x=>(JsonObject)x.DeepClone();var variant=kind;if(u.S("role")!="manager"){
+            if(new[]{"cloudproposal","printjob","warehouse","ingredient","recipe","recipeversion","stock","stocklayer","stockmovement","stockjob","unitstock","transfer","ownernotice","cashadjustment","fiscal","invoicetoken","supplier","purchase","payable","payablepayment","stockcount","expenseaccount","expense","pettymove","pinauth","staffcharge","zreport"}.Contains(kind)){
+                if(kind=="cloudproposal"&&u.S("role")=="mesero"){values=values.Where(x=>x.Obj("command").S("type")=="table"&&x.S("status")=="pending-review"&&x.S("visitId")!=""&&s.Get("visit",x.S("visitId")).S("waiterId")==u.S("id"));variant="cloudproposal:mesero";build=x=>J.O("id",x.S("id"),"visitId",x.S("visitId"),"tableId",x.S("tableId"),"status",x.S("status"),"command",J.O("type","table","payload",J.O("kind","order","items",x.Obj("command").Obj("payload").A("items").DeepClone(),"notes",x.Obj("command").Obj("payload").S("notes"))),"receivedAt",x.S("receivedAt"));}
+                else values=[];
+            }
             else if(kind=="folio")values=values.Where(x=>s.Get("visit",x.S("visitId")).S("waiterId")==u.S("id"));
             else if(u.S("role")=="cocina"&&kind!="station")values=[];
         }
-        if(kind=="invoicetoken")values=values.Select(x=>J.O("id",x.S("id"),"visitId",x.S("visitId"),"expires",x.S("expires"),"used",x.B("used")));
-        output[kind+"s"]=new JsonArray(values.TakeLast(500).Select(x=>(JsonNode)x.DeepClone()).ToArray());}
+        if(kind=="invoicetoken"){variant="invoicetoken:public";build=x=>J.O("id",x.S("id"),"visitId",x.S("visitId"),"expires",x.S("expires"),"used",x.B("used"));}
+        output.Items(kind+"s",values.TakeLast(500).Select(x=>Project(s,variant,x,build)));}
         FilterBlindSnapshot(s,u,output);FilterIntegrationSnapshot(s,u,output);
     }
 }

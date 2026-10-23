@@ -198,7 +198,7 @@ public sealed partial class Restaurant
         if(owner!="")foreach(var n in s.Related("ownernotice","messageId","").Take(5).ToArray())if(Message(s,"email",owner,"owner-notice",n.S("id"),OwnerText(s,n)) is {} sent)n["messageId"]=sent.S("id");
         if(Simulated(s,"printer") is not null)foreach(var job in s.Related("printjob","status","pending").Take(20).ToArray()){job["status"]="simulated";job["attemptId"]=J.Id();job["driver"]="simulated-escpos";job["evidence"]=job.S("type")=="drawer"?"Pulso RJ11 simulado · el cajón físico no se abrió":"Impresión simulada · no salió papel";job["resolvedAt"]=J.Now();}
     }
-    void FilterIntegrationSnapshot(BranchState s,JsonObject u,JsonObject output)
+    void FilterIntegrationSnapshot(BranchState s,JsonObject u,StateParts output)
     {
         if(u.S("role")=="manager")return;var role=u.S("role");
         output["integrations"]=new JsonArray(s.List("integration").Select(x=>(JsonNode)J.O("id",x.S("id"),"mode",x.S("mode"))).ToArray());
