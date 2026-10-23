@@ -1,5 +1,5 @@
 import React,{useEffect,useRef,useState} from 'react';
-import {Button,PanelHeading,Kpis,MetricCard,Pill,Sq,Empty,Notice,DataTable,PageTools,Bar,UiIcon} from './ui';
+import {Button,PanelHeading,Kpis,MetricCard,Pill,Sq,Empty,Notice,DataTable,PageTools,Bar,UiIcon,Select} from './ui';
 import {DialogFrame} from './motion';
 import {cents} from './bridge';
 
@@ -58,15 +58,15 @@ function PurchaseDialog({state:s,mode,order,ctx,action}:{state:any;mode:'order'|
   {ctx.error&&<div className="alert error" role="alert">{ctx.error}</div>}
   {!suppliers.length?<Notice tone="warn">Registra un proveedor antes de comprar.</Notice>:<>
   <div className="po-top">
-   <label>Proveedor<select value={supplierId} disabled={!!order} onChange={e=>{setSupplier(e.target.value);setDueDays(String(suppliers.find(x=>x.id===e.target.value)?.creditDays??0));}}>{suppliers.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
-   <label>Almacén de entrega<select value={warehouseId} disabled={!!order} onChange={e=>setWarehouse(e.target.value)}>{warehouses.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+   <label>Proveedor<Select value={supplierId} disabled={!!order} onChange={e=>{setSupplier(e.target.value);setDueDays(String(suppliers.find(x=>x.id===e.target.value)?.creditDays??0));}}>{suppliers.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</Select></label>
+   <label>Almacén de entrega<Select value={warehouseId} disabled={!!order} onChange={e=>setWarehouse(e.target.value)}>{warehouses.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</Select></label>
   </div>
   <div className="po-lines" role="table" aria-label="Insumos de la compra">
    <div className="po-line head" role="row"><span>Insumo</span><span>Cantidad</span><span>Unidad</span><span>Costo total</span><span/></div>
    {lines.map(l=>{const o=ordered(l.ingredientId);const diff=o&&mode==='receive'&&fromUnit(l.quantity,l.unit)!==o.quantity;return <div className={'po-line'+(diff?' diff':'')} role="row" key={l.key}>
-    <select aria-label="Insumo" value={l.ingredientId} onChange={e=>patch(l.key,{ingredientId:e.target.value,unit:units(family(e.target.value))[0][0]})}>{ingredients.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</select>
+    <Select aria-label="Insumo" value={l.ingredientId} onChange={e=>patch(l.key,{ingredientId:e.target.value,unit:units(family(e.target.value))[0][0]})}>{ingredients.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}</Select>
     <input aria-label={'Cantidad de '+nameOf(s,'ingredient',l.ingredientId)} type="number" inputMode="decimal" min={0} step="any" value={l.quantity} placeholder="0" onFocus={e=>e.target.select()} onChange={e=>patch(l.key,{quantity:e.target.value})}/>
-    <select aria-label="Unidad" value={l.unit} onChange={e=>patch(l.key,{unit:e.target.value})}>{units(family(l.ingredientId)).map(([v,t])=><option key={v} value={v}>{t}</option>)}</select>
+    <Select aria-label="Unidad" value={l.unit} onChange={e=>patch(l.key,{unit:e.target.value})}>{units(family(l.ingredientId)).map(([v,t])=><option key={v} value={v}>{t}</option>)}</Select>
     <span className="affix"><span aria-hidden="true">$</span><input aria-label={'Costo de '+nameOf(s,'ingredient',l.ingredientId)} type="number" inputMode="decimal" min={0} step="0.01" value={l.cost} placeholder="0.00" onFocus={e=>e.target.select()} onChange={e=>patch(l.key,{cost:e.target.value})}/></span>
     <Button type="button" className="ghost icon-only sm" icon="close" aria-label="Quitar renglón" disabled={lines.length===1} onClick={()=>setLines(ls=>ls.filter(x=>x.key!==l.key))}>{''}</Button>
     {diff&&<small className="po-diff">Pedido: {qty(o.quantity,family(l.ingredientId))}</small>}
@@ -77,7 +77,7 @@ function PurchaseDialog({state:s,mode,order,ctx,action}:{state:any;mode:'order'|
    <label>Folio de factura o remisión<input value={invoice} maxLength={60} onChange={e=>setInvoice(e.target.value)} placeholder="Ej. F-1024"/></label>
    <label>Días de crédito<input type="number" min={0} max={180} value={dueDays} onFocus={e=>e.target.select()} onChange={e=>setDueDays(e.target.value)}/><small>Vence el {day(new Date(Date.now()+(Number(dueDays)||0)*86400000).toISOString())}</small></label>
    <label className="check-row"><input type="checkbox" checked={payNow} onChange={e=>setPayNow(e.target.checked)}/>Pagar ahora</label>
-   {payNow&&<label>Pagar desde<select value={source} onChange={e=>setSource(e.target.value)}>{SOURCES.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select></label>}
+   {payNow&&<label>Pagar desde<Select value={source} onChange={e=>setSource(e.target.value)}>{SOURCES.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</Select></label>}
   </div>:<label>Notas para el proveedor<textarea value={notes} maxLength={500} onChange={e=>setNotes(e.target.value)} placeholder="Horario de entrega, presentación…"/></label>}
   </>}
   <div className="dialog-actions"><Button type="button" className="ghost" icon={false} onClick={ctx.close} disabled={ctx.busy}>Volver</Button><Button className="primary" icon={receiving?'check':'save'} disabled={ctx.busy||!suppliers.length||!warehouses.length} onClick={send}>{receiving?'Registrar entrada':'Crear orden'}</Button></div>
@@ -108,14 +108,14 @@ export function CountDialog({state:s,ctx,action}:{state:any;ctx:Ctx;action:Props
  return <DialogFrame label="Conteo físico" close={ctx.close} busy={ctx.busy} className="po-dialog">
   <Head title="Conteo físico" note="Captura lo que hay en el almacén. La diferencia contra el inventario teórico se ajusta a costo y queda en el historial." close={ctx.close} busy={ctx.busy}/>
   {ctx.error&&<div className="alert error" role="alert">{ctx.error}</div>}
-  <div className="po-top"><label>Almacén<select value={warehouseId} onChange={e=>{setWarehouse(e.target.value);setCounts({});}}>{warehouses.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</select></label><label>Nota<input value={note} maxLength={300} onChange={e=>setNote(e.target.value)} placeholder="Ej. Cierre semanal"/></label></div>
+  <div className="po-top"><label>Almacén<Select value={warehouseId} onChange={e=>{setWarehouse(e.target.value);setCounts({});}}>{warehouses.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</Select></label><label>Nota<input value={note} maxLength={300} onChange={e=>setNote(e.target.value)} placeholder="Ej. Cierre semanal"/></label></div>
   {!rows.length?<Empty icon="box" title="Sin insumos" text="Registra insumos en Inventario."/>:<div className="po-lines count" role="table" aria-label="Conteo por insumo">
    <div className="po-line head" role="row"><span>Insumo</span><span>Teórico</span><span>Contado</span><span>Unidad</span><span>Diferencia</span></div>
    {rows.map(({i,theoretical,reserved})=>{const e=entry(i.id,i.unit);const counted=e.value.trim()===''?NaN:fromUnit(e.value,e.unit);const diff=Number.isNaN(counted)?null:counted-theoretical;return <div className="po-line" role="row" key={i.id}>
     <span className="w"><b>{i.name}</b>{reserved>0&&<small>Reservado {qty(reserved,i.unit)}</small>}</span>
     <span className="num">{qty(theoretical,i.unit)}</span>
     <input aria-label={'Contado de '+i.name} type="number" inputMode="decimal" min={0} step="any" placeholder="—" value={e.value} onFocus={ev=>ev.target.select()} onChange={ev=>setCounts(c=>({...c,[i.id]:{...e,value:ev.target.value}}))}/>
-    <select aria-label={'Unidad de '+i.name} value={e.unit} onChange={ev=>setCounts(c=>({...c,[i.id]:{...e,unit:ev.target.value}}))}>{units(i.unit).map(([v,t])=><option key={v} value={v}>{t}</option>)}</select>
+    <Select aria-label={'Unidad de '+i.name} value={e.unit} onChange={ev=>setCounts(c=>({...c,[i.id]:{...e,unit:ev.target.value}}))}>{units(i.unit).map(([v,t])=><option key={v} value={v}>{t}</option>)}</Select>
     <span className={'num '+(diff===null||diff===0?'':diff<0?'neg':'pos')}>{diff===null?'—':(diff>0?'+':'')+qty(diff,i.unit)}</span>
    </div>;})}
   </div>}
