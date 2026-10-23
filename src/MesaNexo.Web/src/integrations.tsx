@@ -115,9 +115,54 @@ export function IntegrationsPage({state:s,form,action,run}:{state:any;form:any;a
 }
 const statusText:Record<string,string>={approved:'Aprobado',declined:'Rechazado',uncertain:'Sin respuesta',reversed:'Revertido',stamped:'Timbrado',rejected:'Rechazado',cancelled:'Cancelado',posted:'Cargado',paid:'Pagado',failed:'Fallido',expired:'Vencido',refunded:'Reembolsado',pending:'Pendiente',accepted:'Aceptado','handed-off':'Entregado',ok:'Correcto',ringing:'Entrante',simulated:'Activa',off:'Apagada'};
 
-// ---------- simulated PIN pad ----------
+// Dialogs keep the state they were opened with; main.tsx keeps the latest here for the ones that follow a provider.
+export const latest={state:null as any};
+// ---------- PIN pad: simulated test cards, or the branch's real terminals ----------
 const CARDS=[{value:'approve',label:'Aprobada',card:'Visa •••• 4242',tone:'green'},{value:'decline',label:'Rechazada',card:'Mastercard •••• 0002',tone:'red'},{value:'timeout',label:'Sin respuesta',card:'Visa •••• 0119',tone:'amber'}];
-export function TerminalDialog({visit,state:s,action,ctx}:{visit:Row;state:any;action:Act;ctx:Ctx}){
+const BRANDS=['Visa','Mastercard','American Express','Carnet','Otra'];
+export const terminalBusy=(t:Row)=>['queued','sending','waiting','cancel-requested','uncertain'].includes(t.status);
+export function TerminalDialog(props:{visit:Row;state:any;action:Act;ctx:Ctx;txnId?:string}){
+ return liveOn(latest.state||props.state,'terminal')?<LiveTerminalDialog {...props}/>:<SimulatedTerminalDialog {...props}/>;
+}
+function LiveTerminalDialog({visit,state:opened,action,ctx,txnId:given=''}:{visit:Row;state:any;action:Act;ctx:Ctx;txnId?:string}){
+ const s=latest.state||opened,terminals:Row[]=s.connection?.terminals||[],connected=terminals.filter(t=>!t.manual),manual=terminals.filter(t=>t.manual);
+ const folios=list(s,'folio').filter(f=>f.visitId===visit.id&&!f.void),balance=list(s,'visit').find(v=>v.id===visit.id)?.balance??visit.balance;
+ const [kind,setKind]=useState(connected.length?'connected':'manual'),[terminalId,setTerminalId]=useState((connected[0]||manual[0])?.id||''),[amount,setAmount]=useState(String((balance||0)/100)),[tip,setTip]=useState(''),[folioId,setFolioId]=useState(folios[0]?.id||'');
+ const [auth,setAuth]=useState(''),[last4,setLast4]=useState(''),[brand,setBrand]=useState('Visa'),[txnId,setTxnId]=useState(given),[working,setWorking]=useState(false),[failure,setFailure]=useState('');
+ const txn=txnId?list(s,'terminaltxn').find(t=>t.id===txnId):null,pool=kind==='connected'?connected:manual,chosen=terminals.find(t=>t.id===(txn?.terminalId||terminalId));
+ const go=async(fn:()=>Promise<any>)=>{setWorking(true);setFailure('');try{const r=await fn();if(r?.id)setTxnId(r.id);}catch(e:any){setFailure(e.message);}finally{setWorking(false);}};
+ const money_=()=>({amount:cents(amount),tip:tip.trim()?cents(tip):0,...(folioId?{folioId}:{})});
+ const voucher={authCode:auth,last4,brand};
+ const charge=()=>go(()=>kind==='connected'?action('terminal.charge',{visitId:visit.id,terminalId,...money_()}):action('terminal.manual',{visitId:visit.id,terminalId,...money_(),...voucher}));
+ const screens:Record<string,[string,string,string]>={queued:['wait','ENVIANDO…','A '+(chosen?.name||'la terminal')],sending:['wait','ENVIANDO…','A '+(chosen?.name||'la terminal')],waiting:['wait','EN LA TERMINAL','Pide al cliente su tarjeta'],'cancel-requested':['wait','CANCELANDO…',txn?.message||''],approved:['ok','APROBADA',[txn?.brand,txn?.last4&&'•••• '+txn.last4,txn?.authCode&&'aut. '+txn.authCode].filter(Boolean).join(' · ')],declined:['bad','RECHAZADA',txn?.message||''],cancelled:['bad','CANCELADO',txn?.message||''],expired:['bad','VENCIDO',txn?.message||''],failed:['bad','NO SE ENVIÓ',txn?.message||''],uncertain:['wait','SIN RESPUESTA','Consulta antes de cobrar de nuevo'],'refund-queued':['wait','DEVOLVIENDO',txn?.message||''],refunding:['wait','DEVOLVIENDO',txn?.message||''],refunded:['wait','DEVUELTO',txn?.message||''],'refund-manual':['wait','DEVOLUCIÓN MANUAL',txn?.message||''],'refund-failed':['bad','DEVOLUCIÓN FALLIDA',txn?.message||'']};
+ const screen=txn?screens[txn.status]||['wait',txn.status,'']:['idle',working?'PROCESANDO…':kind==='manual'?'COBRA EN LA TERMINAL':'LISTA',money((()=>{try{return cents(amount)+(tip.trim()?cents(tip):0);}catch{return 0;}})())];
+ const retry=txn&&['declined','cancelled','expired','failed'].includes(txn.status);
+ const voucherFields=<div className="terminal-fields"><label>Autorización del voucher<input value={auth} maxLength={8} onChange={e=>setAuth(e.target.value.toUpperCase())}/></label><label>Últimos 4 dígitos<input inputMode="numeric" maxLength={4} value={last4} onChange={e=>setLast4(e.target.value.replace(/\D/g,''))}/></label><label>Marca<Select value={brand} onChange={e=>setBrand(e.target.value)}>{BRANDS.map(b=><option key={b}>{b}</option>)}</Select></label></div>;
+ return <DialogFrame label="Cobrar con terminal" close={ctx.close} busy={working} className="terminal-dialog">
+  <div className="dialog-head"><div><h2>Cobrar con terminal</h2><p>{kind==='manual'&&!txn?'Cobra en la terminal BBVA y registra aquí el voucher':(chosen?.name||'Terminal')+' · cobro real'}</p></div><Button className="ghost dialog-close" icon="close" onClick={ctx.close} disabled={working} aria-label="Cerrar diálogo">{''}</Button></div>
+  {failure&&<div className="alert error" role="alert">{failure}</div>}
+  <div className={'pinpad '+screen[0]} aria-live="polite"><div className="pinpad-screen"><small>{chosen?.name||''}</small><b>{screen[1]}</b><span>{screen[2]}</span></div><div className="pinpad-keys" aria-hidden="true">{Array.from({length:12},(_,i)=><i key={i}/>)}</div></div>
+  {!txn||retry?<>
+   {connected.length>0&&manual.length>0&&<div className="seg sm" role="radiogroup" aria-label="Tipo de terminal">{[['connected','Terminal conectada'],['manual','BBVA · voucher']].map(([value,label])=><Button key={value} type="button" role="radio" aria-checked={kind===value} className={kind===value?'active':''} icon={false} onClick={()=>{setKind(value);setTerminalId((value==='connected'?connected:manual)[0]?.id||'');}}>{label}</Button>)}</div>}
+   <div className="terminal-fields">
+    {pool.length>1&&<label>Terminal<Select value={terminalId} onChange={e=>setTerminalId(e.target.value)}>{pool.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</Select></label>}
+    {folios.length>0&&<label>Subfolio<Select value={folioId} onChange={e=>setFolioId(e.target.value)}>{folios.map(f=><option key={f.id} value={f.id}>Parte {f.number} · {money(f.total)}</option>)}</Select></label>}
+    <label>Importe MXN<input inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)}/></label>
+    <label>Propina MXN<input inputMode="decimal" value={tip} placeholder="0" onChange={e=>setTip(e.target.value)}/></label>
+   </div>
+   {kind==='manual'&&voucherFields}
+   <div className="dialog-actions"><Button type="button" className="ghost" icon={false} onClick={ctx.close} disabled={working}>Cancelar</Button><Button className="primary" icon="card" disabled={working||!terminalId} onClick={()=>{setTxnId('');void charge();}}>{working?'Enviando…':kind==='manual'?'Registrar cobro':retry?'Intentar de nuevo':'Enviar a la terminal'}</Button></div>
+  </>:txn.status==='uncertain'&&!txn.providerRef?<>
+   <p className="dialog-note">La terminal no confirmó el cobro. Revisa su reporte: si aparece, registra la autorización del voucher; si no, márcalo sin cargo.</p>
+   {voucherFields}
+   <div className="dialog-actions"><Button className="ghost" icon="close" disabled={working} onClick={()=>void go(()=>action('terminal.reconcile',{id:txn.id,outcome:'not-charged'}))}>No se cobró</Button><Button className="primary" icon="check" disabled={working} onClick={()=>void go(()=>action('terminal.reconcile',{id:txn.id,outcome:'charged',...voucher}))}>Sí se cobró</Button></div>
+  </>:<div className="dialog-actions">
+   {txn.status==='waiting'&&<Button className="ghost" icon="close" disabled={working} onClick={()=>void go(()=>action('terminal.cancel',{id:txn.id}))}>Cancelar cobro</Button>}
+   {txn.status==='uncertain'&&<Button className="ghost" icon="refresh" disabled={working} onClick={()=>void go(()=>action('terminal.reconcile',{id:txn.id}))}>Consultar terminal</Button>}
+   <Button className="primary" icon={false} disabled={working} onClick={ctx.close}>{['approved','refunded','refund-manual'].includes(txn.status)?'Listo':'Cerrar'}</Button></div>}
+ </DialogFrame>;
+}
+function SimulatedTerminalDialog({visit,state:s,action,ctx}:{visit:Row;state:any;action:Act;ctx:Ctx}){
  const folios=list(s,'folio').filter(f=>f.visitId===visit.id&&!f.void);
  const [amount,setAmount]=useState(String((visit.balance||0)/100)),[tip,setTip]=useState(''),[card,setCard]=useState('approve'),[folioId,setFolioId]=useState(folios[0]?.id||'');
  const [txn,setTxn]=useState<any>(null),[working,setWorking]=useState(false),[failure,setFailure]=useState('');
@@ -144,20 +189,22 @@ export function TerminalDialog({visit,state:s,action,ctx}:{visit:Row;state:any;a
 // ---------- account payment extras ----------
 export function AccountPayments({state:s,visit:v,action,run,form,dialog,canPay}:{state:any;visit:Row;action:Act;run:any;form:any;dialog:Dialog;canPay:boolean}){
  const manager=s.user?.role==='manager',links=byTime(list(s,'paylink').filter(l=>l.visitId===v.id&&['pending','failed','expired','refunded'].includes(l.status))).slice(-2),silent=list(s,'terminaltxn').filter(t=>t.visitId===v.id&&t.status==='uncertain');
+ const inFlight=list(s,'terminaltxn').filter(t=>t.visitId===v.id&&t.live&&terminalBusy(t)&&t.status!=='uncertain'),follow=(t:Row)=>dialog(ctx=><TerminalDialog visit={v} state={s} action={action} ctx={ctx} txnId={t.id}/>);
  const room=()=>form('Cargo a habitación',[{key:'room',label:'Habitación',required:true,placeholder:'204'},{key:'guest',label:'Apellido del huésped',required:true,hint:'El PMS lo valida contra la habitación.'},{key:'amount',label:'Importe MXN',type:'money',min:0.01,value:v.balance/100,required:true}],'pms.charge',{visitId:v.id},(settingsOf(s,'pms').system==='cloudbeds'?'Cloudbeds':'Oracle Opera')+' simulado · el cargo aparece en el folio del huésped.',(x:any)=>({room:x.room,guest:x.guest,amount:cents(x.amount)}));
  const open=v.status==='open',hasBalance=v.balance>0;
  return <>
-  {silent.map(t=><div className="alert warn" role="status" key={t.id}><UiIcon name="alert"/><span><b>Cobro con terminal sin respuesta · {money(t.amount+t.tip)}.</b> Consulta el resultado antes de volver a cobrar.</span><Button className="ghost sm" icon="refresh" onClick={()=>run(()=>action('terminal.reconcile',{id:t.id}),'Terminal consultada')}>Consultar terminal</Button></div>)}
+  {silent.map(t=><div className="alert warn" role="status" key={t.id}><UiIcon name="alert"/><span><b>Cobro con terminal sin respuesta · {money(t.amount+t.tip)}.</b> Consulta el resultado antes de volver a cobrar.</span><Button className="ghost sm" icon="refresh" onClick={()=>t.live?follow(t):run(()=>action('terminal.reconcile',{id:t.id}),'Terminal consultada')}>Consultar terminal</Button></div>)}
+  {inFlight.map(t=><div className="alert info" role="status" key={t.id}><UiIcon name="card"/><span><b>Cobro en {t.terminalName} · {money(t.amount+t.tip)}.</b> {t.message}</span><Button className="ghost sm" icon="card" onClick={()=>follow(t)}>Ver terminal</Button></div>)}
   {links.map(l=><div className={'paylink'+(l.status==='pending'?'':' done')} key={l.id}><Sq icon="cloud" tone={l.status==='pending'?'blue':'neutral'}/><div className="w"><b>Liga de pago · {money(l.amount)} · {l.provider==='mercadopago'?'Mercado Pago':'Stripe'}</b><code>{l.payUrl}</code><small>{l.status==='pending'?'Vence a las '+clock(l.expiresAt)+(l.messageId?' · enviada por WhatsApp':''):l.message}</small></div>
    {l.status==='pending'&&<span className="row-actions">{manager&&<><Button className="primary xs" icon="check" onClick={()=>run(()=>action('paylink.simulate',{id:l.id,outcome:'paid'}),'Pago en línea recibido (simulado)')}>Simular pago</Button><Button className="ghost xs" icon="close" onClick={()=>run(()=>action('paylink.simulate',{id:l.id,outcome:'failed'}),'El proveedor rechazó el pago (simulado)')}>Simular rechazo</Button></>}<Button className="ghost xs" icon="close" onClick={()=>run(()=>action('paylink.cancel',{id:l.id}),'Liga cancelada')}>Cancelar liga</Button></span>}</div>)}
   {open&&canPay&&hasBalance&&(simOn(s,'terminal')||simOn(s,'pms')||simOn(s,'onlinepay'))&&<div className="pay-integrations">
-   {simOn(s,'terminal')&&<Button className="ghost" icon="card" disabled={!!silent.length} onClick={()=>dialog(ctx=><TerminalDialog visit={v} state={s} action={action} ctx={ctx}/>)}>Cobrar con terminal</Button>}
+   {activeOn(s,'terminal')&&<Button className="ghost" icon="card" disabled={!!silent.length||!!inFlight.length} onClick={()=>dialog(ctx=><TerminalDialog visit={v} state={s} action={action} ctx={ctx}/>)}>Cobrar con terminal</Button>}
    {simOn(s,'pms')&&<Button className="ghost" icon="key" onClick={room}>Cargo a habitación</Button>}
    {simOn(s,'onlinepay')&&<Button className="ghost" icon="cloud" disabled={links.some(l=>l.status==='pending')} onClick={()=>run(()=>action('paylink.create',{visitId:v.id}),v.customerId&&simOn(s,'messaging')?'Liga de pago enviada por WhatsApp (simulado)':'Liga de pago creada')}>Liga de pago</Button>}
   </div>}
  </>;
 }
-export function paymentDetail(p:Row){return p.terminal?p.terminal.brand+' •••• '+p.terminal.last4+' · aut. '+p.terminal.authCode:p.method==='room'?'Habitación '+p.room+' · '+p.reference:p.method==='online'?(p.provider==='mercadopago'?'Mercado Pago':'Stripe')+' · '+p.reference:p.method==='platform'?(PLATFORMS[p.platform]?.name||'Plataforma')+' · '+p.reference:'';}
+export function paymentDetail(p:Row){return p.terminal?[p.terminal.brand,p.terminal.last4&&'•••• '+p.terminal.last4,p.terminal.authCode&&'aut. '+p.terminal.authCode].filter(Boolean).join(' · ')||'Terminal':p.method==='room'?'Habitación '+p.room+' · '+p.reference:p.method==='online'?(p.provider==='mercadopago'?'Mercado Pago':'Stripe')+' · '+p.reference:p.method==='platform'?(PLATFORMS[p.platform]?.name||'Plataforma')+' · '+p.reference:'';}
 
 // ---------- delivery page: platform orders and incoming calls ----------
 export function platformCards(s:any,{action,run,form,openVisit,manager}:{action:Act;run:any;form:any;openVisit:(id:string)=>void;manager:boolean}){

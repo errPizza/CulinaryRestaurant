@@ -57,17 +57,18 @@ public sealed partial class BranchService
     // Outside work kept durable. The oldest queued record is claimed (status "sending", an attempt id and a lease) in its own
     // commit before the provider is called once; the answer is stored after. A claim whose lease ran out without an answer is
     // never sent again: `recover` asks the provider what happened, and without an answer it stays "uncertain" for a person.
-    public async Task<bool> SendNext(string kind,string actor,Func<JsonObject,bool> queued,Func<BranchState,JsonObject,CancellationToken,Task<JobResult>> send,Func<BranchState,JsonObject,CancellationToken,Task<JobResult?>>? recover=null,CancellationToken ct=default)
+    // Each kind of call on a record claims it with its own status (`claim`), so a lost claim goes back to the right `recover`.
+    public async Task<bool> SendNext(string kind,string actor,Func<JsonObject,bool> queued,Func<BranchState,JsonObject,CancellationToken,Task<JobResult>> send,Func<BranchState,JsonObject,CancellationToken,Task<JobResult?>>? recover=null,CancellationToken ct=default,string claim="sending")
     {
         var s=await Load(ct);var now=DateTimeOffset.UtcNow;
-        var lost=s.List(kind).FirstOrDefault(x=>x.S("status")=="sending"&&!Leased(x,now));
+        var lost=s.List(kind).FirstOrDefault(x=>x.S("status")==claim&&!Leased(x,now));
         if(lost is not null){
             var id=lost.S("id");JobResult? found=null;try{if(recover is not null)found=await recover(s,(JsonObject)lost.DeepClone(),ct);}catch(Exception)when(!ct.IsCancellationRequested){}
             found??=JobResult.Of("uncertain","Sin respuesta del proveedor; revisa en su portal antes de repetir",lost.S("reference"));
             return await Record(kind,id,lost.S("attemptId"),actor,found,ct);
         }
         var row=s.List(kind).Where(x=>queued(x)&&!Leased(x,now)).OrderBy(x=>x.S("at"),StringComparer.Ordinal).FirstOrDefault();if(row is null)return false;
-        var rid=row.S("id");var attempt=J.Id();row["status"]="sending";row["attemptId"]=attempt;row["leaseUntil"]=now.AddMinutes(2).ToString("O");row["attempts"]=row.L("attempts")+1;
+        var rid=row.S("id");var attempt=J.Id();row["status"]=claim;row["attemptId"]=attempt;row["leaseUntil"]=now.AddMinutes(2).ToString("O");row["attempts"]=row.L("attempts")+1;
         var snapshot=(JsonObject)row.DeepClone();var view=s;
         try{await Commit(s,J.Id(),actor,J.Hash(rid+attempt),J.O("id",rid,"attemptId",attempt),kind+".claim",ct);}catch(StoreException e)when(e.Code=="COS-DATA-CONFLICT"){return false;}
         JobResult result;try{result=await send(view,snapshot,ct);}
@@ -103,7 +104,7 @@ public static partial class LiveServices
     public static JsonArray Register(IServiceCollection services,IntegrationConfig config)
     {
         var terminals=new JsonArray();
-        Messaging(services,config);Maps(services,config);CallerId(services,config);
+        Messaging(services,config);Maps(services,config);CallerId(services,config);Terminals(services,config,terminals);
         return terminals;
     }
     static void Worker(IServiceCollection services,string key,Func<BranchService,Func<CancellationToken,Task<bool>>> step,int idleMs=2000)=>services.AddSingleton<IHostedService>(sp=>{var branch=sp.GetRequiredService<BranchService>();return new IntegrationWorker(key,branch,step(branch),sp.GetRequiredService<ILogger<IntegrationWorker>>(),idleMs);});

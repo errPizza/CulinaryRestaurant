@@ -89,11 +89,12 @@ public sealed partial class Restaurant
         if(r.S("email")!="")Message(s,"email",r.S("email"),"invoice",f.S("id"),"Tu factura de "+s.Meta.S("name")+" por "+Pesos(totals.L("total"))+" quedó timbrada. UUID "+uuid+". SIMULADA: no tiene validez fiscal.");
         return f;
     }
-    void ApproveTerminal(BranchState s,JsonObject u,JsonObject txn)
+    // A live terminal gives its own authorization (or none, as Mercado Pago Point and Clip only identify the payment).
+    void ApproveTerminal(BranchState s,JsonObject u,JsonObject txn,string? auth=null,bool simulated=true)
     {
-        var pay=Act(s,u,"payment.add",J.O("visitId",txn.S("visitId"),"amount",txn.L("amount"),"tip",txn.L("tip"),"method","card","folioId",txn.S("folioId")));var auth=Code(6);
-        s.Get("payment",pay.S("id"))["terminal"]=J.O("terminalId",txn.S("terminalId"),"brand",txn.S("brand"),"last4",txn.S("last4"),"authCode",auth,"reference",txn.S("reference"),"simulated",true);
-        txn["status"]="approved";txn["authCode"]=auth;txn["paymentId"]=pay.S("id");txn["message"]="Aprobada · autorización "+auth;
+        var pay=Act(s,u,"payment.add",J.O("visitId",txn.S("visitId"),"amount",txn.L("amount"),"tip",txn.L("tip"),"method","card","folioId",txn.S("folioId")));auth??=Code(6);
+        s.Get("payment",pay.S("id"))["terminal"]=J.O("terminalId",txn.S("terminalId"),"brand",txn.S("brand"),"last4",txn.S("last4"),"authCode",auth,"reference",txn.S("reference"),"simulated",simulated,"provider",txn.S("provider"));
+        txn["status"]="approved";txn["authCode"]=auth;txn["paymentId"]=pay.S("id");txn["message"]=auth==""?"Aprobada":"Aprobada · autorización "+auth;
     }
     void AcceptAggregator(BranchState s,JsonObject u,JsonObject order)
     {
@@ -123,7 +124,9 @@ public sealed partial class Restaurant
             row["mode"]=mode;row["updatedBy"]=u.S("id");row["updatedAt"]=J.Now();Log(s,u,key,"configure",mode,mode=="simulated"?"Simulación activa":mode=="live"?"Conexión real activa":"Integración apagada",simulated:mode!="live");result=row;break;}
         case "pac.stamp":Role(u,"manager");result=StampSimulated(s,u,s.Get("fiscal",id));break;
         case "terminal.charge":{
-            Role(u,"mesero","manager");Need(u.S("role")=="manager"||u.Obj("permissions").B("payments",true),"Permiso de pagos deshabilitado",403);var config=Simulator(s,"terminal","la terminal bancaria");var v=Own(s,u,p.S("visitId"));
+            Role(u,"mesero","manager");Need(u.S("role")=="manager"||u.Obj("permissions").B("payments",true),"Permiso de pagos deshabilitado",403);
+            if(IsLive(s,"terminal")){result=LiveCharge(s,u,p);break;}
+            var config=Simulator(s,"terminal","la terminal bancaria");var v=Own(s,u,p.S("visitId"));
             var amount=Amount(p,"amount",1);var tip=Amount(p,"tip");Need(amount<=Totals(s,v).L("balance"),"El pago supera el saldo");Need(s.Related("cash","status","open").Any(),"Abre una caja antes de registrar pagos");
             Need(!s.Related("terminaltxn","visitId",v.S("id")).Any(x=>x.S("status")=="uncertain"),"Hay un cobro con terminal sin respuesta en esta cuenta; consúltalo antes de cobrar otra vez");
             var outcome=p.S("card","approve");Need(TestCards.ContainsKey(outcome),"Tarjeta de prueba inválida");var card=TestCards[outcome];
@@ -133,10 +136,13 @@ public sealed partial class Restaurant
             else{txn["status"]="uncertain";txn["message"]="La terminal no respondió. Consulta el resultado antes de cobrar de nuevo";}
             Log(s,u,"terminal","charge",txn.S("status"),card.Brand+" •••• "+card.Last4+" · "+Pesos(amount+tip),txn.S("reference"));result=txn;break;}
         case "terminal.reconcile":{
-            Role(u,"mesero","manager");Simulator(s,"terminal","la terminal bancaria");var txn=s.Get("terminaltxn",id);Need(txn.S("status")=="uncertain","Ese cobro ya tiene resultado");var v=s.Get("visit",txn.S("visitId"));Need(u.S("role")=="manager"||v.S("waiterId")==u.S("id"),"La cuenta pertenece a otro mesero",403);
+            Role(u,"mesero","manager");if(s.Get("terminaltxn",id).B("live")){result=LiveReconcile(s,u,s.Get("terminaltxn",id),p);break;}
+            Simulator(s,"terminal","la terminal bancaria");var txn=s.Get("terminaltxn",id);Need(txn.S("status")=="uncertain","Ese cobro ya tiene resultado");var v=s.Get("visit",txn.S("visitId"));Need(u.S("role")=="manager"||v.S("waiterId")==u.S("id"),"La cuenta pertenece a otro mesero",403);
             // The simulated bank reports that the silent charge did go through: it is applied once, or reversed if the account was covered meanwhile.
             if(v.S("status")=="open"&&txn.L("amount")<=Totals(s,v).L("balance"))ApproveTerminal(s,u,txn);else{txn["status"]="reversed";txn["message"]="El banco sí cobró, pero la cuenta ya estaba cubierta: la terminal revirtió el cargo";}
             txn["reconciledAt"]=J.Now();txn["reconciledBy"]=u.S("id");Log(s,u,"terminal","reconcile",txn.S("status"),"Consulta de cobro sin respuesta · "+Pesos(txn.L("amount")+txn.L("tip")),txn.S("reference"));result=txn;break;}
+        case "terminal.cancel":Role(u,"mesero","manager");result=LiveCancel(s,u,s.Get("terminaltxn",id));break;
+        case "terminal.manual":Role(u,"mesero","manager");Need(u.S("role")=="manager"||u.Obj("permissions").B("payments",true),"Permiso de pagos deshabilitado",403);result=ManualCharge(s,u,p);break;
         case "paylink.create":{
             Role(u,"mesero","manager");var config=Simulator(s,"onlinepay","pagos en línea");var v=Own(s,u,p.S("visitId"));var balance=Totals(s,v).L("balance");Need(balance>0,"La cuenta no tiene saldo pendiente");var amount=p.ContainsKey("amount")?Amount(p,"amount",1,balance):balance;
             Need(!s.Related("folio","visitId",v.S("id")).Any(f=>!f.B("void")),"Con subfolios usa otra forma de pago");Need(!s.Related("paylink","visitId",v.S("id")).Any(x=>x.S("status")=="pending"),"Ya hay una liga de pago vigente para esta cuenta");

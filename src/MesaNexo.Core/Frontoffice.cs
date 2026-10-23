@@ -67,7 +67,11 @@ public sealed partial class Restaurant
             var v=s.Get("visit",vid);var balance=Totals(s,v).L("balance");var tip=Amount(p,"tip");
             var pay=J.O("visitId",vid,"amount",balance,"tip",tip,"method",method);
             if(method=="cash"){var tendered=p.ContainsKey("tendered")?Amount(p,"tendered"):balance+tip;Need(tendered>=balance+tip,"Efectivo recibido insuficiente: faltan "+(balance+tip-tendered)/100m+" MXN");pay["tendered"]=tendered;}
-            Need(balance>0,"La venta no tiene importe");Need(method!="wallet"||tip==0,"La propina con monedero no está permitida");var payment=method=="wallet"?Act(s,u,"wallet.pay",J.O("visitId",vid,"amount",balance)):method=="card"&&p.B("terminal")?TerminalSale(s,u,vid,balance,tip,p.S("card","approve")):Act(s,u,"payment.add",pay);v["prepaid"]=true;
+            Need(balance>0,"La venta no tiene importe");Need(method!="wallet"||tip==0,"La propina con monedero no está permitida");
+            // A real terminal answers later: the sale stays open with the charge queued, and is prepaid once approved. A declined
+            // card leaves the account open on the counter to pay another way or cancel.
+            if(method=="card"&&p.B("terminal")&&IsLive(s,"terminal")){var txn=Act(s,u,"terminal.charge",J.O("visitId",vid,"amount",balance,"tip",tip,"terminalId",p.S("terminalId")));s.Get("terminaltxn",txn.S("id"))["counter"]=true;result=J.O("visitId",vid,"commandId",command.S("id"),"terminalTxnId",txn.S("id"),"total",balance,"label",CommandLabel(v),"pending",true);break;}
+            var payment=method=="wallet"?Act(s,u,"wallet.pay",J.O("visitId",vid,"amount",balance)):method=="card"&&p.B("terminal")?TerminalSale(s,u,vid,balance,tip,p.S("card","approve")):Act(s,u,"payment.add",pay);v["prepaid"]=true;
             result=J.O("visitId",vid,"commandId",command.S("id"),"paymentId",payment.S("id"),"total",balance,"change",payment.L("change"),"label",CommandLabel(v));break;}
         case "visit.mergeMany":{
             Role(u,"mesero","manager");var master=Own(s,u,id);var others=p.A("otherIds").Strings();
