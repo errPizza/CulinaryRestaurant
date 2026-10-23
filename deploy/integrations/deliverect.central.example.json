@@ -1,0 +1,6 @@
+{
+  "mi-restaurante": {
+    "secret": "SECRETO_HMAC_DE_LA_UBICACION",
+    "channels": { "ID_CANAL_UBER_EATS": "uber", "ID_CANAL_RAPPI": "rappi", "ID_CANAL_DIDI_FOOD": "didi" }
+  }
+}

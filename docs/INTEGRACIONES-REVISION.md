@@ -1,5 +1,7 @@
 # Activación optativa de integraciones — revisión
 
+> **Decisión vigente (23 de octubre de 2026):** el usuario pidió dejar todas las integraciones preparadas para producción. Cada una se activa con su archivo de credenciales en `/etc/culinaryos/integrations` y el modo «Real» que elige el gerente; sin archivo nada sale de la sucursal. El estado actual está en [PROVEEDORES.md](PROVEEDORES.md). Lo que sigue es la revisión histórica previa.
+
 Estado: código de adaptadores preparado; no se ejecutaron impresiones, llamadas AMI, geocodificación, PAC ni notificaciones. Sin claves ni destinatarios configurados.
 
 Archivos concretos: `src/MesaNexo.Api/PrintDriver.cs`, `Telephony.cs`, `FiscalProcessing.cs`, `src/MesaNexo.Integrations/ExternalAdapters.cs`.

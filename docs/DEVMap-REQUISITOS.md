@@ -128,3 +128,18 @@ Visibilidad: los meseros sólo ven qué simuladores están activos, sus propios 
 Correcciones incluidas: el campo `key` lo elimina el puente web, por eso el parámetro se llama `provider`; los rechazos de negocio de las integraciones usan 400 (el cliente nativo trata los 409 como resultado incierto).
 
 Verificación de la etapa: 61/61 IntegrationTests, suite de integración completa 490/490 sin regresiones, 19/19 pruebas del runtime y 19 pruebas web con Edge contra el backend real (incluida `integrations run in simulation…`), con capturas `evidence/etapa4-*.png` en claro, oscuro y teléfono.
+
+## Integraciones preparadas para producción
+
+Revisión: 23 de octubre de 2026. El usuario pidió que las integraciones simuladas quedaran listas para producción y dejar las pruebas reales para el final. Cada integración tiene tres modos (apagada, simulación, real); el modo real exige credenciales válidas en `/etc/culinaryos/integrations/<clave>.json` ([PROVEEDORES.md](PROVEEDORES.md), ejemplos en `deploy/integrations`).
+
+| Integración | Estado | Archivos principales |
+|---|---|---|
+| Base común | Implementado: carga de credenciales tolerante a errores, `connection.integrations`, trabajo durable con reclamo, arrendamiento y consulta de respuestas perdidas (`SendNext`/`PollNext`), efectos de dinero en `Restaurant.IntegrationResult` | Api/LiveIntegrations.cs; Core/LiveIntegrations.cs |
+| Facturama producción | Implementado: sandbox o producción, envío de PDF/XML al receptor, cancelación de CFDI reales | Api/FiscalService.cs, FiscalProcessing.cs |
+| WhatsApp y correo | Implementado: plantillas de Meta por evento y SMTP con reintentos seguros | Api/LiveMessaging.cs; Integrations/MessagingAdapters.cs |
+| Mapas y Caller ID | Implementado: Geocoding + Routes al guardar la dirección; Asterisk AMI con reconexión | Api/LiveMapsAndCalls.cs; Integrations/MapsAdapters.cs |
+| Terminales | Implementado: Mercado Pago Point y Clip con seguimiento, cancelación y devolución; BBVA semi-integrado con voucher | Api/LiveTerminals.cs; Integrations/TerminalAdapters.cs |
+| Ligas de pago | Implementado: Stripe Checkout con consulta periódica, reembolso y expiración | Api/LivePayments.cs; Integrations/PaymentAdapters.cs |
+| Hotel | Implementado: Cloudbeds y OPERA (OHIP) con validación del huésped y crédito | Api/LivePms.cs; Integrations/PmsAdapters.cs |
+| Deliverect | Implementado: webhook HMAC en el portal público, propuesta `aggregator` a la sucursal, estados y menú de vuelta | Public/Program.cs; Central/CommerceService.cs; Api/LiveAggregators.cs |

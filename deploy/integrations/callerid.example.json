@@ -1,0 +1,6 @@
+{
+  "host": "conmutador.local",
+  "port": 5039,
+  "username": "culinary-readonly",
+  "secret": "SECRETO_DEL_USUARIO_AMI"
+}
