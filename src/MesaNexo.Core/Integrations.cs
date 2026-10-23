@@ -98,9 +98,11 @@ public sealed partial class Restaurant
     }
     void AcceptAggregator(BranchState s,JsonObject u,JsonObject order)
     {
-        Need(order.S("status")=="pending","Pedido de plataforma ya resuelto");var config=Simulator(s,"aggregators","plataformas de reparto");
+        Need(order.S("status")=="pending","Pedido de plataforma ya resuelto");var config=Enabled(s,"aggregators","las plataformas de reparto");
+        Need(order.A("unmapped").Count==0,"Hay productos de la plataforma que no existen en el catálogo ("+string.Join(", ",order.A("unmapped").Strings())+"): corrige el PLU en Deliverect o rechaza el pedido");
         var visit=Act(s,u,"visit.quick",J.O("customerName",order.S("platformName")+" · "+order.S("customerName")));var v=s.Get("visit",visit.S("id"));v["channel"]="aggregator";v["platform"]=order.S("platform");v["priceListId"]="base";v["aggregatorOrderId"]=order.S("id");
-        Act(s,u,"command.send",J.O("visitId",v.S("id"),"items",new JsonArray(order.A("items").Objects().Select((x,i)=>(JsonNode)J.O("productId",x.S("productId"),"quantity",x.L("quantity"),"notes",i==0?order.S("notes"):"")).ToArray())));
+        Act(s,u,"command.send",J.O("visitId",v.S("id"),"items",new JsonArray(order.A("items").Objects().Select((x,i)=>(JsonNode)J.O("productId",x.S("productId"),"quantity",x.L("quantity"),"notes",string.Join(" · ",new[]{i==0?order.S("notes"):"",x.S("notes")}.Where(n=>n!="")))).ToArray())));
+        if(order.B("live"))PlatformSync(s,order,20,"");
         // The platform already charged the customer; the branch records what it will be paid, priced locally, minus the commission.
         var total=Totals(s,v).L("total");var commission=(long)Math.Round(total*config.L("commissionBps")/10000m,MidpointRounding.AwayFromZero);
         if(total>0){var pay=InternalPayment(s,u,v,total,"platform");pay["platform"]=order.S("platform");pay["reference"]=order.S("externalId");}
@@ -190,14 +192,14 @@ public sealed partial class Restaurant
             Log(s,u,"aggregators","order.received","pending",order.S("platformName")+" "+order.S("externalId")+" · "+Pesos(subtotal),order.S("externalId"));if(config.B("autoAccept"))AcceptAggregator(s,u,order);result=order;break;}
         case "aggregator.decide":{
             Role(u,"manager");var order=s.Get("aggregatororder",id);if(p.B("accept")){AcceptAggregator(s,u,order);result=order;break;}
-            Need(order.S("status")=="pending","Pedido de plataforma ya resuelto");order["status"]="rejected";order["reason"]=Text(p,"reason",200);order["decidedBy"]=u.S("id");Log(s,u,"aggregators","order.reject","rejected",order.S("platformName")+" "+order.S("externalId")+" · "+order.S("reason"),order.S("externalId"));result=order;break;}
+            Need(order.S("status")=="pending","Pedido de plataforma ya resuelto");order["status"]="rejected";order["reason"]=Text(p,"reason",200);order["decidedBy"]=u.S("id");if(order.B("live"))PlatformSync(s,order,110,order.S("reason"));Log(s,u,"aggregators","order.reject","rejected",order.S("platformName")+" "+order.S("externalId")+" · "+order.S("reason"),order.S("externalId"));result=order;break;}
         case "aggregator.handoff":{
             Role(u,"mesero","manager");var order=s.Get("aggregatororder",id);Need(order.S("status")=="accepted","El pedido no está listo para entregar");var vid=order.S("visitId");
             Need(!s.Related("unit","visitId",vid).Any(x=>!Final.Append("ready").Contains(x.S("status"))),"Termina la preparación antes de entregar al repartidor");Act(s,u,"visit.deliverAll",J.O("id",vid));
-            var couriers=new[]{"Jorge","Ana","Luis","Paola","Raúl"};order["status"]="handed-off";order["courier"]=couriers[RandomNumberGenerator.GetInt32(couriers.Length)];order["handedOffAt"]=J.Now();order["handedOffBy"]=u.S("id");
+            var couriers=new[]{"Jorge","Ana","Luis","Paola","Raúl"};order["status"]="handed-off";order["courier"]=order.B("live")?"repartidor de "+order.S("platformName"):couriers[RandomNumberGenerator.GetInt32(couriers.Length)];if(order.B("live"))PlatformSync(s,order,90,"");order["handedOffAt"]=J.Now();order["handedOffBy"]=u.S("id");
             Log(s,u,"aggregators","order.handoff","handed-off",order.S("platformName")+" "+order.S("externalId")+" entregado a "+order.S("courier"),order.S("externalId"));result=order;break;}
         case "aggregator.sync":{
-            Role(u,"manager");var config=Simulator(s,"aggregators","plataformas de reparto");var products=s.List("product").Where(x=>x.B("visible")).ToArray();var published=products.Count(x=>x.B("available")&&!x.A("modifiers").Objects().Any(g=>g.B("required"))&&!(x.B("supportsCooking")&&x.B("cookingRequired")));
+            Role(u,"manager");if(IsLive(s,"aggregators")){result=QueueMenuSync(s,u);break;}var config=Simulator(s,"aggregators","plataformas de reparto");var products=s.List("product").Where(x=>x.B("visible")).ToArray();var published=products.Count(x=>x.B("available")&&!x.A("modifiers").Objects().Any(g=>g.B("required"))&&!(x.B("supportsCooking")&&x.B("cookingRequired")));
             var row=s.Get("integration","aggregators");row["lastSync"]=J.O("at",J.Now(),"published",published,"excluded",products.Length-published,"platforms",config["platforms"]?.DeepClone());
             Log(s,u,"aggregators","menu.sync","ok","Menú publicado en "+config.A("platforms").Count+" plataformas · "+published+" productos"+(products.Length>published?" · "+(products.Length-published)+" con opciones obligatorias o agotados quedaron fuera":""));result=row.Obj("lastSync");break;}
         default:return false;
@@ -212,6 +214,8 @@ public sealed partial class Restaurant
         if(type=="delivery.dispatch"){var d=s.Get("delivery",p.S("id"));var c=s.Related("customer","id",d.S("customerId")).FirstOrDefault();var courier=s.Related("courier","id",d.S("courierId")).FirstOrDefault();if(c is not null)Message(s,"whatsapp",c.S("phone"),"dispatch",d.S("id"),"Hola "+c.S("name")+", tu pedido de "+s.Meta.S("name")+" ya va en camino"+(courier is null?"":" con "+courier.S("name"))+(d.L("etaMinutes")>0?". Llega en unos "+d.L("etaMinutes")+" minutos":"")+".",c.S("name"),s.Meta.S("name"),courier?.S("name")??"nuestro repartidor",d.L("etaMinutes")>0?d.L("etaMinutes")+" minutos":"poco tiempo");}
         if(type=="unit.state"&&p.S("status")=="ready"){
             var vid=s.Get("unit",p.S("id")).S("visitId");var d=s.Related("delivery","visitId",vid).FirstOrDefault(x=>x.S("mode")=="pickup");
+            // A platform order whose kitchen finished is ready for its courier.
+            if(s.Get("visit",vid).S("aggregatorOrderId") is {Length:>0} aid&&s.Related("aggregatororder","id",aid).FirstOrDefault() is {} platformOrder&&platformOrder.B("live")&&!s.Related("unit","visitId",vid).Any(x=>!Final.Append("ready").Contains(x.S("status"))))PlatformSync(s,platformOrder,70,"");
             if(d is not null&&!s.Related("unit","visitId",vid).Any(x=>!Final.Append("ready").Contains(x.S("status")))&&s.Related("customer","id",d.S("customerId")).FirstOrDefault() is {} c)Message(s,"whatsapp",c.S("phone"),"pickup-ready",d.S("id"),"Hola "+c.S("name")+", tu pedido de "+s.Meta.S("name")+" está listo para recoger.",c.S("name"),s.Meta.S("name"));
         }
         if(type=="fiscal.request"&&Simulated(s,"pac")?.Obj("settings").B("autoStamp")==true)StampSimulated(s,u,s.Get("fiscal",result.S("id")));

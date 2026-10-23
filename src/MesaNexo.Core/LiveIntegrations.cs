@@ -89,10 +89,54 @@ public sealed partial class Restaurant
         var post=Add(s,"pmspost",J.O("room",room,"guestGiven",guest,"amount",amount,"visitId",v.S("id"),"status","queued","live",true,"message","Consultando al hotel","actor",u.S("id"),"at",J.Now()));
         Log(s,u,"pms","charge","queued","Cargo a habitación "+room+" · "+Pesos(amount),simulated:false);return post;
     }
+    // ---------- delivery platforms through Deliverect ----------
+    // What Deliverect has to hear back about a platform order: 20 accepted, 70 ready for pickup, 90 handed over, 110 cancelled.
+    void PlatformSync(BranchState s,JsonObject order,int code,string reason)
+    {
+        if(s.Related("platformsync","orderId",order.S("id")).Any(x=>x.L("code")==code))return;
+        Add(s,"platformsync",J.O("type","status","orderId",order.S("id"),"deliverectId",order.S("deliverectId"),"code",code,"reason",reason,"receiptId",order.S("visitId"),"status","queued","at",J.Now()));
+    }
+    JsonObject QueueMenuSync(BranchState s,JsonObject u)
+    {
+        Need(!s.Related("platformsync","type","menu").Any(x=>x.S("status") is "queued" or "sending"),"Ya se está publicando el menú");
+        var job=Add(s,"platformsync",J.O("type","menu","status","queued","actor",u.S("id"),"at",J.Now()));
+        var row=s.Get("integration","aggregators");row["lastSync"]=J.O("at",J.Now(),"status","queued");Log(s,u,"aggregators","menu.sync","queued","Publicando el menú en Deliverect",simulated:false);return job;
+    }
+    // Called by the cloud inbox in the same commit that stores the proposal. A new order waits for the manager (or is accepted
+    // at once with auto-accept); a cancellation from the platform voids a pending order or warns the kitchen of an accepted one.
+    public void ImportAggregatorOrder(BranchState s,JsonObject proposal)
+    {
+        var p=proposal.Obj("command").Obj("payload");
+        if(!IsLive(s,"aggregators")){Settle(proposal,"rejected-local","Las plataformas de reparto no están en modo real en la sucursal","");return;}
+        var deliverectId=p.S("deliverectId");var existing=s.Related("aggregatororder","deliverectId",deliverectId).FirstOrDefault();
+        if(p.B("cancel")){
+            if(existing is null){Settle(proposal,"rejected-local","Pedido desconocido","");return;}
+            if(existing.S("status")=="pending"){existing["status"]="rejected";existing["reason"]="Cancelado por la plataforma";}
+            else if(existing.S("status")=="accepted"){existing["platformCancelled"]=true;if(s.Related("visit","id",existing.S("visitId")).FirstOrDefault() is {} visit)Notice(s,visit,existing.S("platformName")+" canceló el pedido "+existing.S("externalId")+" que ya está en cocina","platform-cancel");}
+            Settle(proposal,"accepted-local","Cancelación registrada",existing.S("visitId"));return;
+        }
+        if(existing is not null){Settle(proposal,"accepted-local","Pedido ya recibido",existing.S("visitId"));return;}
+        var products=s.List("product").ToDictionary(x=>x.S("id"));var items=new JsonArray();var unmapped=new List<string>();long subtotal=0;
+        foreach(var item in p.A("items").Objects().Take(50)){
+            var plu=item.S("plu");var quantity=Math.Clamp(item.L("quantity",1),1,50);
+            if(!products.TryGetValue(plu,out var product)){unmapped.Add(Sanitize(item.S("name")==""?plu:item.S("name"),60));continue;}
+            var notes=string.Join(", ",item.A("subItems").Objects().Select(x=>(x.L("quantity",1)>1?x.L("quantity")+" × ":"")+Sanitize(x.S("name"),60)).Where(x=>x!=""));
+            items.Add(J.O("productId",plu,"name",product.S("name"),"price",product.L("price"),"quantity",quantity,"notes",Sanitize(notes,200)));subtotal+=product.L("price")*quantity;
+        }
+        var platform=p.S("platform");var name=Platforms.GetValueOrDefault(platform)??(p.S("channelName") is {Length:>0} channel?Sanitize(channel,30).ToUpperInvariant():"DELIVERECT");
+        var order=Add(s,"aggregatororder",J.O("platform",platform==""?"deliverect":platform,"platformName",name,"externalId",Sanitize(p.S("displayId"),40),"deliverectId",deliverectId,"customerName",Sanitize(p.S("customerName"),80),"items",items,"unmapped",J.N(unmapped),"subtotal",subtotal,"platformTotal",p.L("total"),"notes",Sanitize(p.S("notes"),200),"status","pending","live",true,"receivedAt",J.Now(),"acceptBy",DateTimeOffset.UtcNow.AddMinutes(8).ToString("O"),"proposalId",proposal.S("id")));
+        var system=J.O("id","deliverect","role","manager");Log(s,system,"aggregators","order.received","pending",name+" "+order.S("externalId")+" · "+Pesos(subtotal)+(unmapped.Count>0?" · "+unmapped.Count+" productos sin PLU":""),order.S("externalId"),simulated:false);
+        // Auto-accept acts as the first active manager, who owns the sale the platform already charged.
+        if(Active(s,"aggregators")?.Obj("settings").B("autoAccept")==true&&unmapped.Count==0&&s.List("user").FirstOrDefault(x=>x.S("role")=="manager"&&x.B("active")) is {} manager)AcceptAggregator(s,manager,order);
+        Settle(proposal,"accepted-local","Pedido recibido en la sucursal",order.S("visitId"));
+    }
     // Effects of a provider's answer, applied in the same commit that stores it (IntegrationResult).
     void LiveEffects(BranchState s,JsonObject u,string kind,JsonObject row)
     {
         switch(kind){
+        case "platformsync":
+            if(row.S("type")=="menu"&&s.Related("integration","id","aggregators").FirstOrDefault() is {} integration)integration["lastSync"]=J.O("at",J.Now(),"status",row.S("status"),"published",row.L("published"),"excluded",row.L("excluded"),"message",row.S("message"));
+            break;
         case "pmspost":
             if(row.S("status")=="posted"&&row.S("paymentId")==""){
                 var v=s.Get("visit",row.S("visitId"));
