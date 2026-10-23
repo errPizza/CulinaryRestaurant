@@ -61,7 +61,7 @@ static class FiscalTests
         async Task Patch(string id,Action<JsonObject> change){var state=await service.Load();change(state.Get("fiscal",id));state.Meta["revision"]=state.Meta.L("revision")+1;await runtime.CallAsync(J.O("op","transaction_v1","protocol",1,"event_id",J.Id(),"receipt",J.O("actor","fiscal-fixture","fingerprint",J.Id(),"result",new JsonObject()),"changes",new JsonArray(state.Changes().Select(x=>(JsonNode)x).ToArray())));}
         var issuer=J.O("expeditionPlace","06600","product",J.O("productCode","90101501","unitCode","E48","taxObject","02"));
         var facturama=new SimulatedFacturama("sandbox-user","sandbox-pass");using var pac=new FacturamaAdapter("sandbox-user","sandbox-pass",true,facturama);
-        Task<bool> Process(JsonObject? config=null)=>service.ProcessFiscalSandbox(pac,config??issuer,allRequests:true);
+        Task<bool> Process(JsonObject? config=null)=>service.ProcessFiscal(pac,config??issuer,allRequests:true);
 
         // Configuration of the branch.
         var config=Path.Combine(folder,"fiscal.json");

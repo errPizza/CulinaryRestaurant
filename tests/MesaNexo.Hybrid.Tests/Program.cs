@@ -43,7 +43,7 @@ var issuer=J.O("expeditionPlace","06600","product",J.O("productCode","90101501",
 async Task<JsonNode?> Fixture(string command,JsonObject a)
 {
  if(command!="fiscal.sandbox")throw new InvalidOperationException("Orden de prueba desconocida");
- facturama.Mode=a.S("mode");var processed=0;while(await service.ProcessFiscalSandbox(pac,issuer,allRequests:true))processed++;
+ facturama.Mode=a.S("mode");var processed=0;while(await service.ProcessFiscal(pac,issuer,allRequests:true))processed++;
  return J.O("processed",processed,"stamps",new JsonArray(facturama.Stamps.Select(x=>(JsonNode)x.DeepClone()).ToArray()));
 }
 if(args.Contains("--serve")){

@@ -24,7 +24,7 @@ public static class ApiHost
         builder.Services.AddSignalR(o=>{o.MaximumReceiveMessageSize=16*1024;o.EnableDetailedErrors=false;});
         builder.Services.AddHostedService<InventoryWorker>();builder.Services.AddHostedService<OutboxWorker>();
         if(printer is not null)builder.Services.AddSingleton<IHostedService>(sp=>new PrintWorker(sp.GetRequiredService<BranchService>(),printer,sp.GetRequiredService<ILogger<PrintWorker>>()));
-        if(fiscal is not null)builder.Services.AddSingleton<IHostedService>(sp=>new FiscalWorker(sp.GetRequiredService<BranchService>(),fiscal.Adapter(),fiscal.Issuer,sp.GetRequiredService<ILogger<FiscalWorker>>()));
+        if(fiscal is not null)builder.Services.AddSingleton<IHostedService>(sp=>new FiscalWorker(sp.GetRequiredService<BranchService>(),fiscal.Adapter(),fiscal.Issuer,sp.GetRequiredService<ILogger<FiscalWorker>>(),fiscal.EmailReceiver));
         integrations??=new();if(printer is not null)integrations.Ready("printer");if(fiscal is not null)integrations.Ready("pac");var terminals=LiveServices.Register(builder.Services,integrations);
         var app=builder.Build();var service=app.Services.GetRequiredService<BranchService>();service.UseIntegrations(integrations,terminals);
         app.Use(async(ctx,next)=>{
