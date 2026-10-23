@@ -161,7 +161,7 @@ public sealed partial class BranchService(IBranchStore store,string siteId,IPass
         // The outbox count is informative; refreshing it every two seconds keeps polling off the store. It is not asked
         // of health, whose integrity check reads the whole file and stalls the single-threaded store as it grows.
         var cached=Volatile.Read(ref health);if(cached is null||DateTimeOffset.UtcNow-cached.Item1>TimeSpan.FromSeconds(2))Volatile.Write(ref health,cached=Tuple.Create(DateTimeOffset.UtcNow,(await store.CallAsync(J.O("op","outbox_status_v1"),ct))!));
-        result["connection"]=J.O("local","available","outboxPending",cached.Item2.L("pending"),"central",CentralState,"internet","unverified","cloudOrders",CloudState);return result;
+        var connection=J.O("local","available","outboxPending",cached.Item2.L("pending"),"central",CentralState,"internet","unverified","cloudOrders",CloudState);if(PrinterState!="")connection["printer"]=PrinterState;result["connection"]=connection;return result;
     }
     public async Task<JsonObject> Action(string token,JsonObject request,CancellationToken ct=default)
     {
