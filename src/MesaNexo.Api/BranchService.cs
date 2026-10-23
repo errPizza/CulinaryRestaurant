@@ -122,9 +122,24 @@ public sealed partial class BranchService(IBranchStore store,string siteId,IPass
     // Diagnostics (MESANEXO_PROFILE=1): per action, domain time, total time to commit and records it reached.
     static readonly bool Profile=Environment.GetEnvironmentVariable("MESANEXO_PROFILE")=="1";
     static string Fingerprint(CommittedState c)=>J.Hash(string.Concat(c.Records.Values.OrderBy(x=>x.RecordId,StringComparer.Ordinal).Select(x=>x.RecordId+(x.Data.Parent is null?"":"!attached")+J.Canonical(x.Data))));
-    public async Task<JsonObject> State(string token,CancellationToken ct=default)
+    // Test safety net (MESANEXO_VERIFY_DELTA=1): every delta, applied to the base it claims, must rebuild the state exactly.
+    static readonly bool VerifyDelta=Environment.GetEnvironmentVariable("MESANEXO_VERIFY_DELTA")=="1";
+    readonly StateBases bases=new(VerifyDelta);
+    // With `since` (even empty) the reply names a base; a later call with that base gets only what changed since,
+    // or the whole state when the base is unknown here (restart, expired, another session). Without it: whole state.
+    public async Task<JsonObject> State(string token,CancellationToken ct=default,string? since=null)
     {
-        var s=await View(ct);var before=VerifyViews?Fingerprint(s.Committed):null;var u=Authenticate(s,token,out var sess);var result=Domain.Snapshot(s,u,sess.S("id"));
+        var state=await FullState(token,ct);if(since is null)return state;
+        var session=state.S("sessionId");var fingerprint=StateDelta.Fingerprint(state);var before=bases.Find(session,since);
+        var reply=before is null?state:StateDelta.Diff(before.Value.Fingerprint,state,fingerprint);
+        if(before is {State:{} baseState}&&J.Canonical(StateDelta.Apply((JsonObject)baseState.DeepClone(),reply))!=J.Canonical(state))throw new InvalidOperationException("COS-APP-DELTA-MISMATCH: el delta no reconstruye el estado");
+        if(before is not null)reply["since"]=since;
+        reply["stateBase"]=bases.Remember(session,fingerprint,state);return reply;
+    }
+    async Task<JsonObject> FullState(string token,CancellationToken ct)
+    {
+        var s=await View(ct);var before=VerifyViews?Fingerprint(s.Committed):null;var u=Authenticate(s,token,out var sess);var watch=Profile?System.Diagnostics.Stopwatch.StartNew():null;var result=Domain.Snapshot(s,u,sess.S("id"));
+        if(watch is not null){var built=watch.Elapsed.TotalMilliseconds;var bytes=System.Text.Encoding.UTF8.GetByteCount(result.ToJsonString());Console.Error.WriteLine($"PROFILE_STATE {u.S("role")} snapshot={built:0.0} serialize={watch.Elapsed.TotalMilliseconds-built:0.0} bytes={bytes} records={s.Committed.Count}");}
         if(before is not null&&Fingerprint(s.Committed)!=before)throw new InvalidOperationException("COS-APP-VIEW-MUTATED: una lectura modificó el estado compartido");
         // The outbox count is informative; refreshing it every two seconds keeps polling off the store.
         var cached=Volatile.Read(ref health);if(cached is null||DateTimeOffset.UtcNow-cached.Item1>TimeSpan.FromSeconds(2))Volatile.Write(ref health,cached=Tuple.Create(DateTimeOffset.UtcNow,(await store.CallAsync(J.O("op","health"),ct))!));
