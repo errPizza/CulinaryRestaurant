@@ -29,7 +29,7 @@ public sealed partial class Restaurant
     static string Digits(string value)=>new(value.Where(char.IsDigit).ToArray());
     static string Plain(string value)=>new string(value.Normalize(NormalizationForm.FormD).Where(c=>CharUnicodeInfo.GetUnicodeCategory(c)!=UnicodeCategory.NonSpacingMark).ToArray()).ToLowerInvariant();
     // Hotels verify the surname: any word after the first name of the registered guest must appear in what the waiter typed.
-    static bool SameGuest(string registered,string given){var words=Plain(given).Split(' ',StringSplitOptions.RemoveEmptyEntries);var names=Plain(registered).Split(' ',StringSplitOptions.RemoveEmptyEntries);return names.Skip(names.Length>1?1:0).Where(w=>w.Length>=3).Any(words.Contains);}
+    public static bool SameGuest(string registered,string given){var words=Plain(given).Split(' ',StringSplitOptions.RemoveEmptyEntries);var names=Plain(registered).Split(' ',StringSplitOptions.RemoveEmptyEntries);return names.Skip(names.Length>1?1:0).Where(w=>w.Length>=3).Any(words.Contains);}
     static string Pick(JsonObject p,string key,string fallback,params string[] choices){var value=p.S(key);if(value=="")value=fallback;Need(choices.Contains(value),key+": valor inválido");return value;}
     JsonObject? Simulated(BranchState s,string key)=>s.Related("integration","id",key).FirstOrDefault(x=>x.S("mode")=="simulated");
     JsonObject Simulator(BranchState s,string key,string name)=>(Simulated(s,key)??throw new BusinessException(400,"Activa la simulación de "+name+" en Integraciones")).Obj("settings");
@@ -161,7 +161,7 @@ public sealed partial class Restaurant
             Log(s,u,"onlinepay","webhook."+outcome,link.S("status"),"Aviso del proveedor · "+Pesos(link.L("amount")),link.S("reference"));result=link;break;}
         case "paylink.cancel":{Role(u,"mesero","manager");var link=s.Get("paylink",id);if(link.B("live")){result=LiveLinkCancel(s,u,link);break;}Need(link.S("status")=="pending","La liga ya no está vigente");var v=s.Get("visit",link.S("visitId"));Need(u.S("role")=="manager"||v.S("waiterId")==u.S("id"),"La cuenta pertenece a otro mesero",403);link["status"]="cancelled";link["cancelledBy"]=u.S("id");Log(s,u,"onlinepay","link.cancel","cancelled","Liga cancelada · "+Pesos(link.L("amount")),link.S("reference"));result=link;break;}
         case "pms.charge":{
-            Role(u,"mesero","manager");Need(u.S("role")=="manager"||u.Obj("permissions").B("payments",true),"Permiso de pagos deshabilitado",403);var config=Simulator(s,"pms","el hotel (PMS)");var v=Own(s,u,p.S("visitId"));
+            Role(u,"mesero","manager");Need(u.S("role")=="manager"||u.Obj("permissions").B("payments",true),"Permiso de pagos deshabilitado",403);if(IsLive(s,"pms")){result=LivePost(s,u,p);break;}var config=Simulator(s,"pms","el hotel (PMS)");var v=Own(s,u,p.S("visitId"));
             var number=Text(p,"room",10).ToUpperInvariant();var room=config.A("rooms").Objects().FirstOrDefault(x=>x.S("room")==number);Need(room is not null,"El PMS no tiene un huésped registrado en la habitación "+number,404);
             Need(SameGuest(room!.S("guest"),Text(p,"guest",100)),"El apellido no coincide con el huésped de la habitación "+number,403);Need(!s.Related("folio","visitId",v.S("id")).Any(f=>!f.B("void")),"Con subfolios usa otra forma de pago");
             var balance=Totals(s,v).L("balance");var amount=p.ContainsKey("amount")?Amount(p,"amount",1,balance):balance;var limit=room.L("limit");var used=s.Related("pmspost","room",number).Where(x=>x.S("status")=="posted").Sum(x=>x.L("amount"));

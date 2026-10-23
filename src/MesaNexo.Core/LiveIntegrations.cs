@@ -78,10 +78,28 @@ public sealed partial class Restaurant
         else{Need(link.S("status")=="pending","La liga ya no está vigente");link["status"]="cancel-requested";link["message"]="Cancelando en Stripe";}
         link["cancelledBy"]=u.S("id");Log(s,u,"onlinepay","link.cancel",link.S("status"),"Liga cancelada · "+Pesos(link.L("amount")),link.S("reference"),simulated:false);return link;
     }
+    // ---------- room charges (Cloudbeds, Opera) ----------
+    // The PMS service checks the guest staying in the room, its credit and posts the charge; the payment is recorded once the
+    // hotel confirms it. A charge on its way blocks another one on the same account.
+    JsonObject LivePost(BranchState s,JsonObject u,JsonObject p)
+    {
+        var v=Own(s,u,p.S("visitId"));var room=Text(p,"room",10).ToUpperInvariant();var guest=Text(p,"guest",100);Need(!s.Related("folio","visitId",v.S("id")).Any(f=>!f.B("void")),"Con subfolios usa otra forma de pago");
+        var balance=Totals(s,v).L("balance");var amount=p.ContainsKey("amount")?Amount(p,"amount",1,balance):balance;Need(amount>0,"La cuenta no tiene saldo pendiente");
+        Need(!s.Related("pmspost","visitId",v.S("id")).Any(x=>x.S("status") is "queued" or "sending" or "uncertain"),"Hay un cargo a habitación en curso en esta cuenta; espera su resultado");
+        var post=Add(s,"pmspost",J.O("room",room,"guestGiven",guest,"amount",amount,"visitId",v.S("id"),"status","queued","live",true,"message","Consultando al hotel","actor",u.S("id"),"at",J.Now()));
+        Log(s,u,"pms","charge","queued","Cargo a habitación "+room+" · "+Pesos(amount),simulated:false);return post;
+    }
     // Effects of a provider's answer, applied in the same commit that stores it (IntegrationResult).
     void LiveEffects(BranchState s,JsonObject u,string kind,JsonObject row)
     {
         switch(kind){
+        case "pmspost":
+            if(row.S("status")=="posted"&&row.S("paymentId")==""){
+                var v=s.Get("visit",row.S("visitId"));
+                if(v.S("status")=="open"&&row.L("amount")<=Totals(s,v).L("balance")){var pay=InternalPayment(s,u,v,row.L("amount"),"room");pay["reference"]=row.S("reference");pay["room"]=row.S("room");row["paymentId"]=pay.S("id");}
+                else{row["status"]="posted-unapplied";row["message"]="El hotel registró el cargo, pero la cuenta ya estaba cubierta: anúlalo en el PMS";}
+            }
+            break;
         case "paylink":
             if(row.S("status")=="pending"&&row.S("payUrl")!=""&&row.S("messageId")==""){
                 var v=s.Get("visit",row.S("visitId"));var customer=s.Related("customer","id",v.S("customerId")).FirstOrDefault();
