@@ -181,7 +181,7 @@ static class Program
         try{
             // Un servicio nuevo sobre el mismo almacén no comparte la memoria del que atendió la carga: lee lo durable.
             // (/api/state sólo devuelve las 500 cuentas cerradas más recientes, así que no sirve para contar todo.)
-            var durable=await new BranchService(runtime,Site,new Passwords()).Load();
+            var loadWatch=Stopwatch.StartNew();var durable=await new BranchService(runtime,Site,new Passwords()).Load();var durableLoadMs=(long)loadWatch.Elapsed.TotalMilliseconds;
             var units=durable.List("unit").GroupBy(x=>x.S("visitId")).ToDictionary(g=>g.Key,g=>g.Count());
             var paid=durable.List("payment").GroupBy(x=>x.S("visitId")).ToDictionary(g=>g.Key,g=>g.Sum(x=>x.L("amount")));
             var visits=durable.List("visit").ToDictionary(x=>x.S("id"),x=>x.S("status"));
@@ -189,7 +189,7 @@ static class Program
             var notClosed=closed.Count(x=>visits.GetValueOrDefault(x.VisitId)!="closed");var unitMismatch=closed.Count(x=>units.GetValueOrDefault(x.VisitId)!=x.Units);var paymentMismatch=closed.Count(x=>paid.GetValueOrDefault(x.VisitId)!=x.Paid);
             var duplicated=units.Count(x=>x.Value>3);
             integrity=notClosed==0&&unitMismatch==0&&paymentMismatch==0&&duplicated==0&&audit.B("valid")&&Interlocked.Read(ref metrics.DeltaMismatches)==0;
-            verification=J.O("ticketsVerified",closed.Length,"notClosed",notClosed,"unitMismatch",unitMismatch,"paymentMismatch",paymentMismatch,"visitsWithDuplicatedUnits",duplicated,"ledgerPaid",closed.Sum(x=>x.Paid),"storePaidForLedger",closed.Sum(x=>paid.GetValueOrDefault(x.VisitId)),"abortedTickets",aborted.Count,"auditValid",audit.B("valid"),"auditRecords",audit.L("chainedRecords"),"integrity",integrity);
+            verification=J.O("ticketsVerified",closed.Length,"notClosed",notClosed,"unitMismatch",unitMismatch,"paymentMismatch",paymentMismatch,"visitsWithDuplicatedUnits",duplicated,"ledgerPaid",closed.Sum(x=>x.Paid),"storePaidForLedger",closed.Sum(x=>paid.GetValueOrDefault(x.VisitId)),"abortedTickets",aborted.Count,"auditValid",audit.B("valid"),"auditRecords",audit.L("chainedRecords"),"durableRecords",durable.Count,"durableLoadMs",durableLoadMs,"integrity",integrity);
         }catch(Exception e){
             var sessions=(await service.Load()).List("session").ToArray();var hash=J.Hash(manager.Token);var mine=sessions.Where(x=>x.S("tokenHash")==hash).ToArray();
             verification=J.O("error",e.GetType().Name+": "+e.Message,"integrity",false,"sessions",sessions.Length,"managerSessions",mine.Length,"managerSessionState",new JsonArray(mine.Select(x=>(JsonNode)J.O("revoked",x.B("revoked"),"expires",x.S("expires"))).ToArray()));

@@ -17,6 +17,10 @@ k=folder/'test-only-keyring.json'
 if not k.exists():
     with k.open('x',encoding='utf-8') as f: json.dump(Keyring.generate(),f)
 store=Store(folder/'store.sqlite',a.site,Keyring.load(k),min_free_bytes=1024*1024)
+# The lab branch has no central unless its own branch.json names one.
+mesanexo_ipc.BRANCH_CONFIG=folder/'branch.json'
+if not mesanexo_ipc.BRANCH_CONFIG.exists():
+    with mesanexo_ipc.BRANCH_CONFIG.open('x',encoding='utf-8') as f: json.dump({'version':1,'site_id':a.site},f)
 mesanexo_ipc.install(dataio)
 for raw in sys.stdin.buffer:
     try:

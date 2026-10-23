@@ -8,6 +8,8 @@ public sealed class StoreException:Exception{public string Code=>Message;public 
 public sealed class RuntimeStore:IBranchStore,IDisposable
 {
     readonly string? socketPath;readonly Process? process;readonly SemaphoreSlim gate=new(1);const int Limit=128*1024;
+    // Requests keep the store's 128 KiB limit; replies may carry the scan pages of up to 1 MiB the backend asks for.
+    const int ReplyLimit=2*1024*1024;
     public RuntimeStore(string socketPath){this.socketPath=socketPath;}
     public RuntimeStore(string python,string labScript,string directory,string site)
     {
@@ -33,12 +35,12 @@ public sealed class RuntimeStore:IBranchStore,IDisposable
                 using var socket=new Socket(AddressFamily.Unix,SocketType.Stream,ProtocolType.Unspecified);await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath!),deadline.Token);
                 using var stream=new NetworkStream(socket,true);await stream.WriteAsync(bytes,deadline.Token);raw=await ReadLine(stream,deadline.Token);
             }
-            var reply=JsonNode.Parse(raw)??throw new StoreException("COS-DATA-UNAVAILABLE");if(!reply.B("ok"))throw new StoreException(reply.S("error","COS-DATA-UNAVAILABLE"));return reply["result"]?.DeepClone();
+            var reply=JsonNode.Parse(raw)??throw new StoreException("COS-DATA-UNAVAILABLE");if(!reply.B("ok"))throw new StoreException(reply.S("error","COS-DATA-UNAVAILABLE"));var result=reply["result"];reply.AsObject().Remove("result");return result;
         }catch(StoreException){throw;}catch(Exception e) when(e is IOException or SocketException or OperationCanceledException){throw new StoreException("COS-DATA-UNAVAILABLE");}finally{gate.Release();}
     }
     static async Task<string> ReadLine(Stream stream,CancellationToken ct)
     {
-        using var buffer=new MemoryStream();var chunk=new byte[4096];while(buffer.Length<Limit){var count=await stream.ReadAsync(chunk,ct);if(count==0)throw new IOException("IPC cerrado");var end=Array.IndexOf(chunk,(byte)10,0,count);buffer.Write(chunk,0,end>=0?end:count);if(buffer.Length>Limit)break;if(end>=0)return Encoding.UTF8.GetString(buffer.ToArray());}throw new StoreException("COS-DATA-INVALID");
+        using var buffer=new MemoryStream();var chunk=new byte[65536];while(buffer.Length<ReplyLimit){var count=await stream.ReadAsync(chunk,ct);if(count==0)throw new IOException("IPC cerrado");var end=Array.IndexOf(chunk,(byte)10,0,count);buffer.Write(chunk,0,end>=0?end:count);if(buffer.Length>ReplyLimit)break;if(end>=0)return Encoding.UTF8.GetString(buffer.ToArray());}throw new StoreException("COS-DATA-INVALID");
     }
     public void Dispose(){if(process is not null&&!process.HasExited){process.StandardInput.Close();if(!process.WaitForExit(2000))process.Kill(true);}process?.Dispose();gate.Dispose();}
 }

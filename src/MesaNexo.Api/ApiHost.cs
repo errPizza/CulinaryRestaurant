@@ -22,7 +22,7 @@ public static class ApiHost
         if(cloud is not null)builder.Services.AddSingleton<IHostedService>(sp=>new CloudPull(sp.GetRequiredService<BranchService>(),cloud));
         if(policy is not null)builder.Services.AddSingleton<IHostedService>(sp=>new PolicyRefresh(sp.GetRequiredService<BranchService>(),policy));
         builder.Services.AddSignalR(o=>{o.MaximumReceiveMessageSize=16*1024;o.EnableDetailedErrors=false;});
-        builder.Services.AddHostedService<InventoryWorker>();
+        builder.Services.AddHostedService<InventoryWorker>();builder.Services.AddHostedService<OutboxWorker>();
         var app=builder.Build();var service=app.Services.GetRequiredService<BranchService>();
         app.Use(async(ctx,next)=>{
             ctx.Response.Headers.CacheControl="no-store";ctx.Response.Headers["X-Content-Type-Options"]="nosniff";

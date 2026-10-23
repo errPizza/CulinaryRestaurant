@@ -19,23 +19,35 @@ public sealed partial class BranchService(IBranchStore store,string siteId,IPass
     public async Task<bool> Ready(CancellationToken ct=default)
     {
         var h=await store.CallAsync(J.O("op","health"),ct);if(h?.B("ready")!=true||h.S("site_id")!=siteId)return false;
-        var c=await store.CallAsync(J.O("op","capabilities_v1"),ct);if(!c!.A("extensions").Strings().Contains("transaction_v1"))return false;
+        // Every store operation this backend calls: an earlier runtime extension lacks some and must be upgraded first.
+        var c=await store.CallAsync(J.O("op","capabilities_v1"),ct);if(!new[]{"transaction_v1","scan_v1","recent_v1","event_status_v1","outbox_status_v1","outbox_maintain_v1"}.All(c!.A("extensions").Strings().Contains))return false;
         var m=await store.CallAsync(J.O("op","get","record_id","mn_meta_site"),ct);return m?.Obj("data").S("siteId")==siteId && m.Obj("data").S("status")=="active";
     }
-    // A consistent scan of every record; with `bounded`, kinds in Bounded keep only their newest records.
+    const int PageBytes=1024*1024,PageRecords=4096;
+    // A consistent scan of every record; with `bounded`, kinds in Bounded keep only their newest records, and the store
+    // skips the older ones instead of reading and decrypting each of them.
     async Task<CommittedState> Read(CancellationToken ct,bool bounded=true)
     {
+        var skipped=new JsonArray(bounded?Bounded.Keys.Select(kind=>(JsonNode)BranchState.Key(kind,"")).ToArray():[]);
+        static void Take(JsonNode page,List<StoredRecord> rows){foreach(var row in page.A("records").Objects()){var data=row.Obj("data");row.Remove("data");rows.Add(new(row.S("record_id"),row.L("version"),data));}}
         for(var attempt=0;attempt<8;attempt++){
             var rows=new List<StoredRecord>();string? after=null;long? revision=null;bool changed=false;
             do{
-                var page=(await store.CallAsync(J.O("op","scan_v1","protocol",1,"prefix","mn_","after",after??""),ct))!;
+                var page=(await store.CallAsync(J.O("op","scan_v1","protocol",1,"prefix","mn_","after",after??"","exclude",skipped,"max_bytes",PageBytes,"max_records",PageRecords),ct))!;
                 revision??=page.L("revision");if(revision!=page.L("revision")){changed=true;break;}
-                foreach(var row in page.A("records").Objects())rows.Add(new(row.S("record_id"),row.L("version"),(JsonObject)row.Obj("data").DeepClone()));
-                after=page.S("after");
+                Take(page,rows);after=page.S("after");
             }while(!string.IsNullOrEmpty(after));
+            if(bounded)foreach(var (kind,limit) in Bounded){
+                var newest=new List<StoredRecord>();long before=0;
+                while(!changed){
+                    var page=(await store.CallAsync(J.O("op","recent_v1","protocol",1,"prefix",BranchState.Key(kind,""),"limit",limit-newest.Count,"before",before>0?before:(long?)null,"max_bytes",PageBytes,"max_records",PageRecords),ct))!;
+                    if(revision!=page.L("revision")){changed=true;break;}
+                    Take(page,newest);before=page.L("before");if(before==0)break;
+                }
+                Need(newest.All(x=>x.Data.S("kind")==kind),"Registro ajeno en el rango de "+kind,503);rows.AddRange(newest.OrderBy(x=>x.Data.L("sequence")));
+            }
             var current=await store.CallAsync(J.O("op","get","record_id","mn_meta_site"),ct);
             if(changed||(current?.L("version")??0)!=revision)continue;
-            if(bounded)foreach(var (kind,limit) in Bounded){var all=rows.Where(x=>x.Data.S("kind")==kind).ToArray();var keep=all.OrderBy(x=>x.Data.L("sequence")).TakeLast(limit).ToArray();rows=[..rows.Except(all),..keep];}
             var state=new CommittedState(rows,revision??0);
             if(state.Count>0)Need(new BranchState(state,true).Meta.S("siteId")==siteId,"Identidad de sucursal incorrecta",503);return state;
         }throw new BusinessException(409,"El estado cambió; vuelve a consultar");
@@ -146,8 +158,9 @@ public sealed partial class BranchService(IBranchStore store,string siteId,IPass
         var viewWatch=Profile?System.Diagnostics.Stopwatch.StartNew():null;var s=await View(ct);var viewed=viewWatch?.Elapsed.TotalMilliseconds;var before=VerifyViews?Fingerprint(s.Committed):null;var u=Authenticate(s,token,out var sess);var watch=Profile?System.Diagnostics.Stopwatch.StartNew():null;var result=Domain.Parts(s,u,sess.S("id"));
         if(watch is not null)Console.Error.WriteLine($"PROFILE_STATE {u.S("role")} view={viewed:0.0} parts={watch.Elapsed.TotalMilliseconds:0.0} records={s.Committed.Count}");
         if(before is not null&&Fingerprint(s.Committed)!=before)throw new InvalidOperationException("COS-APP-VIEW-MUTATED: una lectura modificó el estado compartido");
-        // The outbox count is informative; refreshing it every two seconds keeps polling off the store.
-        var cached=Volatile.Read(ref health);if(cached is null||DateTimeOffset.UtcNow-cached.Item1>TimeSpan.FromSeconds(2))Volatile.Write(ref health,cached=Tuple.Create(DateTimeOffset.UtcNow,(await store.CallAsync(J.O("op","health"),ct))!));
+        // The outbox count is informative; refreshing it every two seconds keeps polling off the store. It is not asked
+        // of health, whose integrity check reads the whole file and stalls the single-threaded store as it grows.
+        var cached=Volatile.Read(ref health);if(cached is null||DateTimeOffset.UtcNow-cached.Item1>TimeSpan.FromSeconds(2))Volatile.Write(ref health,cached=Tuple.Create(DateTimeOffset.UtcNow,(await store.CallAsync(J.O("op","outbox_status_v1"),ct))!));
         result["connection"]=J.O("local","available","outboxPending",cached.Item2.L("pending"),"central",CentralState,"internet","unverified","cloudOrders",CloudState);return result;
     }
     public async Task<JsonObject> Action(string token,JsonObject request,CancellationToken ct=default)
