@@ -14,7 +14,10 @@ public sealed partial class Restaurant
     }
     bool TryFiscal(BranchState s,JsonObject u,string type,JsonObject p,out JsonObject result)
     {
-        result=new();if(!new[]{"fiscal.request","fiscal.token","fiscal.cancel.request","fiscal.portal.configure"}.Contains(type))return false;Role(u,"manager");
+        result=new();if(!new[]{"fiscal.request","fiscal.token","fiscal.cancel.request","fiscal.portal.configure","fiscal.retry"}.Contains(type))return false;Role(u,"manager");
+        // Only a submission the PAC never answered, without its id: the manager checked in the PAC portal that the folio was not
+        // stamped. The retry keeps the same Folio and Date, so a stamp that did happen is found instead of duplicated.
+        if(type=="fiscal.retry"){var f=s.Get("fiscal",p.S("id"));Need(f.S("status")=="pending-reconciliation"&&f.S("providerId")=="","Sólo se reintenta un envío al PAC que quedó sin respuesta; los demás estados se resuelven solos");var reason=Text(p,"reason");f["status"]="pending";f.Remove("leaseUntil");f["retryReason"]=reason;f["retriedBy"]=u.S("id");f["retriedAt"]=J.Now();f["message"]="Reintento autorizado: "+reason;result=J.O("id",f.S("id"),"status","pending");return true;}
         if(type=="fiscal.portal.configure"){var url=new Uri(Text(p,"url",500));Need(url.Scheme=="https"&&url.UserInfo==""&&url.Query==""&&url.Fragment=="","Portal HTTPS requerido");s.Meta["invoicePortal"]=url.ToString().TrimEnd('/');result=J.O("configured",true);return true;}
         if(type=="fiscal.cancel.request"){var f=s.Get("fiscal",p.S("id"));Need(new[]{"stamped","sandbox-stamped","simulated-stamped"}.Contains(f.S("status")),"Sólo un CFDI timbrado puede solicitar cancelación");var simulated=f.S("status")=="simulated-stamped";if(simulated)Simulator(s,"pac","facturación (PAC)");f["status"]=simulated?"simulated-cancelled":f.S("status")=="sandbox-stamped"?"sandbox-cancellation-pending":"cancellation-pending";f["cancelReason"]=Text(p,"reason");f["cancelMotive"]=Choice(p,"motive","01","02","03","04");Need(f.S("cancelMotive")!="01"||Guid.TryParse(p.S("replacementUuid"),out _),"Motivo 01 requiere UUID sustituto");f["replacementUuid"]=p.S("replacementUuid");f["cancelRequestedBy"]=u.S("id");
             // The simulated PAC accepts the cancellation at once; the SAT would ask the receiver when motive 02 exceeds its thresholds.

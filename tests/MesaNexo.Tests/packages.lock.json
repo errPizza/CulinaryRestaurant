@@ -407,7 +407,7 @@
         "type": "Project",
         "dependencies": {
           "Avalonia.Desktop": "[12.1.4, )",
-          "MesaNexo.Client": "[0.1.1, )",
+          "MesaNexo.Client": "[0.2.0, )",
           "System.Security.Cryptography.ProtectedData": "[10.0.0, )"
         }
       },
@@ -415,14 +415,15 @@
         "type": "Project",
         "dependencies": {
           "Konscious.Security.Cryptography.Argon2": "[1.3.1, )",
-          "MesaNexo.Core": "[0.1.1, )"
+          "MesaNexo.Core": "[0.2.0, )",
+          "MesaNexo.Integrations": "[0.2.0, )"
         }
       },
       "mesanexo.central": {
         "type": "Project",
         "dependencies": {
-          "MesaNexo.Api": "[0.1.1, )",
-          "MesaNexo.Integrations": "[0.1.1, )",
+          "MesaNexo.Api": "[0.2.0, )",
+          "MesaNexo.Integrations": "[0.2.0, )",
           "Microsoft.Data.Sqlite": "[10.0.12, )"
         }
       },
@@ -432,7 +433,7 @@
           "Avalonia": "[12.1.4, )",
           "Avalonia.Fonts.Inter": "[12.1.4, )",
           "Avalonia.Themes.Fluent": "[12.1.4, )",
-          "MesaNexo.Core": "[0.1.1, )",
+          "MesaNexo.Core": "[0.2.0, )",
           "Microsoft.AspNetCore.SignalR.Client": "[10.0.13, )",
           "QRCoder": "[1.8.0, )"
         }
@@ -443,13 +444,13 @@
       "mesanexo.integrations": {
         "type": "Project",
         "dependencies": {
-          "MesaNexo.Core": "[0.1.1, )"
+          "MesaNexo.Core": "[0.2.0, )"
         }
       },
       "mesanexo.public": {
         "type": "Project",
         "dependencies": {
-          "MesaNexo.Central": "[0.1.1, )"
+          "MesaNexo.Central": "[0.2.0, )"
         }
       }
     }

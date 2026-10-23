@@ -12,7 +12,7 @@ namespace MesaNexo.Api;
 public sealed record ApiOptions(string SiteId,int Port=8443,string Bind="0.0.0.0",string Socket="/run/culinaryos-data/store.sock",string? Credentials=null,string? LabPython=null,string? LabScript=null,string? LabDirectory=null,string? ReadySocket="/run/culinaryos-app/ready.sock",string? SetupCode=null);
 public static class ApiHost
 {
-    public static WebApplication Build(ApiOptions options,IBranchStore store,X509Certificate2 cert,PolicyOptions? policy=null,CloudOptions? cloud=null,IPrintDriver? printer=null)
+    public static WebApplication Build(ApiOptions options,IBranchStore store,X509Certificate2 cert,PolicyOptions? policy=null,CloudOptions? cloud=null,IPrintDriver? printer=null,FiscalOptions? fiscal=null)
     {
         var builder=WebApplication.CreateBuilder(new WebApplicationOptions{Args=[],ContentRootPath=AppContext.BaseDirectory});
         builder.Logging.ClearProviders();builder.Logging.AddSimpleConsole(x=>x.SingleLine=true);builder.Logging.SetMinimumLevel(LogLevel.Warning);
@@ -24,6 +24,7 @@ public static class ApiHost
         builder.Services.AddSignalR(o=>{o.MaximumReceiveMessageSize=16*1024;o.EnableDetailedErrors=false;});
         builder.Services.AddHostedService<InventoryWorker>();builder.Services.AddHostedService<OutboxWorker>();
         if(printer is not null)builder.Services.AddSingleton<IHostedService>(sp=>new PrintWorker(sp.GetRequiredService<BranchService>(),printer,sp.GetRequiredService<ILogger<PrintWorker>>()));
+        if(fiscal is not null)builder.Services.AddSingleton<IHostedService>(sp=>new FiscalWorker(sp.GetRequiredService<BranchService>(),fiscal.Adapter(),fiscal.Issuer,sp.GetRequiredService<ILogger<FiscalWorker>>()));
         var app=builder.Build();var service=app.Services.GetRequiredService<BranchService>();
         app.Use(async(ctx,next)=>{
             ctx.Response.Headers.CacheControl="no-store";ctx.Response.Headers["X-Content-Type-Options"]="nosniff";
