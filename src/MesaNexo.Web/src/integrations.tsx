@@ -4,7 +4,8 @@ import {DialogFrame} from './motion';
 import {cents} from './bridge';
 import {money,type Dialog} from './backoffice';
 
-// Stage 4: simulated third parties. The page never claims a real connection; live mode is locked in the domain.
+// Third parties: off, simulated or live. Live is offered only when the server reports valid credentials for the provider
+// (connection.integrations); the domain checks it again.
 type Row={id:string;[key:string]:any};
 type Ctx={close:()=>void;submit:(fn:()=>Promise<any>)=>void;busy:boolean;error:string};
 type Act=(type:string,payload:any)=>Promise<any>;
@@ -16,25 +17,32 @@ const stamp=(s:string)=>s?new Date(s).toLocaleString('es-MX',{day:'numeric',mont
 const isToday=(s:string)=>!!s&&new Date(s).toDateString()===new Date().toDateString();
 const plural=(n:number,one:string,many:string)=>n+' '+(n===1?one:many);
 export const simOn=(s:any,key:string)=>list(s,'integration').some(x=>x.id===key&&x.mode==='simulated');
+export const serverState=(s:any,key:string):string=>s.connection?.integrations?.[key]||'sin credenciales';
+// The printer and the PAC ran from their own file before modes existed: without a saved mode they are live when ready.
+export const modeOf=(s:any,key:string):'off'|'simulated'|'live'=>{const row=list(s,'integration').find(x=>x.id===key);if(row)return row.mode==='live'&&serverState(s,key)==='sin credenciales'?'off':row.mode;return ['pac','printer'].includes(key)&&serverState(s,key)!=='sin credenciales'?'live':'off';};
+export const liveOn=(s:any,key:string)=>modeOf(s,key)==='live';
+export const activeOn=(s:any,key:string)=>modeOf(s,key)!=='off';
 const settingsOf=(s:any,key:string)=>list(s,'integration').find(x=>x.id===key)?.settings||{};
 export const PLATFORMS:Record<string,{name:string;tone:string}>={uber:{name:'Uber Eats',tone:'green'},rappi:{name:'Rappi',tone:'red'},didi:{name:'DiDi Food',tone:'amber'}};
 export const PROVIDERS=[
- {key:'pac',name:'Facturación CFDI 4.0',vendor:'PAC · Facturama',icon:'file',what:'Timbra y cancela las solicitudes fiscales con un UUID de prueba y aplica las reglas del SAT al receptor.',real:'contrato con el PAC, certificado de sello digital (CSD) del emisor y catálogos SAT revisados.'},
- {key:'terminal',name:'Terminal bancaria',vendor:'PIN pad · Getnet, Clip o Mercado Pago Point',icon:'card',what:'Cobra con tarjeta desde la cuenta y el Mostrador con tarjetas de prueba: aprobada, rechazada o sin respuesta.',real:'terminal física, afiliación bancaria y el SDK del fabricante instalado en la caja.'},
- {key:'onlinepay',name:'Pagos en línea',vendor:'Stripe · Mercado Pago',icon:'cloud',what:'Genera ligas de pago para pedidos por teléfono o a domicilio y recibe el aviso del proveedor.',real:'cuenta verificada, llaves guardadas en el servidor y un webhook firmado por HTTPS.'},
- {key:'messaging',name:'WhatsApp y correo',vendor:'WhatsApp Business · correo',icon:'message',what:'Avisa al cliente que su pedido va en camino o está listo, envía ligas y facturas, y reenvía al dueño los avisos de la sucursal.',real:'número verificado en WhatsApp Business, plantillas aprobadas por Meta y un buzón de envío.'},
- {key:'aggregators',name:'Plataformas de reparto',vendor:'Uber Eats · Rappi · DiDi Food',icon:'truck',what:'Recibe los pedidos de las plataformas, los manda a cocina con su etiqueta y registra lo que pagará cada una.',real:'acuerdo de integración con cada plataforma (o un integrador como Deliverect) y credenciales de la tienda.'},
- {key:'pms',name:'Hotel (PMS)',vendor:'Oracle Opera · Cloudbeds',icon:'key',what:'Carga el consumo a la habitación del huésped después de validar su apellido y el crédito autorizado.',real:'interfaz habilitada por el hotel (OHIP o API de Cloudbeds), códigos de cargo y red hacia el PMS.'},
- {key:'maps',name:'Mapas',vendor:'Google Maps',icon:'pin',what:'Ubica las direcciones de entrega y calcula distancia y tiempo estimado.',real:'clave de API restringida y facturación activa en Google Cloud.'},
- {key:'callerid',name:'Identificador de llamadas',vendor:'Conmutador Asterisk',icon:'phone',what:'Muestra quién llama y lo relaciona con su ficha para tomar el pedido.',real:'conmutador con AMI sobre TLS, usuario de sólo lectura y su certificado.'},
- {key:'printer',name:'Impresora y cajón',vendor:'ESC/POS · CUPS · RJ11',icon:'print',what:'Resuelve como simulados los tickets, cortes y pulsos de cajón; nada sale en papel.',real:'impresora térmica instalada, driver CUPS verificado y cajón conectado por RJ11.'},
+ {key:'pac',name:'Facturación CFDI 4.0',vendor:'PAC · Facturama',icon:'file',what:'Timbra y cancela las solicitudes fiscales y aplica las reglas del SAT al receptor.',real:'cuenta de Facturama (sandbox o producción) con el CSD del emisor cargado en su panel, y claves SAT revisadas con el contador.'},
+ {key:'terminal',name:'Terminal bancaria',vendor:'PIN pad · Mercado Pago Point, Clip o BBVA',icon:'card',what:'Cobra con tarjeta desde la cuenta y el Mostrador; una respuesta perdida se consulta antes de volver a cobrar.',real:'las terminales de la sucursal con el token de Mercado Pago o las llaves de Clip; BBVA se registra capturando la autorización del voucher.'},
+ {key:'onlinepay',name:'Pagos en línea',vendor:'Stripe',icon:'cloud',what:'Genera ligas de pago para pedidos por teléfono o a domicilio y aplica el pago cuando el cliente paga.',real:'cuenta de Stripe verificada y su llave secreta.'},
+ {key:'messaging',name:'WhatsApp y correo',vendor:'WhatsApp Cloud API · SMTP',icon:'message',what:'Avisa al cliente que su pedido va en camino o está listo, envía ligas y facturas, y reenvía al dueño los avisos de la sucursal.',real:'número de WhatsApp Business con plantillas aprobadas por Meta y un buzón SMTP para el correo.'},
+ {key:'aggregators',name:'Plataformas de reparto',vendor:'Uber Eats · Rappi · DiDi Food vía Deliverect',icon:'truck',what:'Recibe los pedidos de las plataformas, los manda a cocina con su etiqueta y registra lo que pagará cada una.',real:'contrato con Deliverect, sus credenciales y la Central publicada en internet para recibir los pedidos.'},
+ {key:'pms',name:'Hotel (PMS)',vendor:'Oracle Opera · Cloudbeds',icon:'key',what:'Carga el consumo a la habitación del huésped después de validar su apellido y el crédito autorizado.',real:'acceso a OHIP o a la API de Cloudbeds habilitado por el hotel y el código de cargo del restaurante.'},
+ {key:'maps',name:'Mapas',vendor:'Google Maps',icon:'pin',what:'Ubica las direcciones de entrega y calcula distancia y tiempo estimado.',real:'clave de API restringida a Geocoding y Routes, con facturación activa en Google Cloud.'},
+ {key:'callerid',name:'Identificador de llamadas',vendor:'Conmutador Asterisk',icon:'phone',what:'Muestra quién llama y lo relaciona con su ficha para tomar el pedido.',real:'conmutador con AMI sobre TLS y un usuario de sólo lectura.'},
+ {key:'printer',name:'Impresora y cajón',vendor:'ESC/POS · RJ11',icon:'print',what:'Imprime cuentas y cortes, y abre el cajón al cobrar en efectivo.',real:'impresora térmica ESC/POS en red o USB, con el cajón conectado a ella por RJ11.'},
 ];
+const FILES:Record<string,string>={pac:'pac.json (o fiscal.json)',printer:'printer.json'};
+const fileOf=(key:string)=>'/etc/culinaryos/integrations/'+(FILES[key]||key+'.json');
 const providerName=(key:string)=>PROVIDERS.find(p=>p.key===key)?.name||key;
 const channelPill=(c:string)=><Pill tone={c==='whatsapp'?'green':'blue'} icon={c==='whatsapp'?'message':'file'}>{c==='whatsapp'?'WhatsApp':'Correo'}</Pill>;
 const logTone:Record<string,string>={approved:'green',stamped:'green',posted:'green',paid:'green',accepted:'green',ok:'green','handed-off':'green',simulated:'blue',declined:'red',rejected:'red',failed:'red',uncertain:'amber',reversed:'amber',refunded:'amber',pending:'amber',ringing:'blue',cancelled:'neutral',off:'neutral',expired:'neutral'};
 
 function configure(s:any,form:any,key:string){
- const c=settingsOf(s,key),base={provider:key,mode:'simulated'};
+ const c=settingsOf(s,key),base={provider:key,mode:modeOf(s,key)==='live'?'live':'simulated'};
  const pct=(bps:number)=>(bps??0)/100;
  switch(key){
  case 'pac':return form('Facturación simulada',[{key:'issuerRfc',label:'RFC del emisor',value:c.issuerRfc||'EKU9003173C9',required:true,hint:'EKU9003173C9 es el RFC de pruebas publicado por el SAT.'},{key:'issuerName',label:'Razón social',value:c.issuerName||s.restaurant?.name,full:true},{key:'series',label:'Serie',value:c.series||'A'},{key:'autoStamp',label:'Timbrar al crear la solicitud',type:'checkbox',value:!!c.autoStamp}],'integration.configure',base,'Los timbres simulados no tienen validez fiscal.',(x:any)=>({settings:x}));
@@ -64,8 +72,8 @@ export function simulateCall(form:any){form('Simular llamada entrante',[{key:'nu
 export function simulatePlatformOrder(s:any,form:any){const c=settingsOf(s,'aggregators');form('Simular pedido de plataforma',[{key:'platform',label:'Plataforma',type:'select',value:(c.platforms||['uber'])[0],options:(c.platforms||Object.keys(PLATFORMS)).map((p:string)=>({value:p,label:PLATFORMS[p]?.name||p}))},{key:'customerName',label:'Cliente',placeholder:'Al azar si lo dejas vacío'},{key:'notes',label:'Indicaciones',placeholder:'Ej. Sin cebolla'}],'aggregator.simulate',{},'Elige productos al azar del menú publicado.',(x:any)=>({platform:x.platform,customerName:x.customerName||'',notes:x.notes||''}));}
 
 export function IntegrationsPage({state:s,form,action,run}:{state:any;form:any;action:Act;run:any}){
- const active=PROVIDERS.filter(p=>simOn(s,p.key)),logs=byTime(list(s,'integrationlog')),messages=byTime(list(s,'message')),orders=list(s,'aggregatororder');
- const toggle=(key:string)=>{const on=simOn(s,key);run(()=>action('integration.configure',{provider:key,mode:on?'off':'simulated'}),on?providerName(key)+' apagada':'Simulación de '+providerName(key)+' activa');};
+ const active=PROVIDERS.filter(p=>activeOn(s,p.key)),live=PROVIDERS.filter(p=>liveOn(s,p.key)),logs=byTime(list(s,'integrationlog')),messages=byTime(list(s,'message')),orders=list(s,'aggregatororder');
+ const setMode=(key:string,mode:string)=>run(()=>action('integration.configure',{provider:key,mode}),mode==='off'?providerName(key)+' apagada':mode==='live'?providerName(key)+': conexión real activa':'Simulación de '+providerName(key)+' activa');
  const tests:Record<string,React.ReactNode>={
   messaging:<Button className="ghost xs" icon="message" onClick={()=>form('Mensaje de prueba',[{key:'channel',label:'Canal',type:'select',value:'whatsapp',options:[{value:'whatsapp',label:'WhatsApp'},{value:'email',label:'Correo'}]},{key:'to',label:'Destinatario',required:true,placeholder:'55 1234 5678 o correo'}],'message.test',{},'Queda en la bandeja de salida; no se envía a nadie.')}>Mensaje de prueba</Button>,
   aggregators:<><Button className="ghost xs" icon="plus" onClick={()=>simulatePlatformOrder(s,form)}>Simular pedido</Button><Button className="ghost xs" icon="upload" onClick={()=>run(()=>action('aggregator.sync',{}),'Menú publicado en las plataformas (simulado)')}>Publicar menú</Button></>,
@@ -74,29 +82,31 @@ export function IntegrationsPage({state:s,form,action,run}:{state:any;form:any;a
  };
  const lastGeo=logs.filter(l=>l.provider==='maps').at(-1);
  return <>
-  <Notice tone="warn" icon="shield"><b>Todo está en simulación.</b> No se contacta a ningún proveedor, no se mueve dinero y los timbres no tienen validez fiscal. Cada integración queda lista: para conectarla de verdad hace falta el contrato, las credenciales guardadas en el servidor y tu autorización.</Notice>
+  {live.length?<Notice tone="info" icon="plug"><b>Conexión real: {live.map(p=>p.name).join(', ')}.</b> Estas integraciones contactan al proveedor, mueven dinero o emiten documentos de verdad. Las demás siguen apagadas o en simulación.</Notice>
+  :<Notice tone="warn" icon="shield"><b>Todo está en simulación.</b> No se contacta a ningún proveedor, no se mueve dinero y los timbres no tienen validez fiscal. Para conectar una de verdad, guarda sus credenciales en el servidor y elige «Real» en su tarjeta.</Notice>}
   <Kpis>
-   <MetricCard className="lead" label="Simuladores activos" value={<>{active.length} <small>/ {PROVIDERS.length}</small></>} note={active.length?active.slice(0,3).map(p=>p.name).join(', ')+(active.length>3?'…':''):'Activa los que quieras probar'} icon="plug" tone="amber"/>
+   <MetricCard className="lead" label="Integraciones activas" value={<>{active.length} <small>/ {PROVIDERS.length}</small></>} note={active.length?plural(live.length,'real','reales')+' · '+plural(active.length-live.length,'simulada','simuladas'):'Activa las que quieras usar'} icon="plug" tone="amber"/>
    <MetricCard label="Operaciones hoy" value={logs.filter(l=>isToday(l.at)).length} note={logs.length?'Última: '+stamp(logs.at(-1)!.at):'Sin operaciones todavía'} icon="history" tone="blue"/>
    <MetricCard label="Bandeja de salida" value={messages.filter(m=>isToday(m.at)).length} note={plural(messages.filter(m=>m.channel==='whatsapp').length,'WhatsApp','WhatsApp')+' · '+plural(messages.filter(m=>m.channel==='email').length,'correo','correos')} icon="message" tone="green"/>
    <MetricCard label="Plataformas hoy" value={money(orders.filter(o=>isToday(o.receivedAt)&&o.net!=null).reduce((t,o)=>t+o.net,0))} note={plural(orders.filter(o=>isToday(o.receivedAt)).length,'pedido','pedidos')+' · neto de comisión'} icon="truck" tone="purple"/>
   </Kpis>
-  <section className="integration-grid stagger" aria-label="Integraciones">{PROVIDERS.map(p=>{const on=simOn(s,p.key);return <article className={'card integration-card'+(on?' on':'')} key={p.key}>
-   <header><Sq icon={p.icon} tone={on?'amber':undefined}/><div className="w"><b>{p.name}</b><small>{p.vendor}</small></div><Switch checked={on} label={(on?'Apagar ':'Activar ')+p.name} hideLabel onChange={()=>toggle(p.key)}/></header>
+  <section className="integration-grid stagger" aria-label="Integraciones">{PROVIDERS.map(p=>{const mode=modeOf(s,p.key),on=mode!=='off',sim=mode==='simulated',server=serverState(s,p.key),ready=server==='lista'||mode==='live';return <article className={'card integration-card'+(on?' on':'')+(mode==='live'?' live':'')} key={p.key}>
+   <header><Sq icon={p.icon} tone={mode==='live'?'green':on?'amber':undefined}/><div className="w"><b>{p.name}</b><small>{p.vendor}</small></div></header>
+   <div className="seg sm" role="radiogroup" aria-label={'Modo de '+p.name}>{([['off','Apagada'],['simulated','Simulación'],['live','Real']] as const).map(([value,label])=><Button key={value} type="button" role="radio" aria-checked={mode===value} className={mode===value?'active':''} icon={false} disabled={value==='live'&&!ready} title={value==='live'&&!ready?'Faltan las credenciales en el servidor':undefined} onClick={()=>mode!==value&&setMode(p.key,value)}>{label}</Button>)}</div>
    <p>{p.what}</p>
-   <div className="integration-state">{on?<Pill tone="amber" icon="spark">Simulación activa</Pill>:<Pill>Apagada</Pill>}<Pill tone="neutral" icon="lock">Real: bloqueado</Pill></div>
+   <div className="integration-state">{mode==='live'?<Pill tone="green" icon="plug">Conexión real</Pill>:sim?<Pill tone="amber" icon="spark">Simulación activa</Pill>:<Pill>Apagada</Pill>}{server==='lista'?<Pill tone="green" icon="check">Credenciales listas</Pill>:server.startsWith('error')?<Pill tone="red" icon="alert">{server}</Pill>:server==='sin conexión'?<Pill tone="amber" icon="alert">Sin conexión con el proveedor</Pill>:<Pill tone="neutral" icon="lock">Sin credenciales</Pill>}</div>
    {on&&<small className="integration-usage">{usage(s,p.key)}</small>}
    {on&&p.key==='maps'&&lastGeo&&<small className="integration-usage">{lastGeo.summary}</small>}
-   <details className="integration-real"><summary>Para conectarlo de verdad</summary><span>Necesita {p.real}</span></details>
-   {on&&<div className="row-actions">{['pac','terminal','onlinepay','messaging','aggregators','pms','maps'].includes(p.key)&&<Button className="ghost xs" icon="settings" onClick={()=>configure(s,form,p.key)}>Configurar</Button>}{tests[p.key]}</div>}
+   <details className="integration-real"><summary>Para conectarlo de verdad</summary><span>Necesita {p.real} Las credenciales van en <code>{fileOf(p.key)}</code>; hay un ejemplo en <code>deploy/integrations</code>.</span></details>
+   {on&&<div className="row-actions">{['pac','terminal','onlinepay','messaging','aggregators','pms','maps'].includes(p.key)&&<Button className="ghost xs" icon="settings" onClick={()=>configure(s,form,p.key)}>Configurar</Button>}{sim&&tests[p.key]}</div>}
   </article>;})}</section>
   <div className="g g2 start">
    <section className="card panel"><PanelHeading title="Bandeja de salida" note="Mensajes simulados · no salieron de la sucursal" icon="message"/>
     {messages.length?<div className="rows">{messages.slice(-12).reverse().map(m=><div className="r outbox" key={m.id}><Sq icon={m.channel==='whatsapp'?'message':'file'} tone={m.channel==='whatsapp'?'green':'blue'}/><div className="w"><b>{m.to}</b><span>{m.body}</span></div><span className="outbox-meta">{channelPill(m.channel)}<time>{clock(m.at)}</time></span></div>)}</div>
     :<Empty icon="message" title="Sin mensajes" text={simOn(s,'messaging')?'Aparecerán al despachar pedidos, enviar ligas o timbrar facturas.':'Activa WhatsApp y correo para ver los avisos que se enviarían.'}/>}
    </section>
-   <section className="card panel"><PanelHeading title="Bitácora de integraciones" note="Cada operación simulada con su referencia" icon="history"/>
-    <DataTable columns={['Hora','Integración','Operación','Resultado','Referencia']} rows={logs.slice(-25).reverse().map(l=>[stamp(l.at),providerName(l.provider),<span className="w"><span style={{whiteSpace:'normal'}}>{l.summary}</span></span>,<Pill tone={logTone[l.status]||'neutral'}>{statusText[l.status]||l.status}</Pill>,l.reference?<code>{String(l.reference).slice(0,18)}</code>:<span className="no">—</span>])} empty="Las operaciones simuladas aparecerán aquí."/>
+   <section className="card panel"><PanelHeading title="Bitácora de integraciones" note="Cada operación con su referencia; las simuladas van marcadas" icon="history"/>
+    <DataTable columns={['Hora','Integración','Operación','Resultado','Referencia']} rows={logs.slice(-25).reverse().map(l=>[stamp(l.at),providerName(l.provider),<span className="w"><span style={{whiteSpace:'normal'}}>{l.summary}</span>{l.simulated!==false&&<small>Simulado</small>}</span>,<Pill tone={logTone[l.status]||'neutral'}>{statusText[l.status]||l.status}</Pill>,l.reference?<code>{String(l.reference).slice(0,18)}</code>:<span className="no">—</span>])} empty="Las operaciones simuladas aparecerán aquí."/>
    </section>
   </div>
  </>;

@@ -9,9 +9,9 @@ namespace MesaNexo.Api;
 // issuer's CSD, a contract with the PAC and a review of the SAT keys, and stays refused here until then.
 public sealed record FiscalOptions(string Username,string Password,JsonObject Issuer)
 {
-    public static FiscalOptions Load(string path)
+    public static FiscalOptions Load(string path)=>From(JsonNode.Parse(File.ReadAllText(path)) as JsonObject??throw new BusinessException(400,"Configuración fiscal inválida"));
+    public static FiscalOptions From(JsonObject o)
     {
-        var o=JsonNode.Parse(File.ReadAllText(path)) as JsonObject??throw new BusinessException(400,"Configuración fiscal inválida");
         Need(o.S("provider")=="facturama","Proveedor PAC no soportado: "+o.S("provider"));
         Need(o.S("environment")=="sandbox","La facturación con validez fiscal sigue desactivada: requiere el CSD del emisor, contrato con el PAC y revisión de claves SAT. Usa \"environment\": \"sandbox\"",403);
         var issuer=o.Obj("issuer");Need(Regex.IsMatch(issuer.S("expeditionPlace"),@"^\d{5}$"),"issuer.expeditionPlace: código postal de expedición de 5 dígitos");

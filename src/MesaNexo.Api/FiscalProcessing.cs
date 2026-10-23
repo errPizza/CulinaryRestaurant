@@ -33,8 +33,8 @@ public sealed partial class BranchService
     public async Task<bool> ProcessFiscalSandbox(IPacAdapter pac,JsonObject config,bool allRequests=false,CancellationToken ct=default)
     {
         Need(pac.IsSandbox,"La automatización fiscal real permanece desactivada",403);var s=await Load(ct);
-        // With the PAC simulator on, the simulator stamps; the sandbox stays out of it.
-        if(s.Related("integration","id","pac").Any(x=>x.S("mode")=="simulated"))return false;
+        // Only with the PAC live: with the simulator on the simulator stamps, and switched off nothing is sent.
+        if(!Domain.IsLive(s,"pac"))return false;
         var configHash=J.Hash(J.Canonical(config));var now=DateTimeOffset.UtcNow;bool Leased(JsonObject x)=>DateTimeOffset.TryParse(x.S("leaseUntil"),out var lease)&&lease>=now;
         var fiscal=s.List("fiscal").Where(x=>(allRequests||x.B("sandboxAuthorized"))&&!Leased(x)).OrderBy(x=>x.S("at"),StringComparer.Ordinal).FirstOrDefault(x=>x.S("status") switch{
             "pending" or "submitting" or "sandbox-cancellation-pending"=>true,

@@ -12,7 +12,7 @@ namespace MesaNexo.Api;
 public sealed record ApiOptions(string SiteId,int Port=8443,string Bind="0.0.0.0",string Socket="/run/culinaryos-data/store.sock",string? Credentials=null,string? LabPython=null,string? LabScript=null,string? LabDirectory=null,string? ReadySocket="/run/culinaryos-app/ready.sock",string? SetupCode=null);
 public static class ApiHost
 {
-    public static WebApplication Build(ApiOptions options,IBranchStore store,X509Certificate2 cert,PolicyOptions? policy=null,CloudOptions? cloud=null,IPrintDriver? printer=null,FiscalOptions? fiscal=null)
+    public static WebApplication Build(ApiOptions options,IBranchStore store,X509Certificate2 cert,PolicyOptions? policy=null,CloudOptions? cloud=null,IPrintDriver? printer=null,FiscalOptions? fiscal=null,IntegrationConfig? integrations=null)
     {
         var builder=WebApplication.CreateBuilder(new WebApplicationOptions{Args=[],ContentRootPath=AppContext.BaseDirectory});
         builder.Logging.ClearProviders();builder.Logging.AddSimpleConsole(x=>x.SingleLine=true);builder.Logging.SetMinimumLevel(LogLevel.Warning);
@@ -25,7 +25,8 @@ public static class ApiHost
         builder.Services.AddHostedService<InventoryWorker>();builder.Services.AddHostedService<OutboxWorker>();
         if(printer is not null)builder.Services.AddSingleton<IHostedService>(sp=>new PrintWorker(sp.GetRequiredService<BranchService>(),printer,sp.GetRequiredService<ILogger<PrintWorker>>()));
         if(fiscal is not null)builder.Services.AddSingleton<IHostedService>(sp=>new FiscalWorker(sp.GetRequiredService<BranchService>(),fiscal.Adapter(),fiscal.Issuer,sp.GetRequiredService<ILogger<FiscalWorker>>()));
-        var app=builder.Build();var service=app.Services.GetRequiredService<BranchService>();
+        integrations??=new();if(printer is not null)integrations.Ready("printer");if(fiscal is not null)integrations.Ready("pac");var terminals=LiveServices.Register(builder.Services,integrations);
+        var app=builder.Build();var service=app.Services.GetRequiredService<BranchService>();service.UseIntegrations(integrations,terminals);
         app.Use(async(ctx,next)=>{
             ctx.Response.Headers.CacheControl="no-store";ctx.Response.Headers["X-Content-Type-Options"]="nosniff";
             try{await next();}catch(BusinessException e){await Error(ctx,e.Status,e.Message);}catch(StoreException e){await Error(ctx,e.Code=="COS-DATA-CONFLICT"||e.Code=="COS-DATA-IDEMPOTENCY"?409:e.Code=="COS-DATA-INVALID"?413:e.Code=="COS-DATA-FULL"?507:503,e.Code=="COS-DATA-INVALID"?"Carga demasiado grande o inválida; divide la comanda o reduce el tamaño de la imagen.":e.Code);}catch(Exception e)when(e is JsonException or FormatException or InvalidOperationException or OverflowException){await Error(ctx,400,"Solicitud o formato inválido");}catch(Exception){await Error(ctx,503,"Servicio local no disponible; conserva la operación y reconcilia");}

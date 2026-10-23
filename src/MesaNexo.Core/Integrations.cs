@@ -5,11 +5,21 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using static MesaNexo.Core.Rules;
 namespace MesaNexo.Core;
-// Stage 4: simulated third parties. Each simulator drives the same records and states a real adapter would, but nothing leaves the branch:
-// no network, no money and no fiscal validity. Live mode stays locked until there is a contract, server-side credentials and explicit authorization.
+// Third parties. Each simulator drives the same records and states a real adapter does, but nothing leaves the branch: no network, no
+// money and no fiscal validity. Live mode needs the provider's credentials on the server (LiveCatalog) and a manager choosing it; then
+// the domain only queues the work and the server's integration services call the provider and report back through IntegrationResult.
 public sealed partial class Restaurant
 {
     public static readonly string[] IntegrationKeys=["pac","terminal","onlinepay","messaging","aggregators","pms","maps","callerid","printer"];
+    // What the server can do for real, without secrets: {providers:[keys with valid credentials], terminals:[{id,name,provider,manual}]}.
+    public JsonObject LiveCatalog{get;set;}=new();
+    // Services that already ran from their own file before modes existed: without a saved mode they stay live.
+    static readonly string[] LiveByDefault=["pac","printer"];
+    bool Ready(string key)=>LiveCatalog.A("providers").Strings().Contains(key);
+    public bool IsLive(BranchState s,string key){var row=s.Related("integration","id",key).FirstOrDefault();return Ready(key)&&(row?.S("mode")=="live"||row is null&&LiveByDefault.Contains(key));}
+    // The settings of a provider that is on, simulated or live.
+    JsonObject? Active(BranchState s,string key)=>Simulated(s,key)??(IsLive(s,key)?s.Related("integration","id",key).FirstOrDefault()??J.O("settings",new JsonObject()):null);
+    JsonObject Enabled(BranchState s,string key,string name)=>(Active(s,key)??throw new BusinessException(400,"Activa "+name+" en Integraciones")).Obj("settings");
     static readonly Dictionary<string,string> Platforms=new(){["uber"]="UBER EATS",["rappi"]="RAPPI",["didi"]="DIDI FOOD"};
     // Test cards of the simulated PIN pad: the outcome picks brand and last four digits. Card data never enters the branch.
     static readonly Dictionary<string,(string Brand,string Last4)> TestCards=new(){["approve"]=("Visa","4242"),["decline"]=("Mastercard","0002"),["timeout"]=("Visa","0119")};
@@ -23,7 +33,7 @@ public sealed partial class Restaurant
     static string Pick(JsonObject p,string key,string fallback,params string[] choices){var value=p.S(key);if(value=="")value=fallback;Need(choices.Contains(value),key+": valor inválido");return value;}
     JsonObject? Simulated(BranchState s,string key)=>s.Related("integration","id",key).FirstOrDefault(x=>x.S("mode")=="simulated");
     JsonObject Simulator(BranchState s,string key,string name)=>(Simulated(s,key)??throw new BusinessException(400,"Activa la simulación de "+name+" en Integraciones")).Obj("settings");
-    JsonObject Log(BranchState s,JsonObject u,string provider,string operation,string status,string summary,string reference="")=>Add(s,"integrationlog",J.O("provider",provider,"operation",operation,"status",status,"summary",Sanitize(summary,200),"reference",reference,"actor",u.S("id"),"at",J.Now(),"simulated",true));
+    JsonObject Log(BranchState s,JsonObject u,string provider,string operation,string status,string summary,string reference="",bool simulated=true)=>Add(s,"integrationlog",J.O("provider",provider,"operation",operation,"status",status,"summary",Sanitize(summary,200),"reference",reference,"actor",u.S("id"),"at",J.Now(),"simulated",simulated));
     // Simulated WhatsApp and e-mail: one message per event, reference and channel, stored as sent without contacting anyone.
     JsonObject? Message(BranchState s,string channel,string to,string kind,string refId,string body)
     {
@@ -103,11 +113,11 @@ public sealed partial class Restaurant
         result=J.O("ok",true);var id=p.S("id");
         switch(type){
         case "integration.configure":{
-            Role(u,"manager");var key=Choice(p,"provider",IntegrationKeys);var mode=p.S("mode");
-            Need(mode!="live","La conexión real necesita contrato con el proveedor, credenciales guardadas en el servidor y tu autorización expresa; por ahora sólo está disponible la simulación",403);Need(mode is "simulated" or "off","Modo inválido");
+            Role(u,"manager");var key=Choice(p,"provider",IntegrationKeys);var mode=p.S("mode");Need(mode is "simulated" or "off" or "live","Modo inválido");
+            Need(mode!="live"||Ready(key),"El servidor no tiene credenciales válidas para esta integración: van en /etc/culinaryos/integrations/"+key+".json");
             var row=s.Related("integration","id",key).FirstOrDefault()??Add(s,"integration",J.O("id",key,"key",key,"since",J.Now()));
             row["settings"]=p["settings"] is JsonObject given?IntegrationSettings(s,key,given):row["settings"] is JsonObject prior&&prior.Count>0?prior.DeepClone():IntegrationSettings(s,key,new());
-            row["mode"]=mode;row["updatedBy"]=u.S("id");row["updatedAt"]=J.Now();Log(s,u,key,"configure",mode,mode=="simulated"?"Simulación activa":"Integración apagada");result=row;break;}
+            row["mode"]=mode;row["updatedBy"]=u.S("id");row["updatedAt"]=J.Now();Log(s,u,key,"configure",mode,mode=="simulated"?"Simulación activa":mode=="live"?"Conexión real activa":"Integración apagada",simulated:mode!="live");result=row;break;}
         case "pac.stamp":Role(u,"manager");result=StampSimulated(s,u,s.Get("fiscal",id));break;
         case "terminal.charge":{
             Role(u,"mesero","manager");Need(u.S("role")=="manager"||u.Obj("permissions").B("payments",true),"Permiso de pagos deshabilitado",403);var config=Simulator(s,"terminal","la terminal bancaria");var v=Own(s,u,p.S("visitId"));
@@ -197,6 +207,16 @@ public sealed partial class Restaurant
         var owner=Simulated(s,"messaging")?.Obj("settings").S("ownerEmail")??"";
         if(owner!="")foreach(var n in s.Related("ownernotice","messageId","").Take(5).ToArray())if(Message(s,"email",owner,"owner-notice",n.S("id"),OwnerText(s,n)) is {} sent)n["messageId"]=sent.S("id");
         if(Simulated(s,"printer") is not null)foreach(var job in s.Related("printjob","status","pending").Take(20).ToArray()){job["status"]="simulated";job["attemptId"]=J.Id();job["driver"]="simulated-escpos";job["evidence"]=job.S("type")=="drawer"?"Pulso RJ11 simulado · el cajón físico no se abrió":"Impresión simulada · no salió papel";job["resolvedAt"]=J.Now();}
+    }
+    static readonly Dictionary<string,string> ProviderOfKind=new(){["message"]="messaging",["terminaltxn"]="terminal",["paylink"]="onlinepay",["pmspost"]="pms",["aggregatororder"]="aggregators",["address"]="maps"};
+    // What a live provider answered for one of its records, stored in the same commit as its effects. Money moves only here,
+    // with the same rules the simulators follow; the record's actor is who asked for it.
+    public void IntegrationResult(BranchState s,string kind,string id,string status,JsonObject fields,string summary="",string reference="")
+    {
+        var row=s.Get(kind,id);foreach(var (key,value) in fields)row[key]=value?.DeepClone();if(status!="")row["status"]=status;row["updatedAt"]=J.Now();
+        var actor=s.Related("user","id",row.S("actor")).FirstOrDefault()??J.O("id","integration-service","role","manager");
+        LiveEffects(s,actor,kind,row);
+        if(summary!="")Log(s,actor,ProviderOfKind.GetValueOrDefault(kind,kind),kind,row.S("status"),summary,reference,simulated:false);
     }
     void FilterIntegrationSnapshot(BranchState s,JsonObject u,StateParts output)
     {

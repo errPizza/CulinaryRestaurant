@@ -10,9 +10,9 @@ namespace MesaNexo.Api;
 // 48 columns is 80 mm paper with font A, 32 is 58 mm.
 public sealed record PrinterOptions(string Uri,int Columns=48)
 {
-    public static PrinterOptions Load(string path)
+    public static PrinterOptions Load(string path)=>From(JsonNode.Parse(File.ReadAllText(path)) as JsonObject??throw new BusinessException(400,"Configuración de impresora inválida"));
+    public static PrinterOptions From(JsonObject o)
     {
-        var o=JsonNode.Parse(File.ReadAllText(path)) as JsonObject??throw new BusinessException(400,"Configuración de impresora inválida");
         var options=new PrinterOptions(o.S("uri"),o.I("columns",48));Need(options.Columns is >=24 and <=64,"Columnas de impresora entre 24 y 64");
         var uri=new Uri(options.Uri);Need(uri.Scheme=="tcp"&&uri.Host!=""&&uri.Port is >0 and <65536||uri.Scheme=="file"&&uri.LocalPath!="","Impresora: usa tcp://host:puerto o file:///dev/usb/lp0");
         return options;
