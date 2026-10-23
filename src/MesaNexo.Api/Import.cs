@@ -14,7 +14,7 @@ public sealed partial class BranchService
         var offset=(await Load(ct)).Meta.I("migrationImported");
         while(offset<all.Length){
             s=await Load(ct);var count=0;var bytes=0;
-            while(offset+count<all.Length&&count<50){var row=all[offset+count];var len=System.Text.Encoding.UTF8.GetByteCount(row.ToJsonString());if(count>0&&bytes+len>32*1024)break;Need(len<40*1024,"Registro demasiado grande");var copy=(JsonObject)row.DeepClone();copy["siteId"]=siteId;var key=BranchState.Key(copy.S("kind"),copy.S("id"));Need(!s.Records.ContainsKey(key),"El plan colisiona con un registro existente");s.Add(copy.S("kind"),copy);count++;bytes+=len;}
+            while(offset+count<all.Length&&count<50){var row=all[offset+count];var len=System.Text.Encoding.UTF8.GetByteCount(row.ToJsonString());if(count>0&&bytes+len>32*1024)break;Need(len<40*1024,"Registro demasiado grande");var copy=(JsonObject)row.DeepClone();copy["siteId"]=siteId;var key=BranchState.Key(copy.S("kind"),copy.S("id"));Need(!s.Contains(key),"El plan colisiona con un registro existente");s.Add(copy.S("kind"),copy);count++;bytes+=len;}
             s.Meta["migrationImported"]=offset+count;await Commit(s,J.Hash(sha+"batch"+offset)[..32],"local-migration",sha,J.O("imported",offset+count),"migration.batch",ct);offset+=count;
         }
         s=await Load(ct);

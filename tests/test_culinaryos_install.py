@@ -33,10 +33,10 @@ class CulinaryInstallation(unittest.TestCase):
         return root/'bundle',runtime
     def test_exact_baseline_accepted(self):
         with tempfile.TemporaryDirectory() as tmp:
-            bundle,runtime=self.runtime(Path(tmp));i.validate_runtime(bundle,runtime)
+            bundle,runtime=self.runtime(Path(tmp));self.assertEqual(i.validate_runtime(bundle,runtime),'absent')
     def test_existing_exact_extension_accepted(self):
         with tempfile.TemporaryDirectory() as tmp:
-            bundle,runtime=self.runtime(Path(tmp),True,True);i.validate_runtime(bundle,runtime)
+            bundle,runtime=self.runtime(Path(tmp),True,True);self.assertEqual(i.validate_runtime(bundle,runtime),'current')
     def test_modified_runtime_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             bundle,runtime=self.runtime(Path(tmp));(runtime/'store.py').write_text('changed')
@@ -120,12 +120,12 @@ class CulinaryInstallation(unittest.TestCase):
             bundle,runtime=self.historical_runtime(Path(tmp))
             with (runtime/'store.py').open('ab') as stream:stream.write(b'\n# not audited\n')
             with self.assertRaises(ValueError):i.validate_runtime(bundle,runtime)
-    def extension_precheck(self,bundle,runtime):
+    def extension_precheck(self,bundle,runtime,upgrade=False):
         spec=importlib.util.spec_from_file_location('extension_install',ROOT/'deploy/install-runtime-extension.py')
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
         class StopBeforeMutation(Exception):pass
         with patch.object(module,'ROOT',bundle),patch.object(module,'TARGET',runtime),patch.object(module.sys,'platform','linux'),patch.object(module.os,'geteuid',return_value=0,create=True),patch.object(module,'command',side_effect=StopBeforeMutation) as command:
-            try:module.main()
+            try:module.main(upgrade)
             except StopBeforeMutation:pass
             return command.call_args_list
     def test_extension_installer_accepts_same_audited_store(self):
@@ -221,21 +221,69 @@ class CulinaryInstallation(unittest.TestCase):
             source=(ROOT/'deploy/culinaryos/install.py').read_text()
             install_source=source[source.index('def install(bundle,client):'):]
             self.assertLess(install_source.index('verify_application_access()'),install_source.index('initialize_branch(site)'))
-    def test_deployed_extension_bytes_match_package_on_resume(self):
+    def upgradable(self,root):
+        # A branch hooked to a delivered earlier extension, and a bundle with the current one and its history.
+        bundle,runtime=self.runtime(root,True,True)
+        (bundle/'runtime/mesanexo_ipc.py').write_bytes((ROOT/'runtime/mesanexo_ipc.py').read_bytes())
+        (bundle/'deploy/culinaryos').mkdir(parents=True);(bundle/'deploy/culinaryos/extension-history.json').write_bytes((ROOT/'deploy/culinaryos/extension-history.json').read_bytes())
+        legacy=(ROOT/'artifacts/culinaryos-cd-r3/runtime/mesanexo_ipc.py').read_bytes();(runtime/'mesanexo_ipc.py').write_bytes(legacy)
+        return bundle,runtime,legacy
+    def test_every_delivered_extension_is_known_for_upgrade(self):
         payload=(ROOT/'runtime/mesanexo_ipc.py').read_bytes()
         self.assertNotIn(b'\r\n',payload)
-        legacy=(ROOT/'artifacts/culinaryos-cd-r3/runtime/mesanexo_ipc.py').read_bytes()
-        self.assertNotEqual(hashlib.sha256(legacy).hexdigest(),hashlib.sha256(payload).hexdigest())
-        self.assertEqual(legacy.replace(b'\r\n',b'\n'),payload)
+        known=i.known_extensions(ROOT)
+        delivered=list((ROOT/'artifacts').glob('*/runtime/mesanexo_ipc.py'))
+        self.assertTrue(delivered)
+        for path in delivered:
+            with self.subTest(release=path.parts[-3]):self.assertIn(i.digest(path),known)
+        self.assertNotIn(hashlib.sha256(payload).hexdigest(),known)
+    def test_known_earlier_extension_reported_for_upgrade_unchanged(self):
         with tempfile.TemporaryDirectory() as tmp:
-            bundle,runtime=self.runtime(Path(tmp),True,True)
-            (bundle/'runtime/mesanexo_ipc.py').write_bytes(payload)
-            (runtime/'mesanexo_ipc.py').write_bytes(legacy.decode('utf-8').replace('\r\n','\n').encode('utf-8'))
-            i.validate_runtime(bundle,runtime)
-            before=(runtime/'mesanexo_ipc.py').read_bytes()
-            self.assertEqual(before,payload)
+            bundle,runtime,legacy=self.upgradable(Path(tmp))
+            self.assertEqual(i.validate_runtime(bundle,runtime),'upgrade')
+            self.assertEqual((runtime/'mesanexo_ipc.py').read_bytes(),legacy)
+            (bundle/'deploy/culinaryos/extension-history.json').unlink()
+            with self.assertRaises(ValueError):i.validate_runtime(bundle,runtime)
+    def test_changed_earlier_extension_not_upgraded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle,runtime,legacy=self.upgradable(Path(tmp))
             with (runtime/'mesanexo_ipc.py').open('ab') as f:f.write(b'\n# unknown change\n')
             with self.assertRaises(ValueError):i.validate_runtime(bundle,runtime)
+            self.assertEqual(self.extension_precheck_error(bundle,runtime,True),'not a known earlier version')
+    def test_extension_install_without_upgrade_keeps_existing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle,runtime,legacy=self.upgradable(Path(tmp))
+            self.assertEqual(self.extension_precheck_error(bundle,runtime,False),'use --upgrade')
+    def extension_precheck_error(self,bundle,runtime,upgrade):
+        with self.assertRaises(SystemExit) as stop:self.assertEqual(self.extension_precheck(bundle,runtime,upgrade),[])
+        message=str(stop.exception);return next(x for x in ('not a known earlier version','use --upgrade') if x in message)
+    def extension_upgrade(self,root,fail_health=False):
+        import subprocess,types
+        spec=importlib.util.spec_from_file_location('extension_upgrade',ROOT/'deploy/install-runtime-extension.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        bundle,runtime,legacy=self.upgradable(root);backups=root/'backups';backups.mkdir();calls=[]
+        def command(*args,check=True):
+            calls.append(args)
+            if fail_health and args[-1]=='health':raise subprocess.CalledProcessError(1,args)
+            return types.SimpleNamespace(returncode=0)
+        dataio=(runtime/'dataio.py').read_bytes()
+        with patch.object(module,'ROOT',bundle),patch.object(module,'TARGET',runtime),patch.object(module,'BACKUPS',backups),patch.object(module.sys,'platform','linux'),patch.object(module.os,'geteuid',return_value=0,create=True),patch.object(os,'chown',create=True),patch.object(module,'command',side_effect=command):
+            try:module.main(True);error=None
+            except subprocess.CalledProcessError as e:error=e
+        self.assertEqual(calls[0],('systemctl','start','culinaryos-snapshot.service'))
+        self.assertEqual((runtime/'dataio.py').read_bytes(),dataio)
+        backup=next(backups.iterdir());self.assertEqual((backup/'mesanexo_ipc.py').read_bytes(),legacy)
+        return runtime,legacy,error,calls
+    def test_extension_upgrade_backs_up_and_replaces_known_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime,legacy,error,calls=self.extension_upgrade(Path(tmp))
+            self.assertIsNone(error);self.assertEqual((runtime/'mesanexo_ipc.py').read_bytes(),(ROOT/'runtime/mesanexo_ipc.py').read_bytes())
+            self.assertIn(('systemctl','stop','culinaryos-data.service'),calls);self.assertIn(('systemctl','start','culinaryos-data.service'),calls)
+    def test_extension_upgrade_restores_previous_when_health_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime,legacy,error,calls=self.extension_upgrade(Path(tmp),fail_health=True)
+            self.assertIsNotNone(error);self.assertEqual((runtime/'mesanexo_ipc.py').read_bytes(),legacy)
+            self.assertEqual(calls[-1],('systemctl','restart','culinaryos-data.service'))
     def test_extension_installer_preserves_lf_and_crlf_bytes(self):
         spec=importlib.util.spec_from_file_location('extension_install_bytes',ROOT/'deploy/install-runtime-extension.py')
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)

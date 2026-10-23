@@ -51,7 +51,22 @@ public sealed partial class NativeSession:IDisposable
         public async Task<JsonObject> Report(string from,string until,string after="",CancellationToken ct=default)=>await Request(HttpMethod.Get,"api/reports?from="+Uri.EscapeDataString(from)+"&until="+Uri.EscapeDataString(until)+"&after="+Uri.EscapeDataString(after),null,ct);
     public async Task<JsonObject> VerifyAudit(CancellationToken ct=default)=>await Request(HttpMethod.Get,"api/audit/verify",null,ct);
     public async Task<JsonObject> Preview(string visit,CancellationToken ct=default)=>await Request(HttpMethod.Get,"api/preview/"+Uri.EscapeDataString(visit),null,ct);
-    public async Task<JsonObject> State(CancellationToken ct=default){var state=await Request(HttpMethod.Get,"api/state"+(profile.TenantId==""?"":"?branchId="+Uri.EscapeDataString(profile.BranchId)),null,ct);var catalog=J.O("siteId",profile.SiteId,"products",state.A("products"),"categorys",state.A("categorys"));var hash=J.Hash(J.Canonical(catalog));if(hash!=catalogHash&&state.A("products").Count>0){catalog["at"]=J.Now();await vault.Write("catalog_"+profile.SiteId+"_"+UserId,catalog.ToJsonString());await vault.Write("last_catalog_"+profile.SiteId,catalog.ToJsonString());catalogHash=hash;}return state;}
+    // The branch server sends only what changed since the state held here; callers always get a whole, private copy.
+    JsonObject? held;string heldBase="";readonly SemaphoreSlim stateGate=new(1);
+    async Task<JsonObject> Fetch(CancellationToken ct)
+    {
+        if(profile.TenantId!="")return await Request(HttpMethod.Get,"api/state?branchId="+Uri.EscapeDataString(profile.BranchId),null,ct);
+        await stateGate.WaitAsync(ct);
+        try{
+            var reply=await Request(HttpMethod.Get,"api/state?since="+Uri.EscapeDataString(heldBase),null,ct);var stateBase=reply.S("stateBase");JsonObject state;
+            if(!reply.B("delta"))state=reply;
+            else if(held is not null&&reply.S("since")==heldBase){try{state=StateDelta.Apply(held,reply);}catch(InvalidOperationException){held=null;heldBase="";return await Refetch(ct);}}
+            else{held=null;heldBase="";return await Refetch(ct);}
+            state.Remove("stateBase");state.Remove("since");held=state;heldBase=stateBase;return (JsonObject)state.DeepClone();
+        }finally{stateGate.Release();}
+        async Task<JsonObject> Refetch(CancellationToken ct){var full=await Request(HttpMethod.Get,"api/state?since=",null,ct);heldBase=full.S("stateBase");full.Remove("stateBase");held=full;return (JsonObject)full.DeepClone();}
+    }
+    public async Task<JsonObject> State(CancellationToken ct=default){var state=await Fetch(ct);var catalog=J.O("siteId",profile.SiteId,"products",state.A("products"),"categorys",state.A("categorys"));var hash=J.Hash(J.Canonical(catalog));if(hash!=catalogHash&&state.A("products").Count>0){catalog["at"]=J.Now();await vault.Write("catalog_"+profile.SiteId+"_"+UserId,catalog.ToJsonString());await vault.Write("last_catalog_"+profile.SiteId,catalog.ToJsonString());catalogHash=hash;}return state;}
     public async Task<JsonObject?> CachedCatalog(){var raw=await vault.Read("catalog_"+profile.SiteId+"_"+UserId);return raw is null?null:JsonNode.Parse(raw)!.AsObject();}
     string PendingKey=>"pending_"+profile.SiteId;
     public async Task<bool> HasPending()=>await vault.Read(PendingKey) is not null;

@@ -21,14 +21,14 @@ public sealed partial class Restaurant
     // Hotels verify the surname: any word after the first name of the registered guest must appear in what the waiter typed.
     static bool SameGuest(string registered,string given){var words=Plain(given).Split(' ',StringSplitOptions.RemoveEmptyEntries);var names=Plain(registered).Split(' ',StringSplitOptions.RemoveEmptyEntries);return names.Skip(names.Length>1?1:0).Where(w=>w.Length>=3).Any(words.Contains);}
     static string Pick(JsonObject p,string key,string fallback,params string[] choices){var value=p.S(key);if(value=="")value=fallback;Need(choices.Contains(value),key+": valor inválido");return value;}
-    JsonObject? Simulated(BranchState s,string key)=>s.List("integration").FirstOrDefault(x=>x.S("id")==key&&x.S("mode")=="simulated");
+    JsonObject? Simulated(BranchState s,string key)=>s.Related("integration","id",key).FirstOrDefault(x=>x.S("mode")=="simulated");
     JsonObject Simulator(BranchState s,string key,string name)=>(Simulated(s,key)??throw new BusinessException(400,"Activa la simulación de "+name+" en Integraciones")).Obj("settings");
     JsonObject Log(BranchState s,JsonObject u,string provider,string operation,string status,string summary,string reference="")=>Add(s,"integrationlog",J.O("provider",provider,"operation",operation,"status",status,"summary",Sanitize(summary,200),"reference",reference,"actor",u.S("id"),"at",J.Now(),"simulated",true));
     // Simulated WhatsApp and e-mail: one message per event, reference and channel, stored as sent without contacting anyone.
     JsonObject? Message(BranchState s,string channel,string to,string kind,string refId,string body)
     {
         var config=Simulated(s,"messaging")?.Obj("settings");to=to.Trim();if(config is null||!config.B(channel)||to=="")return null;
-        var prior=s.List("message").FirstOrDefault(x=>x.S("event")==kind&&x.S("refId")==refId&&x.S("channel")==channel);if(prior is not null)return prior;
+        var prior=s.Related("message","event",kind).FirstOrDefault(x=>x.S("refId")==refId&&x.S("channel")==channel);if(prior is not null)return prior;
         return Add(s,"message",J.O("channel",channel,"to",to,"event",kind,"refId",refId,"body",Sanitize(body,600),"status","simulated-sent","providerId",Ref(channel=="whatsapp"?"WAMID":"MSG"),"at",J.Now()));
     }
     JsonObject IntegrationSettings(BranchState s,string key,JsonObject p)
@@ -105,14 +105,14 @@ public sealed partial class Restaurant
         case "integration.configure":{
             Role(u,"manager");var key=Choice(p,"provider",IntegrationKeys);var mode=p.S("mode");
             Need(mode!="live","La conexión real necesita contrato con el proveedor, credenciales guardadas en el servidor y tu autorización expresa; por ahora sólo está disponible la simulación",403);Need(mode is "simulated" or "off","Modo inválido");
-            var row=s.List("integration").FirstOrDefault(x=>x.S("id")==key)??Add(s,"integration",J.O("id",key,"key",key,"since",J.Now()));
+            var row=s.Related("integration","id",key).FirstOrDefault()??Add(s,"integration",J.O("id",key,"key",key,"since",J.Now()));
             row["settings"]=p["settings"] is JsonObject given?IntegrationSettings(s,key,given):row["settings"] is JsonObject prior&&prior.Count>0?prior.DeepClone():IntegrationSettings(s,key,new());
             row["mode"]=mode;row["updatedBy"]=u.S("id");row["updatedAt"]=J.Now();Log(s,u,key,"configure",mode,mode=="simulated"?"Simulación activa":"Integración apagada");result=row;break;}
         case "pac.stamp":Role(u,"manager");result=StampSimulated(s,u,s.Get("fiscal",id));break;
         case "terminal.charge":{
             Role(u,"mesero","manager");Need(u.S("role")=="manager"||u.Obj("permissions").B("payments",true),"Permiso de pagos deshabilitado",403);var config=Simulator(s,"terminal","la terminal bancaria");var v=Own(s,u,p.S("visitId"));
-            var amount=Amount(p,"amount",1);var tip=Amount(p,"tip");Need(amount<=Totals(s,v).L("balance"),"El pago supera el saldo");Need(s.List("cash").Any(x=>x.S("status")=="open"),"Abre una caja antes de registrar pagos");
-            Need(!s.List("terminaltxn").Any(x=>x.S("visitId")==v.S("id")&&x.S("status")=="uncertain"),"Hay un cobro con terminal sin respuesta en esta cuenta; consúltalo antes de cobrar otra vez");
+            var amount=Amount(p,"amount",1);var tip=Amount(p,"tip");Need(amount<=Totals(s,v).L("balance"),"El pago supera el saldo");Need(s.Related("cash","status","open").Any(),"Abre una caja antes de registrar pagos");
+            Need(!s.Related("terminaltxn","visitId",v.S("id")).Any(x=>x.S("status")=="uncertain"),"Hay un cobro con terminal sin respuesta en esta cuenta; consúltalo antes de cobrar otra vez");
             var outcome=p.S("card","approve");Need(TestCards.ContainsKey(outcome),"Tarjeta de prueba inválida");var card=TestCards[outcome];
             var txn=Add(s,"terminaltxn",J.O("visitId",v.S("id"),"folioId",p.S("folioId"),"amount",amount,"tip",tip,"terminalId",config.S("terminalId"),"brand",card.Brand,"last4",card.Last4,"reference",Ref("TRM"),"actor",u.S("id"),"at",J.Now()));
             if(outcome=="approve")ApproveTerminal(s,u,txn);
@@ -126,10 +126,10 @@ public sealed partial class Restaurant
             txn["reconciledAt"]=J.Now();txn["reconciledBy"]=u.S("id");Log(s,u,"terminal","reconcile",txn.S("status"),"Consulta de cobro sin respuesta · "+Pesos(txn.L("amount")+txn.L("tip")),txn.S("reference"));result=txn;break;}
         case "paylink.create":{
             Role(u,"mesero","manager");var config=Simulator(s,"onlinepay","pagos en línea");var v=Own(s,u,p.S("visitId"));var balance=Totals(s,v).L("balance");Need(balance>0,"La cuenta no tiene saldo pendiente");var amount=p.ContainsKey("amount")?Amount(p,"amount",1,balance):balance;
-            Need(!s.List("folio").Any(f=>f.S("visitId")==v.S("id")&&!f.B("void")),"Con subfolios usa otra forma de pago");Need(!s.List("paylink").Any(x=>x.S("visitId")==v.S("id")&&x.S("status")=="pending"),"Ya hay una liga de pago vigente para esta cuenta");
+            Need(!s.Related("folio","visitId",v.S("id")).Any(f=>!f.B("void")),"Con subfolios usa otra forma de pago");Need(!s.Related("paylink","visitId",v.S("id")).Any(x=>x.S("status")=="pending"),"Ya hay una liga de pago vigente para esta cuenta");
             var provider=config.S("provider");var token=Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(12));
             var link=Add(s,"paylink",J.O("visitId",v.S("id"),"amount",amount,"provider",provider,"payUrl","https://pagos.simulado.invalid/"+provider+"/"+token,"reference",(provider=="stripe"?"plink_sim_":"pref_sim_")+token[..12],"status","pending","expiresAt",DateTimeOffset.UtcNow.AddMinutes(config.L("expiresMinutes",60)).ToString("O"),"actor",u.S("id"),"at",J.Now()));
-            var customer=s.List("customer").FirstOrDefault(x=>x.S("id")==v.S("customerId"));if(customer is not null&&Message(s,"whatsapp",customer.S("phone"),"paylink",link.S("id"),"Hola "+customer.S("name")+", paga tu cuenta de "+s.Meta.S("name")+" por "+Pesos(amount)+" aquí: "+link.S("payUrl")) is {} sent)link["messageId"]=sent.S("id");
+            var customer=s.Related("customer","id",v.S("customerId")).FirstOrDefault();if(customer is not null&&Message(s,"whatsapp",customer.S("phone"),"paylink",link.S("id"),"Hola "+customer.S("name")+", paga tu cuenta de "+s.Meta.S("name")+" por "+Pesos(amount)+" aquí: "+link.S("payUrl")) is {} sent)link["messageId"]=sent.S("id");
             Log(s,u,"onlinepay","link.create","pending",(provider=="stripe"?"Stripe":"Mercado Pago")+" · liga por "+Pesos(amount),link.S("reference"));result=link;break;}
         case "paylink.simulate":{
             Role(u,"manager");Simulator(s,"onlinepay","pagos en línea");var link=s.Get("paylink",id);Need(link.S("status")=="pending","La liga ya no está vigente");var outcome=Choice(p,"outcome","paid","failed","expired");var v=s.Get("visit",link.S("visitId"));
@@ -144,8 +144,8 @@ public sealed partial class Restaurant
         case "pms.charge":{
             Role(u,"mesero","manager");Need(u.S("role")=="manager"||u.Obj("permissions").B("payments",true),"Permiso de pagos deshabilitado",403);var config=Simulator(s,"pms","el hotel (PMS)");var v=Own(s,u,p.S("visitId"));
             var number=Text(p,"room",10).ToUpperInvariant();var room=config.A("rooms").Objects().FirstOrDefault(x=>x.S("room")==number);Need(room is not null,"El PMS no tiene un huésped registrado en la habitación "+number,404);
-            Need(SameGuest(room!.S("guest"),Text(p,"guest",100)),"El apellido no coincide con el huésped de la habitación "+number,403);Need(!s.List("folio").Any(f=>f.S("visitId")==v.S("id")&&!f.B("void")),"Con subfolios usa otra forma de pago");
-            var balance=Totals(s,v).L("balance");var amount=p.ContainsKey("amount")?Amount(p,"amount",1,balance):balance;var limit=room.L("limit");var used=s.List("pmspost").Where(x=>x.S("room")==number&&x.S("status")=="posted").Sum(x=>x.L("amount"));
+            Need(SameGuest(room!.S("guest"),Text(p,"guest",100)),"El apellido no coincide con el huésped de la habitación "+number,403);Need(!s.Related("folio","visitId",v.S("id")).Any(f=>!f.B("void")),"Con subfolios usa otra forma de pago");
+            var balance=Totals(s,v).L("balance");var amount=p.ContainsKey("amount")?Amount(p,"amount",1,balance):balance;var limit=room.L("limit");var used=s.Related("pmspost","room",number).Where(x=>x.S("status")=="posted").Sum(x=>x.L("amount"));
             Need(limit==0||used+amount<=limit,"Supera el crédito autorizado de la habitación "+number+": quedan "+Pesos(Math.Max(0,limit-used)),402);
             var system=config.S("system");var reference=Ref(system=="opera"?"OPERA":"CLDB");var pay=InternalPayment(s,u,v,amount,"room");pay["reference"]=reference;pay["room"]=number;
             result=Add(s,"pmspost",J.O("room",number,"guest",room.S("guest"),"amount",amount,"visitId",v.S("id"),"paymentId",pay.S("id"),"system",system,"reference",reference,"status","posted","actor",u.S("id"),"at",J.Now()));
@@ -174,7 +174,7 @@ public sealed partial class Restaurant
             Need(order.S("status")=="pending","Pedido de plataforma ya resuelto");order["status"]="rejected";order["reason"]=Text(p,"reason",200);order["decidedBy"]=u.S("id");Log(s,u,"aggregators","order.reject","rejected",order.S("platformName")+" "+order.S("externalId")+" · "+order.S("reason"),order.S("externalId"));result=order;break;}
         case "aggregator.handoff":{
             Role(u,"mesero","manager");var order=s.Get("aggregatororder",id);Need(order.S("status")=="accepted","El pedido no está listo para entregar");var vid=order.S("visitId");
-            Need(!s.List("unit").Any(x=>x.S("visitId")==vid&&!Final.Append("ready").Contains(x.S("status"))),"Termina la preparación antes de entregar al repartidor");Act(s,u,"visit.deliverAll",J.O("id",vid));
+            Need(!s.Related("unit","visitId",vid).Any(x=>!Final.Append("ready").Contains(x.S("status"))),"Termina la preparación antes de entregar al repartidor");Act(s,u,"visit.deliverAll",J.O("id",vid));
             var couriers=new[]{"Jorge","Ana","Luis","Paola","Raúl"};order["status"]="handed-off";order["courier"]=couriers[RandomNumberGenerator.GetInt32(couriers.Length)];order["handedOffAt"]=J.Now();order["handedOffBy"]=u.S("id");
             Log(s,u,"aggregators","order.handoff","handed-off",order.S("platformName")+" "+order.S("externalId")+" entregado a "+order.S("courier"),order.S("externalId"));result=order;break;}
         case "aggregator.sync":{
@@ -188,22 +188,22 @@ public sealed partial class Restaurant
     void IntegrationAfterAction(BranchState s,JsonObject u,string type,JsonObject p,JsonObject result)
     {
         if(type=="delivery.create"&&Simulated(s,"maps") is {} maps){var d=s.Get("delivery",result.S("id"));var a=d.Obj("addressSnapshot");if(d.S("mode")=="delivery"&&a.ContainsKey("lat")){var config=maps.Obj("settings");var km=Distance((double)Coordinate(config,"centerLat",90),(double)Coordinate(config,"centerLon",180),(double)Coordinate(a,"lat",90),(double)Coordinate(a,"lon",180));d["distanceKm"]=Math.Round((decimal)km,1);d["etaMinutes"]=Eta(km);}}
-        if(type=="delivery.dispatch"){var d=s.Get("delivery",p.S("id"));var c=s.List("customer").FirstOrDefault(x=>x.S("id")==d.S("customerId"));var courier=s.List("courier").FirstOrDefault(x=>x.S("id")==d.S("courierId"));if(c is not null)Message(s,"whatsapp",c.S("phone"),"dispatch",d.S("id"),"Hola "+c.S("name")+", tu pedido de "+s.Meta.S("name")+" ya va en camino"+(courier is null?"":" con "+courier.S("name"))+(d.L("etaMinutes")>0?". Llega en unos "+d.L("etaMinutes")+" minutos":"")+".");}
+        if(type=="delivery.dispatch"){var d=s.Get("delivery",p.S("id"));var c=s.Related("customer","id",d.S("customerId")).FirstOrDefault();var courier=s.Related("courier","id",d.S("courierId")).FirstOrDefault();if(c is not null)Message(s,"whatsapp",c.S("phone"),"dispatch",d.S("id"),"Hola "+c.S("name")+", tu pedido de "+s.Meta.S("name")+" ya va en camino"+(courier is null?"":" con "+courier.S("name"))+(d.L("etaMinutes")>0?". Llega en unos "+d.L("etaMinutes")+" minutos":"")+".");}
         if(type=="unit.state"&&p.S("status")=="ready"){
-            var vid=s.Get("unit",p.S("id")).S("visitId");var d=s.List("delivery").FirstOrDefault(x=>x.S("visitId")==vid&&x.S("mode")=="pickup");
-            if(d is not null&&!s.List("unit").Any(x=>x.S("visitId")==vid&&!Final.Append("ready").Contains(x.S("status")))&&s.List("customer").FirstOrDefault(x=>x.S("id")==d.S("customerId")) is {} c)Message(s,"whatsapp",c.S("phone"),"pickup-ready",d.S("id"),"Hola "+c.S("name")+", tu pedido de "+s.Meta.S("name")+" está listo para recoger.");
+            var vid=s.Get("unit",p.S("id")).S("visitId");var d=s.Related("delivery","visitId",vid).FirstOrDefault(x=>x.S("mode")=="pickup");
+            if(d is not null&&!s.Related("unit","visitId",vid).Any(x=>!Final.Append("ready").Contains(x.S("status")))&&s.Related("customer","id",d.S("customerId")).FirstOrDefault() is {} c)Message(s,"whatsapp",c.S("phone"),"pickup-ready",d.S("id"),"Hola "+c.S("name")+", tu pedido de "+s.Meta.S("name")+" está listo para recoger.");
         }
         if(type=="fiscal.request"&&Simulated(s,"pac")?.Obj("settings").B("autoStamp")==true)StampSimulated(s,u,s.Get("fiscal",result.S("id")));
         var owner=Simulated(s,"messaging")?.Obj("settings").S("ownerEmail")??"";
-        if(owner!="")foreach(var n in s.List("ownernotice").Where(x=>x.S("messageId")=="").Take(5).ToArray())if(Message(s,"email",owner,"owner-notice",n.S("id"),OwnerText(s,n)) is {} sent)n["messageId"]=sent.S("id");
-        if(Simulated(s,"printer") is not null)foreach(var job in s.List("printjob").Where(x=>x.S("status")=="pending").Take(20).ToArray()){job["status"]="simulated";job["attemptId"]=J.Id();job["driver"]="simulated-escpos";job["evidence"]=job.S("type")=="drawer"?"Pulso RJ11 simulado · el cajón físico no se abrió":"Impresión simulada · no salió papel";job["resolvedAt"]=J.Now();}
+        if(owner!="")foreach(var n in s.Related("ownernotice","messageId","").Take(5).ToArray())if(Message(s,"email",owner,"owner-notice",n.S("id"),OwnerText(s,n)) is {} sent)n["messageId"]=sent.S("id");
+        if(Simulated(s,"printer") is not null)foreach(var job in s.Related("printjob","status","pending").Take(20).ToArray()){job["status"]="simulated";job["attemptId"]=J.Id();job["driver"]="simulated-escpos";job["evidence"]=job.S("type")=="drawer"?"Pulso RJ11 simulado · el cajón físico no se abrió":"Impresión simulada · no salió papel";job["resolvedAt"]=J.Now();}
     }
-    void FilterIntegrationSnapshot(BranchState s,JsonObject u,JsonObject output)
+    void FilterIntegrationSnapshot(BranchState s,JsonObject u,StateParts output)
     {
         if(u.S("role")=="manager")return;var role=u.S("role");
         output["integrations"]=new JsonArray(s.List("integration").Select(x=>(JsonNode)J.O("id",x.S("id"),"mode",x.S("mode"))).ToArray());
         foreach(var kind in new[]{"integrationlog","message","pmspost"})output[kind+"s"]=new JsonArray();
-        var mine=s.List("visit").Where(v=>v.S("waiterId")==u.S("id")).Select(v=>v.S("id")).ToHashSet();
+        var mine=s.Related("visit","waiterId",u.S("id")).Select(v=>v.S("id")).ToHashSet();
         foreach(var kind in new[]{"terminaltxn","paylink"})output[kind+"s"]=new JsonArray(role=="mesero"?s.List(kind).Where(x=>mine.Contains(x.S("visitId"))).TakeLast(200).Select(x=>(JsonNode)x.DeepClone()).ToArray():[]);
         if(role!="mesero")output["aggregatororders"]=new JsonArray();
     }

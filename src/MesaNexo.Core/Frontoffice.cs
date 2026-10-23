@@ -44,7 +44,7 @@ public sealed partial class Restaurant
     void CloseVisit(BranchState s,JsonObject v)
     {
         var id=v.S("id");
-        Need(Totals(s,v).L("balance")==0,"Debe liquidarse el saldo");Need(!s.List("unit").Any(x=>x.S("visitId")==id&&!Final.Contains(x.S("status"))),"Hay productos pendientes de preparación o entrega");Need(!s.List("request").Any(x=>x.S("visitId")==id&&x.S("status")=="pending"),"Resuelve autorizaciones pendientes");
+        Need(Totals(s,v).L("balance")==0,"Debe liquidarse el saldo");Need(!s.Related("unit","visitId",id).Any(x=>!Final.Contains(x.S("status"))),"Hay productos pendientes de preparación o entrega");Need(!s.Related("request","visitId",id).Any(x=>x.S("status")=="pending"),"Resuelve autorizaciones pendientes");
         v["status"]="closed";v["closeCycle"]=v.L("closeCycle")+1;v["closedAt"]=J.Now();v["trackingExpires"]=DateTimeOffset.UtcNow.AddHours(24).ToString("O");
         Release(s,v.S("tableId"));foreach(var linked in v.A("linkedTableIds").Strings())Release(s,linked);QueueConsumption(s,v);LoyaltyEarn(s,v);
     }
@@ -60,7 +60,7 @@ public sealed partial class Restaurant
         result=J.O("ok",true);var id=p.S("id");
         switch(type){
         case "sale.quick":{
-            Role(u,"manager","mesero");Need(s.List("cash").Any(x=>x.S("status")=="open"),"Abre una caja antes de vender en mostrador");
+            Role(u,"manager","mesero");Need(s.Related("cash","status","open").Any(),"Abre una caja antes de vender en mostrador");
             var method=Choice(p,"method","cash","card","transfer","wallet");
             var visit=Act(s,u,"visit.quick",J.O("takeout",p.B("takeout"),"customerName",p.S("customerName")));var vid=visit.S("id");if(p.S("customerId")!="")Act(s,u,"visit.customer",J.O("id",vid,"customerId",p.S("customerId")));
             var command=Act(s,u,"command.send",J.O("visitId",vid,"items",p.A("items").DeepClone()));
@@ -82,11 +82,11 @@ public sealed partial class Restaurant
             result=J.O("id",id,"linkedTableIds",linked);break;}
         case "visit.reassignZone":{
             Role(u,"manager");var zone=Text(p,"zone",100);var w=s.Get("user",p.S("waiterId"));Need(w.B("active")&&w.S("role")=="mesero","Selecciona un mesero activo");
-            var tables=s.List("table").Where(t=>t.S("zone")==zone).Select(t=>t.S("id")).ToHashSet();Need(tables.Count>0,"Zona sin mesas");
+            var tables=s.Related("table","zone",zone).Select(t=>t.S("id")).ToHashSet();Need(tables.Count>0,"Zona sin mesas");
             int moved=0,skipped=0;
-            foreach(var v in s.List("visit").Where(v=>v.S("status")=="open"&&tables.Contains(v.S("tableId"))).ToArray()){
-                if(v.B("printed")||s.List("folio").Any(f=>f.S("visitId")==v.S("id")&&!f.B("void"))){skipped++;continue;}
-                v["waiterId"]=w.S("id");foreach(var n in s.List("notification").Where(x=>x.S("visitId")==v.S("id")&&!x.B("attended")))n["waiterId"]=w.S("id");moved++;
+            foreach(var v in s.Related("visit","status","open").Where(v=>tables.Contains(v.S("tableId"))).ToArray()){
+                if(v.B("printed")||s.Related("folio","visitId",v.S("id")).Any(f=>!f.B("void"))){skipped++;continue;}
+                v["waiterId"]=w.S("id");foreach(var n in s.Related("notification","visitId",v.S("id")).Where(x=>!x.B("attended")))n["waiterId"]=w.S("id");moved++;
             }
             result=J.O("moved",moved,"skipped",skipped,"zone",zone,"waiterId",w.S("id"));break;}
         default:return false;
@@ -100,7 +100,7 @@ public sealed partial class Restaurant
         // A prepaid counter sale closes itself once everything was handed over.
         if(type is "unit.state" or "visit.deliverAll"){
             var vid=type=="visit.deliverAll"?p.S("id"):s.Get("unit",p.S("id")).S("visitId");var v=s.Get("visit",vid);
-            if(v.B("prepaid")&&v.S("status")=="open"&&Totals(s,v).L("balance")==0&&!s.List("unit").Any(x=>x.S("visitId")==vid&&!Final.Contains(x.S("status")))&&!s.List("request").Any(x=>x.S("visitId")==vid&&x.S("status")=="pending"))CloseVisit(s,v);
+            if(v.B("prepaid")&&v.S("status")=="open"&&Totals(s,v).L("balance")==0&&!s.Related("unit","visitId",vid).Any(x=>!Final.Contains(x.S("status")))&&!s.Related("request","visitId",vid).Any(x=>x.S("status")=="pending"))CloseVisit(s,v);
         }
     }
 }

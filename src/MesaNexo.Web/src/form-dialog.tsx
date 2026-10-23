@@ -1,6 +1,6 @@
 import React,{useId,useState} from 'react';
 import {DialogFrame} from './motion';
-import {Button,Sq,UiIcon} from './ui';
+import {Button,Sq,UiIcon,Select} from './ui';
 
 export type Option={value:string;label:string};
 export type Column={key:string;label:string;type?:'text'|'number'|'select';options?:Option[];placeholder?:string;width?:string;step?:string;prefix?:string};
@@ -70,7 +70,7 @@ function Rows({field,value,onChange}:{field:Field;value:string;onChange:(v:strin
   {list.length>0&&<div className="rows-head" style={{gridTemplateColumns:spec.columns.map(c=>c.width||'1fr').join(' ')+' 34px'}} aria-hidden="true">{spec.columns.map(c=><span key={c.key}>{c.label}</span>)}<span/></div>}
   {list.map((row,i)=><div className="rows-line" key={i} style={{gridTemplateColumns:spec.columns.map(c=>c.width||'1fr').join(' ')+' 34px'}}>
    {spec.columns.map((c,j)=>{const set=(v:string)=>commit(list.map((r,k)=>k===i?r.map((x,m)=>m===j?v:x):r));const name=c.label+' '+(i+1);
-    if(c.type==='select')return <select key={c.key} aria-label={name} value={row[j]} onChange={e=>set(e.target.value)}>{c.options?.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>;
+    if(c.type==='select')return <Select key={c.key} aria-label={name} value={row[j]} onChange={e=>set(e.target.value)}>{c.options?.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</Select>;
     const input=<input key={c.key} aria-label={name} type={c.type==='number'?'number':'text'} inputMode={c.type==='number'?'decimal':undefined} step={c.step||'any'} min={c.type==='number'?0:undefined} placeholder={c.placeholder} value={row[j]??''} onFocus={e=>c.type==='number'&&e.target.select()} onChange={e=>set(e.target.value)}/>;
     return c.prefix?<span className="affix" key={c.key}><span aria-hidden="true">{c.prefix}</span>{input}</span>:input;})}
    <Button type="button" className="ghost icon-only sm" icon="close" aria-label={'Quitar fila '+(i+1)} onClick={()=>commit(list.filter((_,k)=>k!==i))}>{''}</Button>
@@ -93,7 +93,7 @@ export function FormDialog({modal,close,submit,busy,error}:{modal:Modal;close:()
  const control=(f:Field,id:string,hintId?:string)=>{
   const common={id,'aria-describedby':hintId};
   switch(f.type){
-   case 'select':return <select {...common} required={f.required} value={v[f.key]} onChange={e=>set(f.key,e.target.value)}>{f.options?.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>;
+   case 'select':return <Select {...common} required={f.required} value={v[f.key]} onChange={e=>set(f.key,e.target.value)}>{f.options?.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</Select>;
    case 'textarea':return <textarea {...common} value={v[f.key]} required={f.required} placeholder={f.placeholder} onChange={e=>set(f.key,e.target.value)}/>;
    case 'file':return <input {...common} type="file" required={f.required} accept=".exe" onChange={e=>set(f.key,e.target.files?.[0])}/>;
    case 'number':case 'money':{const input=<input {...common} aria-label={f.type==='money'?f.label:undefined} type="number" inputMode="decimal" value={v[f.key]} required={f.required||f.type==='number'} min={f.min} max={f.max} step={f.step||(f.type==='money'?'0.01':undefined)} placeholder={f.placeholder||'0'} autoComplete="off" onFocus={e=>e.target.select()} onChange={e=>set(f.key,e.target.value)}/>;

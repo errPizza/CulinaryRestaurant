@@ -11,9 +11,9 @@ public sealed partial class Restaurant(IPasswordHasher passwords)
     public JsonObject SafeUser(JsonObject u){var o=(JsonObject)u.DeepClone();o.Remove("password");o.Remove("pinHash");o["hasPin"]=u.S("pinHash")!="";return o;}
     public JsonObject Totals(BranchState s,JsonObject v)
     {
-        var gross=s.List("unit").Where(x=>x.S("visitId")==v.S("id")&&!new[]{"cancelled","unavailable"}.Contains(x.S("status"))).Sum(x=>x.L("price"))+v.L("deliveryFee");
+        var gross=s.Related("unit","visitId",v.S("id")).Where(x=>!new[]{"cancelled","unavailable"}.Contains(x.S("status"))).Sum(x=>x.L("price"))+v.L("deliveryFee");
         var d=v.Obj("discount");var discount=d.S("kind")=="percent"?(long)Math.Round(gross*(d["value"]?.GetValue<decimal>()??0)/100m,MidpointRounding.AwayFromZero):Math.Min(gross,d.L("value"));
-        var paid=s.List("payment").Where(x=>x.S("visitId")==v.S("id")).Sum(x=>x.L("amount"));
+        var paid=s.Related("payment","visitId",v.S("id")).Sum(x=>x.L("amount"));
         return J.O("gross",gross,"discount",discount,"total",gross-discount,"paid",paid,"balance",gross-discount-paid,"tax",IncludedTax(s,v,gross-discount));
     }
     public void Usage(BranchState s,JsonObject u)
@@ -27,10 +27,10 @@ public sealed partial class Restaurant(IPasswordHasher passwords)
     JsonObject Add(BranchState s,string kind,JsonObject value){value["siteId"]=s.Meta.S("siteId");return s.Add(kind,value);}
     JsonObject Notice(BranchState s,JsonObject v,string message,string kind,string? unitId=null)=>Add(s,"notification",J.O("visitId",v.S("id"),"waiterId",v.S("waiterId"),"message",message,"type",kind,"unitId",unitId,"at",J.Now(),"attended",false));
     void History(JsonObject unit,JsonObject u,string status,string reason="") {var a=unit.A("history");a.Add(J.O("at",J.Now(),"actor",u.S("id"),"status",status,"reason",reason));unit["history"]=a.Parent is null?a:a.DeepClone();}
-    void Release(BranchState s,string tableId){if(tableId=="")return;if(!s.List("visit").Any(x=>x.S("tableId")==tableId&&x.S("status")=="open"))s.Get("table",tableId)["status"]="cleaning";}
+    void Release(BranchState s,string tableId){if(tableId=="")return;if(!s.Related("visit","tableId",tableId).Any(x=>x.S("status")=="open"))s.Get("table",tableId)["status"]="cleaning";}
     void Complete(BranchState s)
     {
-        foreach(var c in s.List("command").ToArray()){
+        foreach(var c in s.Related("command","completeNotified","false").Concat(s.Related("command","completeNotified","")).ToArray()){
             var units=c.A("unitIds").Strings().Select(id=>s.Get("unit",id)).ToArray();
             if(!c.B("completeNotified")&&units.Length>0&&units.All(x=>Final.Append("ready").Contains(x.S("status")))){
                 c["completeNotified"]=true;
@@ -38,37 +38,63 @@ public sealed partial class Restaurant(IPasswordHasher passwords)
             }
         }
     }
-        void ReconcileReservations(BranchState s)
+    // A reservation holds a free table for two hours around its start.
+    string TableStatus(BranchState s,JsonObject t)=>!new[]{"free","reserved"}.Contains(t.S("status"))?t.S("status"):s.Related("reservation","tableId",t.S("id")).Any(r=>r.S("status")=="confirmed"&&DateTimeOffset.TryParse(r.S("start"),out var at)&&Math.Abs((at-DateTimeOffset.UtcNow).TotalHours)<2)?"reserved":"free";
+    void ReconcileReservations(BranchState s){foreach(var t in s.List("table").Where(t=>new[]{"free","reserved"}.Contains(t.S("status"))))t["status"]=TableStatus(s,t);}
+    // Elements already projected for /api/state, reused while what they were built from is unchanged: the record's
+    // committed version plus, for some variants, a stamp of what else they read. Entries no snapshot used during the
+    // last 500 snapshots are dropped.
+    sealed class Projected(string stamp,StateItem item,long used){public string Stamp=>stamp;public StateItem Item=>item;public long Used=used;}
+    readonly System.Collections.Concurrent.ConcurrentDictionary<(string Variant,string Key),Projected> projected=new();long snapshots;
+    StateItem Project(BranchState s,string variant,JsonObject record,Func<JsonObject,JsonObject> build,Func<string>? stamp=null)
     {
-        foreach(var t in s.List("table").Where(t=>new[]{"free","reserved"}.Contains(t.S("status")))){
-            var reserved=s.List("reservation").Any(r=>r.S("tableId")==t.S("id")&&r.S("status")=="confirmed"&&DateTimeOffset.TryParse(r.S("start"),out var at)&&Math.Abs((at-DateTimeOffset.UtcNow).TotalHours)<2);t["status"]=reserved?"reserved":"free";
-        }
+        // A writable state may hold edits that are not committed: its records are never cached.
+        if(!s.ReadOnly){var fresh=build(record);return new(fresh.S("id"),fresh,StateDelta.Hash(fresh));}
+        var key=BranchState.Key(record.S("kind"),record.S("id"));var full=(s.Committed.TryGet(key,out var stored)?stored.Version:-1)+"|"+stamp?.Invoke();var now=Volatile.Read(ref snapshots);
+        if(projected.TryGetValue((variant,key),out var hit)&&hit.Stamp==full){Volatile.Write(ref hit.Used,now);return hit.Item;}
+        var node=build(record);var item=new StateItem(node.S("id"),node,StateDelta.Hash(node));projected[(variant,key)]=new(full,item,now);return item;
     }
-    public JsonObject Snapshot(BranchState s,JsonObject u,string session)
+    static JsonObject Without(JsonObject x,string field){var c=(JsonObject)x.DeepClone();c.Remove(field);return c;}
+    public JsonObject Snapshot(BranchState s,JsonObject u,string session)=>Parts(s,u,session).Materialize();
+    // Reads the shared committed state, so nothing here may modify s. History is preserved in storage;
+    // the API returns open visits, the newest 500 others and only the units of the visits it returns.
+    public StateParts Parts(BranchState s,JsonObject u,string session)
     {
-        ReconcileReservations(s);Usage(s,u);var role=u.S("role");var outp=J.O("user",SafeUser(u),"sessionId",session,"restaurant",s.Meta,"siteId",s.Meta.S("siteId"));
-        var visible=s.List("visit").Where(v=>role!="mesero"||(v.S("waiterId")==u.S("id")&&(u.Obj("permissions").B("shiftReports",true)||v.S("status")=="open"))).Select(x=>x.S("id")).ToHashSet();
+        var generation=Interlocked.Increment(ref snapshots);if(generation%500==0)foreach(var (k,v) in projected)if(v.Used<generation-500)projected.TryRemove(k,out _);
+        Usage(s,u);var role=u.S("role");var me=u.S("id");var meta=(JsonObject)s.Meta.DeepClone();meta.Remove("enrollmentHash");
+        var outp=new StateParts();outp["user"]=SafeUser(u);outp["sessionId"]=session;outp["restaurant"]=meta;outp["siteId"]=s.Meta.S("siteId");
+        string Version(JsonObject x)=>x.S("id")+":"+(s.Committed.TryGet(BranchState.Key(x.S("kind"),x.S("id")),out var r)?r.Version:-1);
+        var visible=role=="mesero"?s.Related("visit","waiterId",me).Where(v=>u.Obj("permissions").B("shiftReports",true)||v.S("status")=="open").Select(x=>x.S("id")).ToHashSet():null;
+        bool Visible(string visitId)=>visible is null||visible.Contains(visitId);
+        var shown=s.Related("visit","status","open").Where(v=>Visible(v.S("id"))).Concat(s.Latest("visit",500,v=>v.S("status")!="open"&&Visible(v.S("id")))).ToArray();
         foreach(var kind in new[]{"table","product","category","visit","command","unit","notification","request","payment","reservation","review","cash","movement","promotion","ticket","grant","audit","device","user","session"}.Concat(EcosystemKinds)){
-            IEnumerable<JsonObject> values=s.List(kind);
-            if(kind=="user")values=values.Select(SafeUser);
-            if(kind=="grant")values=values.Select(x=>{var c=(JsonObject)x.DeepClone();c.Remove("tokenHash");return c;});
-            if(kind=="device")values=values.Select(x=>{var c=(JsonObject)x.DeepClone();c.Remove("secretHash");return c;});
-            if(kind=="session")values=values.Select(x=>{var c=(JsonObject)x.DeepClone();c.Remove("tokenHash");return c;});
+            IEnumerable<JsonObject> values=kind switch{
+                "visit"=>shown,
+                "unit"=>shown.SelectMany(v=>s.Related("unit","visitId",v.S("id"))),
+                "notification" when role=="mesero"=>s.Latest(kind,500,x=>x.S("waiterId")==me),
+                "command" or "payment" when role=="mesero"=>s.Latest(kind,500,x=>Visible(x.S("visitId"))),
+                "audit" or "command" or "notification" or "session" or "payment" or "movement"=>s.Latest(kind,500),
+                "request" when role=="mesero"=>s.List(kind).Where(x=>Visible(x.S("visitId"))),
+                _=>s.List(kind)};
             if(role!="manager"&&new[]{"review","audit","grant","device","ticket","session"}.Contains(kind))values=[];
-            if(role=="mesero"&&kind=="notification")values=values.Where(x=>x.S("waiterId")==u.S("id"));
-            if(role=="mesero"&&new[]{"visit","unit","request","payment","command"}.Contains(kind))values=values.Where(x=>visible.Contains(kind=="visit"?x.S("id"):x.S("visitId")));
-            if(role!="manager"&&kind=="user")values=values.Select(x=>J.O("id",x.S("id"),"name",x.S("name"),"role",x.S("role"),"active",x.B("active"),"hasPin",x.S("role")=="manager"&&x.B("hasPin")));
             if(role=="mesero"&&new[]{"cash","movement"}.Contains(kind))values=[];
             if(role=="cocina"&&new[]{"payment","cash","movement","reservation","notification","request"}.Contains(kind))values=[];
-            if(kind=="visit")values=values.Select(v=>{
-                if(role=="cocina")return J.O("id",v.S("id"),"tableId",v.S("tableId"),"waiterId",v.S("waiterId"),"status",v.S("status"),"openedAt",v.S("openedAt"));
-                var c=(JsonObject)v.DeepClone();foreach(var p in Totals(s,v))c[p.Key]=p.Value?.DeepClone();c.Remove("trackingKey");return c;});
-            if(kind=="unit"&&role=="cocina")values=values.Select(x=>{var c=(JsonObject)x.DeepClone();c.Remove("price");c.Remove("basePrice");c.Remove("promoId");c["extras"]=new JsonArray(x.A("extras").Objects().Select(e=>(JsonNode)J.O("name",e.S("name"))).ToArray());c["modifiers"]=new JsonArray(x.A("modifiers").Objects().Select(m=>(JsonNode)J.O("group",m.S("group"),"name",m.S("name"))).ToArray());return c;});
-            // History is preserved in storage; API returns a bounded recent window.
-            if(kind=="visit")values=values.Where(v=>v.S("status")=="open").Concat(values.Where(v=>v.S("status")!="open").TakeLast(500));else if(new[]{"audit","command","notification","session","payment","movement"}.Contains(kind))values=values.TakeLast(500);
-            outp[kind+"s"]=new JsonArray(values.Select(x=>(JsonNode)x.DeepClone()).ToArray());
+            // How each record becomes an element: the variant names the projection, the stamp what else it reads.
+            Func<JsonObject,JsonObject> build=x=>(JsonObject)x.DeepClone();Func<JsonObject,string>? stamp=null;var variant=kind;
+            switch(kind){
+                case "table":build=t=>{var c=(JsonObject)t.DeepClone();c["status"]=TableStatus(s,t);return c;};stamp=t=>TableStatus(s,t);break;
+                case "user" when role=="manager":build=SafeUser;variant="user:safe";break;
+                case "user":build=x=>{var safe=SafeUser(x);return J.O("id",safe.S("id"),"name",safe.S("name"),"role",safe.S("role"),"active",safe.B("active"),"hasPin",safe.S("role")=="manager"&&safe.B("hasPin"));};variant="user:public";break;
+                case "grant" or "session":build=x=>Without(x,"tokenHash");break;
+                case "device":build=x=>Without(x,"secretHash");break;
+                case "visit" when role=="cocina":build=v=>J.O("id",v.S("id"),"tableId",v.S("tableId"),"waiterId",v.S("waiterId"),"status",v.S("status"),"openedAt",v.S("openedAt"));variant="visit:cocina";break;
+                case "visit":build=v=>{var c=Without(v,"trackingKey");foreach(var p in Totals(s,v))c[p.Key]=p.Value?.DeepClone();return c;};variant="visit:totals";
+                    stamp=v=>string.Join(",",s.Related("unit","visitId",v.S("id")).Select(Version))+";"+string.Join(",",s.Related("payment","visitId",v.S("id")).Select(Version));break;
+                case "unit" when role=="cocina":build=x=>{var c=(JsonObject)x.DeepClone();c.Remove("price");c.Remove("basePrice");c.Remove("promoId");c["extras"]=new JsonArray(x.A("extras").Objects().Select(e=>(JsonNode)J.O("name",e.S("name"))).ToArray());c["modifiers"]=new JsonArray(x.A("modifiers").Objects().Select(m=>(JsonNode)J.O("group",m.S("group"),"name",m.S("name"))).ToArray());return c;};variant="unit:cocina";break;
+            }
+            outp.Items(kind+"s",values.Select(x=>Project(s,variant,x,build,stamp is null?null:()=>stamp(x))));
         }
-        outp.Obj("restaurant").Remove("enrollmentHash");FilterEcosystemSnapshot(s,u,outp);return outp;
+        FilterEcosystemSnapshot(s,u,outp);return outp;
     }
     public JsonObject Act(BranchState s,JsonObject u,string type,JsonObject p)
     {
@@ -101,22 +127,22 @@ public sealed partial class Restaurant(IPasswordHasher passwords)
             }result=J.O("id",c.S("id"),"unitIds",c.A("unitIds"),"visitId",v.S("id"));break;}
         case "unit.state":{
             var unit=s.Get("unit",id);var v=s.Get("visit",unit.S("visitId"));Need(v.S("status")=="open","Cuenta cerrada");var next=p.S("status");var current=unit.S("status");
-            if(next=="delivered"){Role(u,"mesero","manager");Own(s,u,v.S("id"));Need(current=="ready","Solo se entrega un producto listo");unit["deliveredAt"]=J.Now();foreach(var n in s.List("notification").Where(n=>n.S("unitId")==id))n["attended"]=true;}
+            if(next=="delivered"){Role(u,"mesero","manager");Own(s,u,v.S("id"));Need(current=="ready","Solo se entrega un producto listo");unit["deliveredAt"]=J.Now();foreach(var n in s.Related("notification","unitId",id))n["attended"]=true;}
             else{Role(u,"cocina","manager");Need((current=="held"&&next=="received")||(new[]{"received","preparing"}.Contains(current)&&next=="unavailable")||(current=="received"&&next=="preparing")||(current=="preparing"&&next=="ready"),"Transición de preparación no permitida");
                 if(current=="held"){Module(s,"courses");unit["receivedAt"]=J.Now();}
                 if(next=="unavailable"){unit["reason"]=Text(p,"reason");Notice(s,v,unit.S("name")+" no disponible: "+unit.S("reason"),"unavailable",id);}
                 if(next=="preparing")unit["startedAt"]=J.Now();if(next=="ready"){unit["readyAt"]=J.Now();Notice(s,v,unit.S("name")+" listo para recoger","ready",id);}}
             unit["status"]=next;History(unit,u,next,p.S("reason"));Need(Totals(s,v).L("balance")>=0,"La operación dejaría un saldo negativo; concilia pagos");Complete(s);break;}
         case "visit.deliverAll":{
-            Role(u,"mesero","manager");var v=Own(s,u,id);foreach(var unit in s.List("unit").Where(x=>x.S("visitId")==id&&x.S("status")=="ready").ToArray())Act(s,u,"unit.state",J.O("id",unit.S("id"),"status","delivered"));break;}
+            Role(u,"mesero","manager");var v=Own(s,u,id);foreach(var unit in s.Related("unit","visitId",id).Where(x=>x.S("status")=="ready").ToArray())Act(s,u,"unit.state",J.O("id",unit.S("id"),"status","delivered"));break;}
         case "notification.attend":{Role(u,"mesero","manager");var n=s.Get("notification",id);Need(u.S("role")=="manager"||n.S("waiterId")==u.S("id"),"Aviso de otro mesero",403);n["attended"]=true;n["attendedAt"]=J.Now();break;}
-        case "visit.transfer":{Role(u,"mesero","manager");var v=Own(s,u,id);var w=s.Get("user",p.S("waiterId"));Need(w.B("active")&&w.S("role")=="mesero","Mesero no válido");v["waiterId"]=w.S("id");foreach(var n in s.List("notification").Where(x=>x.S("visitId")==id&&!x.B("attended")))n["waiterId"]=w.S("id");break;}
+        case "visit.transfer":{Role(u,"mesero","manager");var v=Own(s,u,id);var w=s.Get("user",p.S("waiterId"));Need(w.B("active")&&w.S("role")=="mesero","Mesero no válido");v["waiterId"]=w.S("id");foreach(var n in s.Related("notification","visitId",id).Where(x=>!x.B("attended")))n["waiterId"]=w.S("id");break;}
         case "visit.move":{Role(u,"mesero","manager");var v=Own(s,u,id);var t=s.Get("table",p.S("tableId"));Need(t.S("status")=="free"&&t.L("capacity")>=v.L("people"),"Mesa ocupada o capacidad insuficiente");var old=v.S("tableId");v["tableId"]=t.S("id");t["status"]="occupied";Release(s,old);break;}
         case "visit.split":{
-            Role(u,"mesero","manager");var v=Own(s,u,id);Need(!s.List("payment").Any(x=>x.S("visitId")==id)&&v["discount"] is null,"Divide antes de registrar pagos o descuentos");var ids=p.A("unitIds").Strings();var all=s.List("unit").Where(x=>x.S("visitId")==id).ToArray();Need(ids.Length>0&&ids.Distinct().Count()==ids.Length&&ids.Length<all.Length&&ids.All(uid=>all.Any(x=>x.S("id")==uid)),"La división debe dejar unidades en ambas cuentas");var nv=(JsonObject)v.DeepClone();nv["id"]=J.Id();nv["people"]=1;nv["openedAt"]=J.Now();nv["splitFrom"]=id;nv["trackingKey"]=Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));Add(s,"visit",nv);
-            foreach(var unit in all.Where(x=>ids.Contains(x.S("id")))){unit["visitId"]=nv.S("id");foreach(var n in s.List("notification").Where(x=>x.S("unitId")==unit.S("id")))n["visitId"]=nv.S("id");}result=J.O("id",nv.S("id"));break;}
+            Role(u,"mesero","manager");var v=Own(s,u,id);Need(!s.Related("payment","visitId",id).Any()&&v["discount"] is null,"Divide antes de registrar pagos o descuentos");var ids=p.A("unitIds").Strings();var all=s.Related("unit","visitId",id).ToArray();Need(ids.Length>0&&ids.Distinct().Count()==ids.Length&&ids.Length<all.Length&&ids.All(uid=>all.Any(x=>x.S("id")==uid)),"La división debe dejar unidades en ambas cuentas");var nv=(JsonObject)v.DeepClone();nv["id"]=J.Id();nv["people"]=1;nv["openedAt"]=J.Now();nv["splitFrom"]=id;nv["trackingKey"]=Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));Add(s,"visit",nv);
+            foreach(var unit in all.Where(x=>ids.Contains(x.S("id")))){unit["visitId"]=nv.S("id");foreach(var n in s.Related("notification","unitId",unit.S("id")))n["visitId"]=nv.S("id");}result=J.O("id",nv.S("id"));break;}
         case "visit.merge":{
-            Role(u,"mesero","manager");var v=Own(s,u,id);var other=Own(s,u,p.S("otherId"));Need(id!=other.S("id"),"Cuentas incompatibles");Need(new[]{v,other}.All(x=>x["discount"] is null&&!s.List("payment").Any(pay=>pay.S("visitId")==x.S("id"))),"Une antes de pagos o descuentos");foreach(var unit in s.List("unit").Where(x=>x.S("visitId")==other.S("id")))unit["visitId"]=id;foreach(var n in s.List("notification").Where(x=>x.S("visitId")==other.S("id"))){n["visitId"]=id;n["waiterId"]=v.S("waiterId");}other["status"]="merged";other["mergedInto"]=id;other["closedAt"]=J.Now();other["trackingExpires"]=J.Now();Release(s,other.S("tableId"));break;}
+            Role(u,"mesero","manager");var v=Own(s,u,id);var other=Own(s,u,p.S("otherId"));Need(id!=other.S("id"),"Cuentas incompatibles");Need(new[]{v,other}.All(x=>x["discount"] is null&&!s.Related("payment","visitId",x.S("id")).Any()),"Une antes de pagos o descuentos");foreach(var unit in s.Related("unit","visitId",other.S("id")))unit["visitId"]=id;foreach(var n in s.Related("notification","visitId",other.S("id"))){n["visitId"]=id;n["waiterId"]=v.S("waiterId");}other["status"]="merged";other["mergedInto"]=id;other["closedAt"]=J.Now();other["trackingExpires"]=J.Now();Release(s,other.S("tableId"));break;}
         case "payment.add":{
             Role(u,"mesero","manager");Need(u.S("role")=="manager"||u.Obj("permissions").B("payments",true),"Permiso de pagos deshabilitado",403);var v=Own(s,u,p.S("visitId"));var amount=Amount(p,"amount",1);Need(amount<=Totals(s,v).L("balance"),"El pago supera el saldo");var cash=s.List("cash").SingleOrDefault(x=>x.S("status")=="open")??throw new BusinessException(400,"Abre una caja antes de registrar pagos");
             ValidatePayment(s,v,p,amount);result=Add(s,"payment",J.O("visitId",v.S("id"),"cashId",cash.S("id"),"amount",amount,"tip",Amount(p,"tip"),"method",Choice(p,"method","cash","card","transfer"),"actor",u.S("id"),"at",J.Now(),"externalProcessed",false,"folioId",p.S("folioId"),"tendered",p.L("tendered",amount+Amount(p,"tip")),"change",p.L("tendered",amount+Amount(p,"tip"))-amount-Amount(p,"tip")));break;}
@@ -137,13 +163,13 @@ public sealed partial class Restaurant(IPasswordHasher passwords)
                         unit["notes"]=Text(r,"notes");s.Get("command",unit.S("commandId"))["completeNotified"]=false;
                         if(unit.S("status") is "ready" or "preparing"){unit["status"]="received";unit["receivedAt"]=J.Now();unit["startedAt"]=null;unit["readyAt"]=null;}
                         if(r.S("productId")!=""){var prod=s.Get("product",r.S("productId"));Need(prod.B("visible")&&prod.B("available"),"Producto no disponible");foreach(var key in new[]{"name","station"})unit[key]=prod[key]?.DeepClone();unit["productId"]=prod.S("id");unit["recipeVersionId"]=prod.S("recipeVersionId");unit["taxBps"]=prod.L("taxBps");unit["price"]=prod.L("price");unit["basePrice"]=prod.L("price");unit["extras"]=new JsonArray();unit["cooking"]="";unit["status"]="received";unit["receivedAt"]=J.Now();unit["startedAt"]=null;unit["readyAt"]=null;}
-                    }History(unit,u,unit.S("status"),r.S("reason"));foreach(var n in s.List("notification").Where(n=>n.S("visitId")==v.S("id")&&(n.S("unitId")==unit.S("id")||n.S("type")=="complete")))n["attended"]=true;
+                    }History(unit,u,unit.S("status"),r.S("reason"));foreach(var n in s.Related("notification","visitId",v.S("id")).Where(n=>(n.S("unitId")==unit.S("id")||n.S("type")=="complete")))n["attended"]=true;
                 }Need(Totals(s,v).L("balance")>=0,"El cambio dejaría un saldo negativo");}
             r["status"]=p.B("approve")?"approved":"rejected";r["decidedBy"]=u.S("id");r["decidedAt"]=J.Now();Notice(s,v,"Solicitud "+r.S("status")+": "+r.S("reason"),"authorization");Complete(s);break;}
-        case "cash.open":Role(u,"manager");Need(!s.List("cash").Any(x=>x.S("status")=="open"),"Ya hay una caja abierta");result=Add(s,"cash",J.O("initial",Amount(p,"initial"),"status","open","openedAt",J.Now(),"openedBy",u.S("id")));break;
+        case "cash.open":Role(u,"manager");Need(!s.Related("cash","status","open").Any(),"Ya hay una caja abierta");result=Add(s,"cash",J.O("initial",Amount(p,"initial"),"status","open","openedAt",J.Now(),"openedBy",u.S("id")));break;
         case "cash.movement":{Role(u,"manager");var cash=s.Get("cash",p.S("cashId"));Need(cash.S("status")=="open","Caja cerrada");result=Add(s,"movement",J.O("cashId",cash.S("id"),"type",Choice(p,"type","income","expense","withdrawal"),"amount",Amount(p,"amount",1),"reason",Text(p,"reason"),"actor",u.S("id"),"at",J.Now()));break;}
         case "cash.close":{
-            Role(u,"manager");var cash=s.Get("cash",id);Need(cash.S("status")=="open","Caja cerrada");var expected=cash.L("initial")+s.List("payment").Where(x=>x.S("cashId")==id&&x.S("method")=="cash").Sum(x=>x.L("amount")+x.L("tip"))+s.List("movement").Where(x=>x.S("cashId")==id).Sum(x=>x.S("type")=="income"?x.L("amount"):-x.L("amount"));var counted=Amount(p,"counted");cash["status"]="closed";cash["expected"]=expected;cash["counted"]=counted;cash["difference"]=counted-expected;cash["closedAt"]=J.Now();cash["closedBy"]=u.S("id");break;}
+            Role(u,"manager");var cash=s.Get("cash",id);Need(cash.S("status")=="open","Caja cerrada");var expected=cash.L("initial")+s.Related("payment","cashId",id).Where(x=>x.S("method")=="cash").Sum(x=>x.L("amount")+x.L("tip"))+s.Related("movement","cashId",id).Sum(x=>x.S("type")=="income"?x.L("amount"):-x.L("amount"));var counted=Amount(p,"counted");cash["status"]="closed";cash["expected"]=expected;cash["counted"]=counted;cash["difference"]=counted-expected;cash["closedAt"]=J.Now();cash["closedBy"]=u.S("id");break;}
         default:result=Manage(s,u,type,p);break;
         }
         AfterEcosystem(s,u,type,p,result);return (JsonObject)result.DeepClone();
@@ -161,27 +187,27 @@ public sealed partial class Restaurant(IPasswordHasher passwords)
         Role(u,"manager");
         switch(type){
         case "catalog.product":{
-            var prod=id!=""?s.Get("product",id):Add(s,"product",new());var price=Amount(p,"price");var name=Text(p,"name",150);Need(s.List("category").Any(x=>x.S("name")==p.S("category")),"Categoría no registrada");Need(s.Meta.A("stations").Strings().Contains(p.S("station")),"Estación no configurada");var extras=p.A("extras");Need(extras.Count<=30&&extras.Objects().Select(x=>x.S("name")).Distinct().Count()==extras.Count,"Extras inválidos o repetidos");foreach(var e in extras.Objects()){Text(e,"name",100);Amount(e,"price");}
+            var prod=id!=""?s.Get("product",id):Add(s,"product",new());var price=Amount(p,"price");var name=Text(p,"name",150);Need(s.Related("category","name",p.S("category")).Any(),"Categoría no registrada");Need(s.Meta.A("stations").Strings().Contains(p.S("station")),"Estación no configurada");var extras=p.A("extras");Need(extras.Count<=30&&extras.Objects().Select(x=>x.S("name")).Distinct().Count()==extras.Count,"Extras inválidos o repetidos");foreach(var e in extras.Objects()){Text(e,"name",100);Amount(e,"price");}
             var image=p.S("image");Need(image.Length<=40*1024&&(image==""||(Uri.TryCreate(image,UriKind.Absolute,out var imageUri)&&imageUri.Scheme=="https"&&imageUri.UserInfo=="")||image.StartsWith("data:image/png;base64,")||image.StartsWith("data:image/jpeg;base64,")||image.StartsWith("data:image/webp;base64,")),"Imagen: HTTPS o PNG/JPEG/WebP incrustado de hasta 40 KiB; para imágenes mayores usa una URL HTTPS");foreach(var key in new[]{"category","station","description","ingredients","allergens","tags"}){Need(p.S(key).Length<=2000,key+" demasiado largo");prod[key]=p.S(key);}prod["taxBps"]=Amount(p,"taxBps",0,10000);prod["name"]=name;prod["price"]=price;prod["image"]=image;prod["extras"]=extras.DeepClone();prod["supportsCooking"]=p.B("supportsCooking");prod["cookingRequired"]=p.B("supportsCooking")&&p.B("cookingRequired");prod["modifiers"]=ValidModifierGroups(p.A("modifiers"));prod["visible"]=p.B("visible",true);prod["available"]=p.B("available",true);result=J.O("id",prod.S("id"));break;}
         case "catalog.toggle":{var prod=s.Get("product",id);prod[Choice(p,"field","visible","available")]=p.B("value");break;}
         case "catalog.category":{
-            var name=Text(p,"name",100);Need(!s.List("category").Any(x=>x.S("name")==name&&x.S("id")!=id),"Categoría repetida");if(id!=""){var c=s.Get("category",id);var old=c.S("name");c["name"]=name;foreach(var prod in s.List("product").Where(x=>x.S("category")==old))prod["category"]=name;}else result=Add(s,"category",J.O("name",name));break;}
+            var name=Text(p,"name",100);Need(!s.Related("category","name",name).Any(x=>x.S("id")!=id),"Categoría repetida");if(id!=""){var c=s.Get("category",id);var old=c.S("name");c["name"]=name;foreach(var prod in s.Related("product","category",old))prod["category"]=name;}else result=Add(s,"category",J.O("name",name));break;}
         case "table.save":{
-            if(id=="")Need(s.List("table").Count()<s.Meta.L("maxTables",30),"Límite de mesas del plan");var t=id!=""?s.Get("table",id):Add(s,"table",J.O("status","free"));Need(id==""||!s.List("visit").Any(x=>x.S("tableId")==id&&x.S("status")=="open"),"Mesa con cuentas abiertas");t["name"]=Text(p,"name",100);t["zone"]=Text(p,"zone",100);t["capacity"]=Amount(p,"capacity",1,100);result=t;break;}
+            if(id=="")Need(s.List("table").Count()<s.Meta.L("maxTables",30),"Límite de mesas del plan");var t=id!=""?s.Get("table",id):Add(s,"table",J.O("status","free"));Need(id==""||!s.Related("visit","tableId",id).Any(x=>x.S("status")=="open"),"Mesa con cuentas abiertas");t["name"]=Text(p,"name",100);t["zone"]=Text(p,"zone",100);t["capacity"]=Amount(p,"capacity",1,100);result=t;break;}
         case "branch.save":throw new BusinessException(403,"Cada sucursal requiere identidad y servidor propios. El alta corresponde al panel central.");
         case "settings.save":{
             var m=s.Meta;var stations=p.A("stations").Strings();Need(stations.Length is >0 and <=20&&stations.All(x=>x.Length is >0 and <=100),"Estaciones inválidas");Need(System.Text.RegularExpressions.Regex.IsMatch(p.S("color"),"^#[a-fA-F0-9]{6}$"),"Color inválido");m["name"]=Text(p,"name",150);m["color"]=p.S("color");m["contact"]=p.S("contact");m["stations"]=J.N(stations);m["delayMinutes"]=Amount(p,"delayMinutes",1,120);m["discountLimit"]=Amount(p,"discountLimit",0,100);if(p.ContainsKey("drawerOnCash"))m["drawerOnCash"]=p.B("drawerOnCash");if(p.ContainsKey("displayBanners")){var banners=p.A("displayBanners").Strings().Select(b=>Sanitize(b,140)).Where(b=>b!="").ToArray();Need(banners.Length<=10,"Máximo 10 mensajes para la pantalla del cliente");m["displayBanners"]=J.N(banners);}break;}
         case "user.save":{
-            var user=id!=""?s.Get("user",id):Add(s,"user",new());var role=Choice(p,"role","mesero","cocina","manager","cajero");Need(user.S("id")!=u.S("id")||(p.B("active",true)&&role=="manager"),"No puedes quitarte el acceso de gerente");var username=Text(p,"username",100);Need(!s.List("user").Any(x=>x.S("username")==username&&x.S("id")!=user.S("id")),"Usuario existente");Need(id!=""||s.List("user").Count()<=s.Meta.L("maxUsers",15),"Límite de empleados del plan");user["name"]=Text(p,"name",100);user["username"]=username;user["role"]=role;user["active"]=p.B("active",true);var permissions=new JsonObject();foreach(var key in UserPermissions)permissions[key]=p.Obj("permissions").B(key,true);user["permissions"]=permissions;if(p.S("password")!="")user["password"]=passwords.Hash(p.S("password"));Need(user.S("password")!="","Contraseña requerida");if(!user.B("active")||p.S("password")!="")foreach(var sess in s.List("session").Where(x=>x.S("userId")==user.S("id")))sess["revoked"]=true;result=SafeUser(user);break;}
+            var user=id!=""?s.Get("user",id):Add(s,"user",new());var role=Choice(p,"role","mesero","cocina","manager","cajero");Need(user.S("id")!=u.S("id")||(p.B("active",true)&&role=="manager"),"No puedes quitarte el acceso de gerente");var username=Text(p,"username",100);Need(!s.Related("user","username",username).Any(x=>x.S("id")!=user.S("id")),"Usuario existente");Need(id!=""||s.List("user").Count()<=s.Meta.L("maxUsers",15),"Límite de empleados del plan");user["name"]=Text(p,"name",100);user["username"]=username;user["role"]=role;user["active"]=p.B("active",true);var permissions=new JsonObject();foreach(var key in UserPermissions)permissions[key]=p.Obj("permissions").B(key,true);user["permissions"]=permissions;if(p.S("password")!="")user["password"]=passwords.Hash(p.S("password"));Need(user.S("password")!="","Contraseña requerida");if(!user.B("active")||p.S("password")!="")foreach(var sess in s.Related("session","userId",user.S("id")))sess["revoked"]=true;result=SafeUser(user);break;}
         case "device.enrollment":Need(p.S("code").Length>=20,"Código de alta demasiado corto");s.Meta["enrollmentHash"]=J.Hash(p.S("code"));break;
         case "session.revoke":s.Get("session",id)["revoked"]=true;break;
-        case "installation.authorize":{var d=s.Get("device",id);d["authorized"]=p.B("authorized");if(!d.B("authorized"))foreach(var sess in s.List("session").Where(x=>x.S("deviceId")==id))sess["revoked"]=true;break;}
+        case "installation.authorize":{var d=s.Get("device",id);d["authorized"]=p.B("authorized");if(!d.B("authorized"))foreach(var sess in s.Related("session","deviceId",id))sess["revoked"]=true;break;}
         case "reservation.save":{
             Module(s,"reservations");var r=id!=""?s.Get("reservation",id):Add(s,"reservation",J.O("at",J.Now()));var status=Choice(p,"status","pending","confirmed","proposed","rejected","attended","cancelled","no_show");Need(DateTimeOffset.TryParse(p.S("start"),out var start),"Fecha y hora inválidas");var people=Amount(p,"people",1,100);JsonObject? t=p.S("tableId")==""?null:s.Get("table",p.S("tableId"));
             if(new[]{"confirmed","attended"}.Contains(status)){Need(t is not null&&t.L("capacity")>=people,"Capacidad insuficiente o falta mesa");Need(!s.List("reservation").Any(x=>x.S("id")!=r.S("id")&&x.S("tableId")==t!.S("id")&&new[]{"confirmed","attended"}.Contains(x.S("status"))&&Math.Abs((DateTimeOffset.Parse(x.S("start"))-start).TotalHours)<2),"Conflicto de reservación (bloque de dos horas)");if(r.S("status")=="proposed")Need(p.B("accepted"),"Registra la aceptación del horario propuesto");}
             r["name"]=Text(p,"name",100);r["contact"]=Text(p,"contact",150);r["start"]=start.ToString("O");r["people"]=people;r["notes"]=p.S("notes");r["tableId"]=t?.S("id")??"";r["status"]=status;r["accepted"]=p.B("accepted");r["simulated"]=p.B("simulated");result=r;break;}
         case "review.simulate":{
-            Module(s,"reviews");var v=s.Get("visit",p.S("visitId"));Need(v.S("status")=="closed","Solo visitas cerradas");Need(!s.List("review").Any(x=>x.S("visitId")==v.S("id")),"La visita ya tiene evaluación",409);result=Add(s,"review",J.O("visitId",v.S("id"),"food",Amount(p,"food",1,5),"service",Amount(p,"service",1,5),"overall",Amount(p,"overall",1,5),"comment",p.S("comment"),"at",J.Now(),"simulated",true,"private",true));break;}
+            Module(s,"reviews");var v=s.Get("visit",p.S("visitId"));Need(v.S("status")=="closed","Solo visitas cerradas");Need(!s.Related("review","visitId",v.S("id")).Any(),"La visita ya tiene evaluación",409);result=Add(s,"review",J.O("visitId",v.S("id"),"food",Amount(p,"food",1,5),"service",Amount(p,"service",1,5),"overall",Amount(p,"overall",1,5),"comment",p.S("comment"),"at",J.Now(),"simulated",true,"private",true));break;}
         case "promotion.save":{
             Module(s,"promotions");var prodIds=p.A("productIds").Strings();Need(prodIds.Length>0,"Selecciona productos");foreach(var pid in prodIds)s.Get("product",pid);var promo=id!=""?s.Get("promotion",id):Add(s,"promotion",new());promo["name"]=Text(p,"name",100);promo["startHour"]=Amount(p,"startHour",0,23);promo["endHour"]=Amount(p,"endHour",1,24);Need(promo.L("startHour")<promo.L("endHour"),"Horario inválido");promo["productIds"]=J.N(prodIds);promo["percent"]=Amount(p,"percent",1,100);var coupon=p.S("coupon").Trim().ToUpperInvariant();Need(coupon==""||System.Text.RegularExpressions.Regex.IsMatch(coupon,"^[A-Z0-9_-]{3,32}$"),"Cupón: 3 a 32 letras, números, guion o subrayado");Need(coupon==""||!s.List("promotion").Any(x=>x.S("id")!=promo.S("id")&&x.S("coupon")==coupon),"Cupón ya registrado");promo["coupon"]=coupon;promo["combo"]=p.B("combo");promo["active"]=p.B("active");result=promo;break;}
         case "ticket.create":result=Add(s,"ticket",J.O("subject",Text(p,"subject",200),"status","open","at",J.Now(),"messages",new[]{J.O("id",J.Id(),"actor",u.S("id"),"name",u.S("name"),"message",Text(p,"message"),"at",J.Now())}));break;

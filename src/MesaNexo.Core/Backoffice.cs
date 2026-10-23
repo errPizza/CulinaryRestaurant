@@ -8,9 +8,9 @@ public sealed partial class Restaurant
     static readonly string[] PinActions=["request.decide","visit.unlock","visit.reopen","drawer.request","cash.withdraw"];
     public static readonly string[] UserPermissions=["payments","shiftReports","quickSale","mergeTables","transfer"];
     const int PinAttempts=5;
-    long DrawerCash(BranchState s,JsonObject cash)=>cash.L("initial")+s.List("payment").Where(x=>x.S("cashId")==cash.S("id")&&x.S("method")=="cash").Sum(x=>x.L("amount")+x.L("tip"))+s.List("movement").Where(x=>x.S("cashId")==cash.S("id")).Sum(x=>x.S("type")=="income"?x.L("amount"):-x.L("amount"));
+    long DrawerCash(BranchState s,JsonObject cash)=>cash.L("initial")+s.Related("payment","cashId",cash.S("id")).Where(x=>x.S("method")=="cash").Sum(x=>x.L("amount")+x.L("tip"))+s.Related("movement","cashId",cash.S("id")).Sum(x=>x.S("type")=="income"?x.L("amount"):-x.L("amount"));
     long PettyBalance(BranchState s)=>s.List("pettymove").Sum(x=>x.S("type")=="in"?x.L("amount"):-x.L("amount"));
-    JsonObject OpenRegister(BranchState s){var cash=s.List("cash").FirstOrDefault(x=>x.S("status")=="open");Need(cash is not null,"Abre una caja para pagar desde el efectivo");Need(!cash!.B("blind"),"La caja abierta es de arqueo ciego; usa caja chica o banco");return cash;}
+    JsonObject OpenRegister(BranchState s){var cash=s.Related("cash","status","open").FirstOrDefault();Need(cash is not null,"Abre una caja para pagar desde el efectivo");Need(!cash!.B("blind"),"La caja abierta es de arqueo ciego; usa caja chica o banco");return cash;}
     static long OptionalQuantity(JsonObject p,string key,string unit)
     {
         var raw=p[key];if(raw is null||(raw is JsonValue v&&v.TryGetValue<string>(out var t)&&t.Trim()==""))return 0;
@@ -57,12 +57,12 @@ public sealed partial class Restaurant
             if(type is "visit.transfer" or "visit.move")Need(perms.B("transfer",true),"Permiso para transferir cuentas deshabilitado",403);
         }
         if(type=="payment.add"&&p.S("method")=="cash"&&s.Meta.L("cashLimit")>0&&s.Meta.B("cashLimitBlock")){
-            var cash=s.List("cash").FirstOrDefault(x=>x.S("status")=="open");if(cash is not null&&!cash.B("blind"))Need(DrawerCash(s,cash)<s.Meta.L("cashLimit"),"El efectivo en caja superó el límite; un gerente debe hacer un retiro parcial antes de seguir cobrando en efectivo",409);
+            var cash=s.Related("cash","status","open").FirstOrDefault();if(cash is not null&&!cash.B("blind"))Need(DrawerCash(s,cash)<s.Meta.L("cashLimit"),"El efectivo en caja superó el límite; un gerente debe hacer un retiro parcial antes de seguir cobrando en efectivo",409);
         }
     }
     void BackofficeAfterAction(BranchState s,string type,JsonObject p)
     {
-        if(type!="payment.add"||p.S("method")!="cash"||s.Meta.L("cashLimit")<=0)return;var cash=s.List("cash").FirstOrDefault(x=>x.S("status")=="open");if(cash is null||cash.B("blind"))return;
+        if(type!="payment.add"||p.S("method")!="cash"||s.Meta.L("cashLimit")<=0)return;var cash=s.Related("cash","status","open").FirstOrDefault();if(cash is null||cash.B("blind"))return;
         var drawer=DrawerCash(s,cash);if(drawer>=s.Meta.L("cashLimit")&&!cash.B("limitAlerted")){cash["limitAlerted"]=true;Add(s,"ownernotice",J.O("type","cash-limit","cashId",cash.S("id"),"amount",drawer,"limit",s.Meta.L("cashLimit"),"status","pending","at",J.Now()));}
     }
     bool TryBackoffice(BranchState s,JsonObject u,string type,JsonObject p,out JsonObject result)
@@ -109,7 +109,7 @@ public sealed partial class Restaurant
             Role(u,"manager");var warehouse=s.Get("warehouse",p.S("warehouseId")).S("id");var lines=new List<JsonObject>();
             foreach(var i in s.List("ingredient").Where(x=>x.L("maxStock")>0)){
                 var stock=FindStock(s,warehouse,i.S("id"));var available=(stock?.L("quantity")??0)-(stock?.L("reserved")??0);
-                var incoming=s.List("purchase").Where(x=>x.S("status")=="ordered"&&x.S("warehouseId")==warehouse).SelectMany(x=>x.A("lines").Objects()).Where(x=>x.S("ingredientId")==i.S("id")).Sum(x=>x.L("quantity"));
+                var incoming=s.Related("purchase","status","ordered").Where(x=>x.S("warehouseId")==warehouse).SelectMany(x=>x.A("lines").Objects()).Where(x=>x.S("ingredientId")==i.S("id")).Sum(x=>x.L("quantity"));
                 if(available+incoming>i.L("minStock"))continue;var suggest=i.L("maxStock")-available-incoming;if(suggest<=0)continue;
                 lines.Add(J.O("ingredientId",i.S("id"),"name",i.S("name"),"unit",i.S("unit"),"available",available,"incoming",incoming,"min",i.L("minStock"),"max",i.L("maxStock"),"suggest",suggest,"supplierId",i.S("supplierId"),"estimated",CostAt(i.L("lastCost"),suggest)));
             }

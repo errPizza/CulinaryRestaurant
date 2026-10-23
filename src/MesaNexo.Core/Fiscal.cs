@@ -20,7 +20,7 @@ public sealed partial class Restaurant
             // The simulated PAC accepts the cancellation at once; the SAT would ask the receiver when motive 02 exceeds its thresholds.
             if(simulated){f["cancelledAt"]=J.Now();f["message"]="SIMULADO · cancelación aceptada por el PAC simulado (motivo "+f.S("cancelMotive")+")";Log(s,u,"pac","cancel","cancelled","Cancelación del UUID "+f.S("fiscalUuid"),f.S("fiscalUuid"));}
             result=J.O("id",f.S("id"),"status",f.S("status"));return true;}
-        var v=s.Get("visit",p.S("visitId"));Need(v.S("status")=="closed","La solicitud corresponde a un ticket liquidado");Need(!s.List("fiscal").Any(x=>x.S("visitId")==v.S("id")&&!FiscalClosed.Contains(x.S("status"))),"Ticket ya tiene solicitud fiscal",409);
+        var v=s.Get("visit",p.S("visitId"));Need(v.S("status")=="closed","La solicitud corresponde a un ticket liquidado");Need(!s.Related("fiscal","visitId",v.S("id")).Any(x=>!FiscalClosed.Contains(x.S("status"))),"Ticket ya tiene solicitud fiscal",409);
         if(type=="fiscal.token"){
             Need(s.Meta.S("invoicePortal")!="","Configura el portal público separado");var token=Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));var expires=DateTimeOffset.UtcNow.AddHours(24).ToString("O");Add(s,"invoicetoken",J.O("tokenHash",J.Hash(token),"visitId",v.S("id"),"expires",expires,"used",false,"ticketSnapshot",J.O("totals",Totals(s,v),"closedAt",v.S("closedAt"))));result=J.O("url",s.Meta.S("invoicePortal")+"/invoice#"+token,"expires",expires);return true;
         }

@@ -20,7 +20,14 @@ def validate_site(site):
     if address not in ipaddress.IPv4Network(site['network']):raise ValueError('Servidor fuera de la red de sucursal')
     return site
 
+def known_extensions(bundle):
+    # Earlier MesaNexo extensions this package may replace. Without the list nothing is replaced.
+    path=bundle/'deploy/culinaryos/extension-history.json'
+    if not path.is_file():return set()
+    return {value.lower() for release in json.loads(path.read_text())['releases'] for value in release['sha256']}
+
 def validate_runtime(bundle,runtime=RUNTIME):
+    """Returns what the extension needs: 'absent', 'current' or 'upgrade' (a known earlier version)."""
     for row in json.loads((bundle/'vendor/culinaryos/source-hashes.json').read_text()):
         p=runtime/row['file']
         if p.is_symlink() or not p.is_file():raise ValueError('Runtime no compatible: '+row['file'])
@@ -32,8 +39,12 @@ def validate_runtime(bundle,runtime=RUNTIME):
     extension=runtime/'mesanexo_ipc.py'
     hooked=HOOK in (runtime/'dataio.py').read_text()
     if extension.exists():
-        if extension.is_symlink() or digest(extension)!=digest(bundle/'runtime/mesanexo_ipc.py') or not hooked:raise ValueError('Extension previa distinta o incompleta; no se sobrescribe (SHA256 instalada '+digest(extension)+', paquete '+digest(bundle/'runtime/mesanexo_ipc.py')+', hook '+str(hooked)+')')
+        installed=digest(extension);package=digest(bundle/'runtime/mesanexo_ipc.py')
+        if not extension.is_symlink() and hooked and installed==package:return 'current'
+        if not extension.is_symlink() and hooked and installed in known_extensions(bundle):return 'upgrade'
+        raise ValueError('Extension previa distinta o incompleta; no se sobrescribe (SHA256 instalada '+installed+', paquete '+package+', hook '+str(hooked)+')')
     elif hooked:raise ValueError('Falta la extension del runtime')
+    return 'absent'
 
 def preflight(bundle):
     if sys.platform!='linux' or os.geteuid()!=0:raise PermissionError('Solo root dentro de CulinaryOS')
@@ -45,7 +56,7 @@ def preflight(bundle):
     if APP.exists() and not (APP/'culinary-restaurant-installing.json').is_file():raise ValueError('/opt/culinaryos-app ya existe; revisar')
     site=validate_site(json.loads((CONFIG/'site.json').read_text()))
     if json.loads((CONFIG/'branch.json').read_text()).get('site_id')!=site['site_id']:raise ValueError('Identidad de almacen diferente; no se cambia')
-    validate_runtime(bundle)
+    if validate_runtime(bundle)=='upgrade':print('La extension instalada es una version anterior conocida: se reemplazara tras un snapshot y una copia del codigo.')
     status=Client().call('health')
     if status.get('ready') is not True or status.get('site_id')!=site['site_id']:raise ValueError('Almacen CulinaryOS no disponible')
     pwd.getpwnam('operador');pwd.getpwnam('culinaryos-app')
@@ -198,7 +209,9 @@ def install(bundle,client):
     write_new(Path(ENTRY),(bundle/'deploy/culinaryos/CulinaryRestaurant').read_bytes(),0o755)
     set_application_permissions()
     verify_application_access()
-    if not (RUNTIME/'mesanexo_ipc.py').exists():run('/usr/bin/python3',bundle/'deploy/install-runtime-extension.py')
+    extension=validate_runtime(bundle)
+    if extension=='absent':run('/usr/bin/python3',bundle/'deploy/install-runtime-extension.py')
+    elif extension=='upgrade':run('/usr/bin/python3',bundle/'deploy/install-runtime-extension.py','--upgrade')
     from dataio import Client
     if 'transaction_v1' not in Client().call('capabilities_v1')['extensions']:raise ValueError('Falta extension transaccional')
     initialize_branch(site)

@@ -6,7 +6,7 @@ public sealed partial class BranchService
     public async Task<bool> ProcessInventory(CancellationToken ct=default)
     {
         for(int attempt=0;attempt<8;attempt++){
-            var s=await Load(ct);if(s.Records.Count==0)return false;var job=s.List("stockjob").FirstOrDefault(x=>x.S("status")=="pending");if(job is null)return false;
+            var s=await Load(ct);if(s.Count==0)return false;var job=s.Related("stockjob","status","pending").FirstOrDefault();if(job is null)return false;
             var actor=J.O("id","inventory-worker","role","manager");var fingerprint=J.Hash(J.Canonical(job));var id=J.Hash("stockjob:"+job.S("id")+":"+fingerprint)[..32];Domain.Act(s,actor,"stock.process",J.O("id",job.S("id")));
             try{await Commit(s,id,actor.S("id"),fingerprint,J.O("jobId",job.S("id"),"status",job.S("status")),"stock.worker",ct);return true;}catch(StoreException e)when(e.Code=="COS-DATA-CONFLICT"&&attempt<7){}
         }return false;

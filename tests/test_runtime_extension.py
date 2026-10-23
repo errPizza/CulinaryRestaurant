@@ -18,10 +18,15 @@ import dataio,mesanexo_ipc
 class RuntimeTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.path=Path(self.temp.name)/'store.sqlite';self.keys=Keyring(Keyring.generate());self.store=Store(self.path,'test-site',self.keys,min_free_bytes=0)
+        self.config=Path(self.temp.name)/'branch.json';patcher=patch.object(mesanexo_ipc,'BRANCH_CONFIG',self.config);patcher.start();self.addCleanup(patcher.stop)
     def tearDown(self):self.temp.cleanup()
     def transaction(self,event='e1',expected=0,fingerprint='request1',changes=None):
         return {'protocol':1,'event_id':event,'receipt':{'actor':'user','fingerprint':fingerprint,'result':{'payment':'p1'}},'changes':changes or [{'record_id':'mn_meta_site','expected_version':expected,'data':{'id':'site','siteId':'test-site','revision':expected+1}},{'record_id':'mn_payment_p1','expected_version':expected,'data':{'amount':12500}}]}
     def put(self,request):return mesanexo_ipc.transaction_v1(self.store,request)
+    def sql(self,statement):
+        db=sqlite3.connect(self.path)
+        try:db.execute(statement);db.commit()
+        finally:db.close()
     def test_scan_includes_z_types(self):
         request=self.transaction(changes=[{'record_id':'mn_meta_site','expected_version':0,'data':{'kind':'meta','id':'site'}},{'record_id':'mn_zone_z1','expected_version':0,'data':{'kind':'zone','id':'z1'}}])
         self.put(request)
@@ -115,6 +120,97 @@ class RuntimeTests(unittest.TestCase):
     def test_wrong_key_cannot_restore_snapshot(self):
         self.put(self.transaction());snapshot=Path(self.temp.name)/'snapshot.sqlite';self.store.snapshot(snapshot)
         with self.assertRaises(Exception):Store(snapshot,'test-site',Keyring(Keyring.generate()),min_free_bytes=0)
+    def test_scan_excludes_kinds_and_grows_pages(self):
+        changes=[{'record_id':'mn_meta_site','expected_version':0,'data':{'id':'site'}}]
+        changes.extend({'record_id':kind+str(n).zfill(3),'expected_version':0,'data':{'n':n}} for kind in ('mn_audit_','mn_unit_','mn_zone_') for n in range(40))
+        self.put(self.transaction(changes=changes));seen=[];after=''
+        while True:
+            page=mesanexo_ipc.scan_v1(self.store,{'protocol':1,'after':after,'exclude':['mn_audit_'],'max_records':7})
+            self.assertLessEqual(len(page['records']),7);seen+=[x['record_id'] for x in page['records']];after=page['after']
+            if not after:break
+        self.assertEqual(seen,sorted(seen));self.assertEqual(len(seen),81);self.assertFalse(any(x.startswith('mn_audit_') for x in seen))
+        self.assertEqual(len(mesanexo_ipc.scan_v1(self.store,{'protocol':1,'max_records':500,'max_bytes':1024*1024})['records']),121)
+        for bad in ({'exclude':['mn_']},{'exclude':'mn_audit_'},{'max_bytes':4*1024*1024},{'max_records':0}):
+            with self.assertRaises(ValueError):mesanexo_ipc.scan_v1(self.store,{'protocol':1,**bad})
+    def test_recent_returns_newest_of_a_kind_in_pages(self):
+        for n in range(30):
+            changes=[{'record_id':'mn_meta_site','expected_version':n,'data':{'id':'site'}},{'record_id':'mn_audit_'+format((n*7919)%1000,'03x')+str(n),'expected_version':0,'data':{'sequence':n+1}}]
+            if n%3==0:changes.append({'record_id':'mn_unit_'+str(n),'expected_version':0,'data':{'n':n}})
+            self.put(self.transaction('e'+str(n),changes=changes))
+        got=[];before=None
+        while True:
+            page=mesanexo_ipc.recent_v1(self.store,{'protocol':1,'prefix':'mn_audit_','limit':12-len(got),'before':before,'max_records':5})
+            self.assertEqual(page['revision'],30);got+=[x['data']['sequence'] for x in page['records']];before=page['before']
+            if not before:break
+        self.assertEqual(got,list(range(30,18,-1)))
+        with self.assertRaises(ValueError):mesanexo_ipc.recent_v1(self.store,{'protocol':1,'prefix':'mn_','limit':5})
+    def test_acknowledged_events_compacted_unacknowledged_kept(self):
+        self.put(self.transaction())
+        class Central:
+            def send(self,event,digest):return {'status':'committed','site_id':'test-site','event_id':event['event_id'],'sha256':digest}
+        self.put(self.transaction('e2',1,'second'))
+        self.assertEqual(deliver(self.store,Central(),now=0)['sent'],2)
+        self.sql("UPDATE events SET acked=1.0 WHERE id='e1'")
+        self.put(self.transaction('e3',2,'third'))
+        self.assertEqual(self.store.status()['events'],2)
+        status=lambda e:mesanexo_ipc.dispatch(self.store,{'op':'event_status_v1','event_id':e},dataio.dispatch)
+        self.assertEqual(status('e1'),{'local':'committed','remote':'acknowledged'})
+        self.assertEqual(status('e2'),{'local':'committed','remote':'acknowledged'})
+        self.assertEqual(status('e3'),{'local':'committed','remote':'pending'})
+        self.assertEqual(status('never'),{'local':'unknown','remote':'unknown'})
+        self.assertTrue(self.put(self.transaction())['duplicate'])
+    def test_old_unacknowledged_events_never_compacted(self):
+        self.put(self.transaction())
+        self.sql('UPDATE events SET created=1.0')
+        self.put(self.transaction('e2',1,'second'))
+        out=mesanexo_ipc.dispatch(self.store,{'op':'outbox_status_v1'},dataio.dispatch)
+        self.assertEqual(out['pending'],2);self.assertEqual(out['oldest_pending'],1.0);self.assertEqual(len(self.store.pending()),2)
+    def branch(self,central):self.config.write_text(json.dumps({'version':1,'site_id':'test-site',**({'central':{'url':'https://central.example/v1'}} if central else {})}))
+    def maintain(self):return mesanexo_ipc.dispatch(self.store,{'op':'outbox_maintain_v1','protocol':1},dataio.dispatch)
+    def test_outbox_upkeep_waits_for_service_configuration(self):
+        self.put(self.transaction());self.sql('UPDATE events SET created=1.0')
+        self.assertEqual(self.maintain(),{'mode':'unknown','more':False})
+        self.config.write_text('{broken');self.assertEqual(self.maintain()['mode'],'unknown');self.assertEqual(self.store.status()['events'],1)
+    def test_without_central_old_pending_events_dropped_recent_kept(self):
+        self.put(self.transaction());self.put(self.transaction('e2',1,'second'));self.sql("UPDATE events SET created=1.0 WHERE id='e1'")
+        self.branch(False);self.assertEqual(self.maintain(),{'mode':'standalone','dropped':1,'more':False})
+        self.assertEqual([w['event_id'] for w,_ in self.store.pending()],['e2'])
+        self.assertEqual(self.maintain()['dropped'],0);self.assertTrue(self.put(self.transaction())['duplicate'])
+        # Dropped without any central acknowledging it: the receipt stays, but nothing claims it was delivered.
+        self.assertEqual(mesanexo_ipc.dispatch(self.store,{'op':'event_status_v1','event_id':'e1'},dataio.dispatch),{'local':'committed','remote':'untracked'})
+    def test_complete_outbox_needs_no_baseline(self):
+        self.put(self.transaction());self.branch(True)
+        self.assertEqual(self.maintain(),{'mode':'complete','more':False});self.assertEqual(self.store.status()['events'],1)
+    def test_connecting_central_queues_baseline_that_rebuilds_the_mirror(self):
+        big='x'*3000
+        changes=[{'record_id':'mn_meta_site','expected_version':0,'data':{'id':'site','revision':1}}]
+        changes+=[{'record_id':'mn_unit_'+str(n).zfill(3),'expected_version':0,'data':{'n':n,'notes':big}} for n in range(15)]
+        self.put(self.transaction(changes=changes))
+        for n in range(1,4):self.put(self.transaction('u'+str(n),changes=[{'record_id':'mn_meta_site','expected_version':n,'data':{'id':'site','revision':n+1}},{'record_id':'mn_audit_'+str(n),'expected_version':0,'data':{'sequence':n}}]))
+        self.sql("UPDATE events SET created=1.0 WHERE id!='u3'")
+        self.branch(False);self.assertEqual(self.maintain()['dropped'],3)
+        self.put(self.transaction('u4',changes=[{'record_id':'mn_meta_site','expected_version':4,'data':{'id':'site','revision':5}},{'record_id':'mn_unit_000','expected_version':1,'data':{'n':0,'notes':'changed'}}]))
+        self.branch(True);steps=[]
+        with patch.object(mesanexo_ipc,'BASELINE_EVENTS',1):
+            while True:
+                steps.append(self.maintain())
+                if not steps[-1]['more']:break
+        self.assertEqual(steps[-1]['mode'],'complete');self.assertGreater(len(steps),1)
+        self.assertEqual(self.maintain(),{'mode':'complete','more':False})
+        mirror={};order=[]
+        class Central:
+            def send(self,event,digest):
+                self.check(event,digest);order.append(event['data']['contract'])
+                for c in event['data']['changes']:
+                    if c['expected_version']+1>mirror.get(c['record_id'],(0,))[0]:mirror[c['record_id']]=(c['expected_version']+1,c['data'])
+                return {'status':'committed','site_id':'test-site','event_id':event['event_id'],'sha256':digest}
+            def check(self,event,digest):
+                assert len(canonical(event))<=mesanexo_ipc.MAX_TRANSACTION and hashlib.sha256(canonical(event)).hexdigest()==digest
+        central=Central()
+        while deliver(self.store,central)['state']=='delivered':pass
+        self.assertEqual(order[:2],['mesa-nexo-transaction-v1']*2);self.assertTrue(all(x=='mesa-nexo-baseline-v1' for x in order[2:]))
+        stored={r['record_id']:(r['version'],r['data']) for page in [mesanexo_ipc.scan_v1(self.store,{'protocol':1,'max_records':500,'max_bytes':1024*1024})] for r in page['records']}
+        self.assertEqual(mirror,stored);self.assertEqual(self.store.status()['pending'],0)
 if __name__=='__main__':
     result=unittest.TextTestRunner(stream=sys.stdout,verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(RuntimeTests))
     report={'suite':'CulinaryOS runtime extension','tests':result.testsRun,'failures':len(result.failures),'errors':len(result.errors),'successful':result.wasSuccessful(),'platform':sys.platform,'fault_injection':['disk reserve failure','permission failure'],'not_executed':['POSIX Unix socket and systemd on Windows']}

@@ -16,7 +16,7 @@ public sealed partial class Restaurant
     }
     JsonObject Stock(BranchState s,string warehouse,string ingredient)
     {
-        s.Get("warehouse",warehouse);s.Get("ingredient",ingredient);var id=warehouse+"-"+ingredient;return s.List("stock").FirstOrDefault(x=>x.S("id")==id)??Add(s,"stock",J.O("id",id,"warehouseId",warehouse,"ingredientId",ingredient,"quantity",0,"reserved",0,"value",0));
+        s.Get("warehouse",warehouse);s.Get("ingredient",ingredient);var id=warehouse+"-"+ingredient;return s.Related("stock","id",id).FirstOrDefault()??Add(s,"stock",J.O("id",id,"warehouseId",warehouse,"ingredientId",ingredient,"quantity",0,"reserved",0,"value",0));
     }
     Dictionary<string,long> Explode(BranchState s,string versionId,long servings,HashSet<string>? path=null)
     {
@@ -35,8 +35,8 @@ public sealed partial class Restaurant
     {
         if(unit.S("recipeVersionId")=="")return;Need(s.Meta.S("inventoryPolicy")=="reserve-on-send-consume-on-close","Configura reserva al enviar y consumo al liquidar");var warehouse=s.Meta.S("saleWarehouseId");var lines=Explode(s,unit.S("recipeVersionId"),1000);Need(lines.Count<=30,"Máximo 30 insumos por porción");
         foreach(var line in lines){var stock=Stock(s,warehouse,line.Key);Need(stock.L("quantity")-stock.L("reserved")>=line.Value,"Stock insuficiente: "+s.Get("ingredient",line.Key).S("name"));stock["reserved"]=checked(stock.L("reserved")+line.Value);}
-        var prior=s.List("unitstock").FirstOrDefault(x=>x.S("id")==unit.S("id"));var cycle=(prior?.L("cycle")??0)+1;var data=J.O("id",unit.S("id"),"unitId",unit.S("id"),"visitId",unit.S("visitId"),"warehouseId",warehouse,"recipeVersionId",unit.S("recipeVersionId"),"cycle",cycle,"status","reserved","prepared",false,"at",J.Now(),"lines",lines.Select(l=>J.O("ingredientId",l.Key,"quantity",l.Value)).ToArray());
-        if(prior is null)Add(s,"unitstock",data);else{data["siteId"]=s.Meta.S("siteId");data["kind"]="unitstock";s.Records[BranchState.Key("unitstock",unit.S("id"))]=data;}
+        var prior=s.Related("unitstock","id",unit.S("id")).FirstOrDefault();var cycle=(prior?.L("cycle")??0)+1;var data=J.O("id",unit.S("id"),"unitId",unit.S("id"),"visitId",unit.S("visitId"),"warehouseId",warehouse,"recipeVersionId",unit.S("recipeVersionId"),"cycle",cycle,"status","reserved","prepared",false,"at",J.Now(),"lines",lines.Select(l=>J.O("ingredientId",l.Key,"quantity",l.Value)).ToArray());
+        if(prior is null)Add(s,"unitstock",data);else{data["siteId"]=s.Meta.S("siteId");data["kind"]="unitstock";s.Put(BranchState.Key("unitstock",unit.S("id")),data);}
     }
     void ReleaseOrWaste(BranchState s,JsonObject reservation,string reason)
     {
@@ -52,18 +52,18 @@ public sealed partial class Restaurant
     {
         if(type=="command.send")foreach(var uid in result.A("unitIds").Strings())ReserveUnit(s,s.Get("unit",uid));
         if(type=="unit.state"){
-            var unit=s.Get("unit",p.S("id"));var reservation=s.List("unitstock").FirstOrDefault(x=>x.S("unitId")==unit.S("id"));if(reservation is not null){if(unit.S("status") is "preparing" or "ready" or "delivered")reservation["prepared"]=true;if(unit.S("status")=="unavailable")ReleaseOrWaste(s,reservation,unit.S("reason"));}
+            var unit=s.Get("unit",p.S("id"));var reservation=s.Related("unitstock","unitId",unit.S("id")).FirstOrDefault();if(reservation is not null){if(unit.S("status") is "preparing" or "ready" or "delivered")reservation["prepared"]=true;if(unit.S("status")=="unavailable")ReleaseOrWaste(s,reservation,unit.S("reason"));}
         }
         if(type=="request.decide"&&p.B("approve")){
             var request=s.Get("request",p.S("id"));if(request.S("type") is "cancel" or "change"){
-                var unit=s.Get("unit",request.S("unitId"));var reservation=s.List("unitstock").FirstOrDefault(x=>x.S("unitId")==unit.S("id"));if(reservation is not null)ReleaseOrWaste(s,reservation,request.S("reason"));if(request.S("type")=="change")ReserveUnit(s,unit);
+                var unit=s.Get("unit",request.S("unitId"));var reservation=s.Related("unitstock","unitId",unit.S("id")).FirstOrDefault();if(reservation is not null)ReleaseOrWaste(s,reservation,request.S("reason"));if(request.S("type")=="change")ReserveUnit(s,unit);
             }
         }
-        if(type is "visit.split" or "visit.merge")foreach(var reservation in s.List("unitstock").Where(x=>x.S("status")=="reserved"))reservation["visitId"]=s.Get("unit",reservation.S("unitId")).S("visitId");
+        if(type is "visit.split" or "visit.merge")foreach(var reservation in s.Related("unitstock","status","reserved"))reservation["visitId"]=s.Get("unit",reservation.S("unitId")).S("visitId");
     }
     void QueueConsumption(BranchState s,JsonObject v)
     {
-        var units=s.List("unit").Where(x=>x.S("visitId")==v.S("id")&&x.S("status")=="delivered"&&x.S("recipeVersionId")!="").ToArray();if(units.Length==0)return;
+        var units=s.Related("unit","visitId",v.S("id")).Where(x=>x.S("status")=="delivered"&&x.S("recipeVersionId")!="").ToArray();if(units.Length==0)return;
         var reservations=units.Select(unit=>s.Get("unitstock",unit.S("id"))).Where(x=>x.S("status")=="reserved").ToArray();
         foreach(var group in reservations.GroupBy(x=>x.S("warehouseId"))){var lines=new Dictionary<string,long>();foreach(var reservation in group)foreach(var line in reservation.A("lines").Objects())lines[line.S("ingredientId")]=checked(lines.GetValueOrDefault(line.S("ingredientId"))+line.L("quantity"));Need(lines.Count<=40,"Máximo 40 insumos distintos por trabajo");
             Add(s,"stockjob",J.O("id","sale-"+v.S("id")+"-"+group.Key+"-"+v.L("closeCycle"),"visitId",v.S("id"),"warehouseId",group.Key,"status","pending","movementType","sale","at",J.Now(),"recipeVersions",group.Select(x=>x.S("recipeVersionId")).Distinct().ToArray(),"lines",lines.Select(l=>J.O("ingredientId",l.Key,"quantity",l.Value)).ToArray()));foreach(var reservation in group)reservation["status"]="sale-queued";
@@ -71,7 +71,7 @@ public sealed partial class Restaurant
     }
     JsonObject Consume(BranchState s,string warehouse,string ingredient,long quantity,string type,string source,string actor,bool reserved=false)
     {
-        var stock=Stock(s,warehouse,ingredient);Need(stock.L("quantity")-(reserved?0:stock.L("reserved"))>=quantity,"Stock no disponible");var layers=s.List("stocklayer").Where(x=>x.S("warehouseId")==warehouse&&x.S("ingredientId")==ingredient&&x.L("remaining")>0).OrderBy(x=>x.L("order")).ThenBy(x=>x.S("id"),StringComparer.Ordinal).ToArray();var remaining=quantity;long fifoCost=0;var trace=new JsonArray();
+        var stock=Stock(s,warehouse,ingredient);Need(stock.L("quantity")-(reserved?0:stock.L("reserved"))>=quantity,"Stock no disponible");var layers=s.Related("stocklayer","warehouseId",warehouse).Where(x=>x.S("ingredientId")==ingredient&&x.L("remaining")>0).OrderBy(x=>x.L("order")).ThenBy(x=>x.S("id"),StringComparer.Ordinal).ToArray();var remaining=quantity;long fifoCost=0;var trace=new JsonArray();
         foreach(var layer in layers){if(remaining==0)break;var take=Math.Min(remaining,layer.L("remaining"));var cost=take==layer.L("remaining")?layer.L("remainingCost"):(long)Math.Round(layer.L("remainingCost")*(decimal)take/layer.L("remaining"),MidpointRounding.AwayFromZero);layer["remaining"]=layer.L("remaining")-take;layer["remainingCost"]=layer.L("remainingCost")-cost;fifoCost=checked(fifoCost+cost);trace.Add(J.O("layerId",layer.S("id"),"quantity",take,"fifoCost",cost));remaining-=take;}
         Need(remaining==0,"Capas de inventario inconsistentes",409);var method=s.Get("warehouse",warehouse).S("costMethod","average");var costTotal=method=="fifo"?fifoCost:quantity==stock.L("quantity")?stock.L("value"):(long)Math.Round(stock.L("value")*(decimal)quantity/stock.L("quantity"),MidpointRounding.AwayFromZero);
         stock["quantity"]=stock.L("quantity")-quantity;stock["value"]=stock.L("value")-costTotal;if(reserved)stock["reserved"]=stock.L("reserved")-quantity;
@@ -89,7 +89,7 @@ public sealed partial class Restaurant
         switch(type){
         case "inventory.configure":{var w=s.Get("warehouse",p.S("warehouseId"));s.Meta["saleWarehouseId"]=w.S("id");s.Meta["inventoryPolicy"]=Choice(p,"policy","reserve-on-send-consume-on-close");break;}
         case "inventory.warehouse":{
-            var w=id==""?Add(s,"warehouse",new()):s.Get("warehouse",id);var method=Choice(p,"costMethod","average","fifo");Need(w.S("costMethod",method)==method||!s.List("stock").Any(x=>x.S("warehouseId")==id&&x.L("quantity")!=0),"Cambia método sólo con almacén vacío");w["name"]=Text(p,"name",100);w["costMethod"]=method;result=w;break;}
+            var w=id==""?Add(s,"warehouse",new()):s.Get("warehouse",id);var method=Choice(p,"costMethod","average","fifo");Need(w.S("costMethod",method)==method||!s.Related("stock","warehouseId",id).Any(x=>x.L("quantity")!=0),"Cambia método sólo con almacén vacío");w["name"]=Text(p,"name",100);w["costMethod"]=method;result=w;break;}
         case "inventory.ingredient":{var i=id==""?Add(s,"ingredient",new()):s.Get("ingredient",id);var unit=Choice(p,"unit","g","ml","unit");Need(i.S("unit",unit)==unit,"La unidad base histórica no se modifica");i["name"]=Text(p,"name",100);i["unit"]=unit;result=i;break;}
         case "recipe.save":{
             var recipe=id==""?Add(s,"recipe",J.O("name",Text(p,"name",100))):s.Get("recipe",id);var lines=new JsonArray();Need(p.A("lines").Count is >0 and <=30,"Receta: de 1 a 30 renglones");
@@ -101,11 +101,11 @@ public sealed partial class Restaurant
         case "stock.receive":{var i=s.Get("ingredient",p.S("ingredientId"));ValidateIngredientUnit(i,p.S("unit","base"));var qty=ExactQuantity(p);var reference=Text(p,"reference",200);ReceiveStock(s,p.S("warehouseId"),i.S("id"),qty,Amount(p,"cost"),"receipt",reference,u.S("id"));break;}
         case "stock.waste":{var i=s.Get("ingredient",p.S("ingredientId"));ValidateIngredientUnit(i,p.S("unit","base"));result=Consume(s,p.S("warehouseId"),i.S("id"),ExactQuantity(p),"waste",Text(p,"reason"),u.S("id"));break;}
         case "stock.return":{
-            var original=s.Get("stockmovement",p.S("movementId"));Need(original.L("quantity")<0&&original.S("type")=="sale","Sólo devolución física de consumo registrado");Need(!s.List("stockmovement").Any(x=>x.S("type")=="return"&&x.S("sourceId")==original.S("id")),"Consumo ya devuelto");Text(p,"reason");ReceiveStock(s,original.S("warehouseId"),original.S("ingredientId"),-original.L("quantity"),-original.L("cost"),"return",original.S("id"),u.S("id"));break;}
+            var original=s.Get("stockmovement",p.S("movementId"));Need(original.L("quantity")<0&&original.S("type")=="sale","Sólo devolución física de consumo registrado");Need(!s.Related("stockmovement","type","return").Any(x=>x.S("sourceId")==original.S("id")),"Consumo ya devuelto");Text(p,"reason");ReceiveStock(s,original.S("warehouseId"),original.S("ingredientId"),-original.L("quantity"),-original.L("cost"),"return",original.S("id"),u.S("id"));break;}
         case "stock.process":{
             var job=s.Get("stockjob",id);if(job.S("status")=="done"){result=J.O("duplicate",true);break;}Need(job.S("status")=="pending","Trabajo inválido");
             var line=job.A("lines").Objects().FirstOrDefault(x=>x.L("remaining",x.L("quantity"))>0);
-            if(line is not null){var left=line.L("remaining",line.L("quantity"));var batch=s.List("stocklayer").Where(x=>x.S("warehouseId")==job.S("warehouseId")&&x.S("ingredientId")==line.S("ingredientId")&&x.L("remaining")>0).OrderBy(x=>x.L("order")).Take(20).Sum(x=>x.L("remaining"));var take=Math.Min(left,batch);Need(take>0,"Capas insuficientes para consumo reservado");Consume(s,job.S("warehouseId"),line.S("ingredientId"),take,job.S("movementType","sale"),id,u.S("id"),true);line["remaining"]=left-take;}
+            if(line is not null){var left=line.L("remaining",line.L("quantity"));var batch=s.Related("stocklayer","warehouseId",job.S("warehouseId")).Where(x=>x.S("ingredientId")==line.S("ingredientId")&&x.L("remaining")>0).OrderBy(x=>x.L("order")).Take(20).Sum(x=>x.L("remaining"));var take=Math.Min(left,batch);Need(take>0,"Capas insuficientes para consumo reservado");Consume(s,job.S("warehouseId"),line.S("ingredientId"),take,job.S("movementType","sale"),id,u.S("id"),true);line["remaining"]=left-take;}
             if(job.A("lines").Objects().All(x=>x.L("remaining",x.L("quantity"))==0)){job["status"]="done";job["completedAt"]=J.Now();}break;}
         case "transfer.create":{
             var from=p.S("fromWarehouseId");var to=p.S("toWarehouseId");Need(from!=to,"Almacenes distintos");s.Get("warehouse",from);s.Get("warehouse",to);var i=s.Get("ingredient",p.S("ingredientId"));ValidateIngredientUnit(i,p.S("unit","base"));var qty=ExactQuantity(p);var stock=Stock(s,from,i.S("id"));Need(stock.L("quantity")-stock.L("reserved")>=qty,"Stock insuficiente");stock["reserved"]=stock.L("reserved")+qty;

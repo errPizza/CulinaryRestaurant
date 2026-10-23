@@ -47,6 +47,11 @@ export function Button({children,icon,className='',...props}:React.ComponentProp
  const content=text(children),simple=/^[×+−–→↗✕]$/.test(content.trim()),graphic=hasIcon(children);
  return <button {...props} className={'ui-button '+className}>{icon!==false&&!graphic&&!simple&&<UiIcon name={icon||actionIcon(content)}/>}{children}</button>;
 }
+// Every dropdown goes through here so an empty list still opens and shows one row that cannot be chosen.
+export function Select({children,value,...props}:React.ComponentPropsWithRef<'select'>){
+ const empty=!React.Children.toArray(children).some(child=>React.isValidElement(child)&&(child.type==='option'||child.type==='optgroup'));
+ return <select {...props} value={empty&&value!==undefined?'':value}>{empty?<option value="" disabled>{'< Sin opciones >'}</option>:children}</select>;
+}
 function sectionIcon(value:string){const v=value.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();for(const [pattern,icon] of [[/soporte|ayuda/,'help'],[/autoriz|consent|cobertura|seguridad|auditor/,'shield'],[/preparacion|cocina|comanda|consumo|estacion/,'chef'],[/existencia|reserva|receta|insumo|almacen|inventario|traspas/,'box'],[/pago|caja|arqueo|comercial/,'wallet'],[/mesa/,'table'],[/equipo|usuario|dispositivo|cliente/,'users'],[/delivery|repart/,'truck'],[/impres/,'print'],[/producto|categoria|catalog/,'book'],[/solicitud|evaluacion|mensaje/,'message'],[/restaurante|identidad|regla|configura/,'settings'],[/historial|vigencia/,'history'],[/reporte|resultado|venta/,'chart'],[/plan|modulo/,'layers'],[/respaldo/,'db']] as const)if(pattern.test(v))return icon;return 'file';}
 export function SectionTitle({children,icon}:{children:React.ReactNode;icon?:string}){return <div className="card-h"><div className="ph"><span className="ic"><UiIcon name={icon||sectionIcon(text(children))}/></span><div><h3>{children}</h3></div></div></div>;}
 export function PanelHeading({title,note,action,icon}:{title:React.ReactNode;note?:React.ReactNode;action?:React.ReactNode;icon?:string}){return <div className="card-h panel-title"><div className="ph"><span className="ic"><UiIcon name={icon||sectionIcon(text(title))}/></span><div><h3>{title}</h3>{note&&<p>{note}</p>}</div></div>{action&&<div className="ph-act">{action}</div>}</div>;}

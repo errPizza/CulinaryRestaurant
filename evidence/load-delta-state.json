@@ -1,0 +1,695 @@
+{
+  "generatedAt": "2026-10-23T02:13:51.4639532+00:00",
+  "scenario": {
+    "waiters": 6,
+    "kitchen": 2,
+    "manager": 1,
+    "tables": 24,
+    "pollMs": 2000,
+    "thinkMs": 600,
+    "plannedMinutes": 15,
+    "deltaState": true,
+    "ticket": "2 tacos + 1 agua, cobro en efectivo o tarjeta"
+  },
+  "store": "Laboratorio: lab_host.py sobre el mismo almacén cifrado de CulinaryOS, por tubería en vez de socket Unix (cota optimista: en producción cada página abre un socket nuevo).",
+  "verdict": "completó la duración prevista",
+  "elapsedSeconds": 980,
+  "windows": [
+    {
+      "seconds": 60,
+      "records": 2040,
+      "internalLoadMs": 453,
+      "ticketsClosed": 147,
+      "ticketsInWindow": 147,
+      "state": {
+        "requests": 214,
+        "ok": 214,
+        "errors": 0,
+        "p50Ms": 28,
+        "p95Ms": 271,
+        "p99Ms": 402,
+        "maxMs": 437,
+        "avgBytes": 36688,
+        "outcomes": {
+          "ok": 214
+        }
+      },
+      "actions": {
+        "requests": 1776,
+        "ok": 1776,
+        "errors": 0,
+        "p50Ms": 36,
+        "p95Ms": 108,
+        "p99Ms": 427,
+        "maxMs": 616,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1776
+        }
+      },
+      "retries": 0
+    },
+    {
+      "seconds": 120,
+      "records": 3508,
+      "internalLoadMs": 11,
+      "ticketsClosed": 292,
+      "ticketsInWindow": 145,
+      "state": {
+        "requests": 213,
+        "ok": 213,
+        "errors": 0,
+        "p50Ms": 57,
+        "p95Ms": 378,
+        "p99Ms": 553,
+        "maxMs": 752,
+        "avgBytes": 45042,
+        "outcomes": {
+          "ok": 213
+        }
+      },
+      "actions": {
+        "requests": 1757,
+        "ok": 1757,
+        "errors": 0,
+        "p50Ms": 37,
+        "p95Ms": 133,
+        "p99Ms": 537,
+        "maxMs": 935,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1757
+        }
+      },
+      "retries": 0
+    },
+    {
+      "seconds": 180,
+      "records": 4854,
+      "internalLoadMs": 8,
+      "ticketsClosed": 427,
+      "ticketsInWindow": 135,
+      "state": {
+        "requests": 199,
+        "ok": 199,
+        "errors": 0,
+        "p50Ms": 147,
+        "p95Ms": 550,
+        "p99Ms": 772,
+        "maxMs": 808,
+        "avgBytes": 53453,
+        "outcomes": {
+          "ok": 199
+        }
+      },
+      "actions": {
+        "requests": 1618,
+        "ok": 1618,
+        "errors": 0,
+        "p50Ms": 39,
+        "p95Ms": 259,
+        "p99Ms": 585,
+        "maxMs": 896,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1618
+        }
+      },
+      "retries": 0
+    },
+    {
+      "seconds": 240,
+      "records": 6162,
+      "internalLoadMs": 333,
+      "ticketsClosed": 559,
+      "ticketsInWindow": 132,
+      "state": {
+        "requests": 185,
+        "ok": 185,
+        "errors": 0,
+        "p50Ms": 203,
+        "p95Ms": 594,
+        "p99Ms": 1073,
+        "maxMs": 2318,
+        "avgBytes": 60737,
+        "outcomes": {
+          "ok": 185
+        }
+      },
+      "actions": {
+        "requests": 1569,
+        "ok": 1569,
+        "errors": 0,
+        "p50Ms": 44,
+        "p95Ms": 269,
+        "p99Ms": 608,
+        "maxMs": 1311,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1569
+        }
+      },
+      "retries": 0
+    },
+    {
+      "seconds": 300,
+      "records": 7471,
+      "internalLoadMs": 8,
+      "ticketsClosed": 689,
+      "ticketsInWindow": 130,
+      "state": {
+        "requests": 187,
+        "ok": 187,
+        "errors": 0,
+        "p50Ms": 204,
+        "p95Ms": 770,
+        "p99Ms": 938,
+        "maxMs": 1227,
+        "avgBytes": 65042,
+        "outcomes": {
+          "ok": 187
+        }
+      },
+      "actions": {
+        "requests": 1570,
+        "ok": 1570,
+        "errors": 0,
+        "p50Ms": 44,
+        "p95Ms": 330,
+        "p99Ms": 689,
+        "maxMs": 1226,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1570
+        }
+      },
+      "retries": 0
+    },
+    {
+      "seconds": 360,
+      "records": 8652,
+      "internalLoadMs": 5,
+      "ticketsClosed": 807,
+      "ticketsInWindow": 118,
+      "state": {
+        "requests": 173,
+        "ok": 173,
+        "errors": 0,
+        "p50Ms": 215,
+        "p95Ms": 944,
+        "p99Ms": 1130,
+        "maxMs": 1374,
+        "avgBytes": 66344,
+        "outcomes": {
+          "ok": 173
+        }
+      },
+      "actions": {
+        "requests": 1419,
+        "ok": 1419,
+        "errors": 0,
+        "p50Ms": 44,
+        "p95Ms": 413,
+        "p99Ms": 766,
+        "maxMs": 1297,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1419
+        }
+      },
+      "retries": 0
+    },
+    {
+      "seconds": 420,
+      "records": 9847,
+      "internalLoadMs": 4,
+      "ticketsClosed": 927,
+      "ticketsInWindow": 120,
+      "state": {
+        "requests": 175,
+        "ok": 175,
+        "errors": 0,
+        "p50Ms": 320,
+        "p95Ms": 874,
+        "p99Ms": 916,
+        "maxMs": 926,
+        "avgBytes": 68075,
+        "outcomes": {
+          "ok": 175
+        }
+      },
+      "actions": {
+        "requests": 1431,
+        "ok": 1431,
+        "errors": 0,
+        "p50Ms": 49,
+        "p95Ms": 440,
+        "p99Ms": 851,
+        "maxMs": 958,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1431
+        }
+      },
+      "retries": 0
+    },
+    {
+      "seconds": 481,
+      "records": 11036,
+      "internalLoadMs": 38,
+      "ticketsClosed": 1046,
+      "ticketsInWindow": 119,
+      "state": {
+        "requests": 162,
+        "ok": 162,
+        "errors": 0,
+        "p50Ms": 480,
+        "p95Ms": 915,
+        "p99Ms": 1047,
+        "maxMs": 1103,
+        "avgBytes": 70950,
+        "outcomes": {
+          "ok": 162
+        }
+      },
+      "actions": {
+        "requests": 1432,
+        "ok": 1432,
+        "errors": 0,
+        "p50Ms": 42,
+        "p95Ms": 452,
+        "p99Ms": 873,
+        "maxMs": 1240,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1432
+        }
+      },
+      "retries": 0
+    },
+    {
+      "seconds": 541,
+      "records": 12063,
+      "internalLoadMs": 5,
+      "ticketsClosed": 1147,
+      "ticketsInWindow": 101,
+      "state": {
+        "requests": 155,
+        "ok": 155,
+        "errors": 0,
+        "p50Ms": 359,
+        "p95Ms": 1373,
+        "p99Ms": 2193,
+        "maxMs": 3324,
+        "avgBytes": 70482,
+        "outcomes": {
+          "ok": 155
+        }
+      },
+      "actions": {
+        "requests": 1229,
+        "ok": 1229,
+        "errors": 0,
+        "p50Ms": 50,
+        "p95Ms": 623,
+        "p99Ms": 1451,
+        "maxMs": 3136,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1229
+        }
+      },
+      "retries": 0
+    },
+    {
+      "seconds": 601,
+      "records": 13200,
+      "internalLoadMs": 7,
+      "ticketsClosed": 1263,
+      "ticketsInWindow": 116,
+      "state": {
+        "requests": 165,
+        "ok": 165,
+        "errors": 0,
+        "p50Ms": 521,
+        "p95Ms": 1101,
+        "p99Ms": 1353,
+        "maxMs": 1881,
+        "avgBytes": 70667,
+        "outcomes": {
+          "ok": 165
+        }
+      },
+      "actions": {
+        "requests": 1365,
+        "ok": 1365,
+        "errors": 0,
+        "p50Ms": 46,
+        "p95Ms": 471,
+        "p99Ms": 1096,
+        "maxMs": 1895,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1365
+        }
+      },
+      "retries": 0
+    },
+    {
+      "seconds": 661,
+      "records": 14346,
+      "internalLoadMs": 6,
+      "ticketsClosed": 1376,
+      "ticketsInWindow": 113,
+      "state": {
+        "requests": 146,
+        "ok": 146,
+        "errors": 0,
+        "p50Ms": 578,
+        "p95Ms": 988,
+        "p99Ms": 2399,
+        "maxMs": 2802,
+        "avgBytes": 76841,
+        "outcomes": {
+          "ok": 146
+        }
+      },
+      "actions": {
+        "requests": 1374,
+        "ok": 1374,
+        "errors": 0,
+        "p50Ms": 40,
+        "p95Ms": 518,
+        "p99Ms": 1101,
+        "maxMs": 3501,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1374
+        }
+      },
+      "retries": 0
+    },
+    {
+      "seconds": 721,
+      "records": 15321,
+      "internalLoadMs": 6,
+      "ticketsClosed": 1473,
+      "ticketsInWindow": 97,
+      "state": {
+        "requests": 145,
+        "ok": 145,
+        "errors": 0,
+        "p50Ms": 602,
+        "p95Ms": 1411,
+        "p99Ms": 2973,
+        "maxMs": 3286,
+        "avgBytes": 72623,
+        "outcomes": {
+          "ok": 145
+        }
+      },
+      "actions": {
+        "requests": 1169,
+        "ok": 1169,
+        "errors": 0,
+        "p50Ms": 46,
+        "p95Ms": 755,
+        "p99Ms": 1693,
+        "maxMs": 4124,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1169
+        }
+      },
+      "retries": 0
+    },
+    {
+      "seconds": 781,
+      "records": 16377,
+      "internalLoadMs": 6,
+      "ticketsClosed": 1581,
+      "ticketsInWindow": 108,
+      "state": {
+        "requests": 142,
+        "ok": 142,
+        "errors": 0,
+        "p50Ms": 642,
+        "p95Ms": 1454,
+        "p99Ms": 1916,
+        "maxMs": 1934,
+        "avgBytes": 79541,
+        "outcomes": {
+          "ok": 142
+        }
+      },
+      "actions": {
+        "requests": 1274,
+        "ok": 1274,
+        "errors": 0,
+        "p50Ms": 44,
+        "p95Ms": 624,
+        "p99Ms": 1401,
+        "maxMs": 1723,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1274
+        }
+      },
+      "retries": 0
+    },
+    {
+      "seconds": 841,
+      "records": 17390,
+      "internalLoadMs": 21,
+      "ticketsClosed": 1680,
+      "ticketsInWindow": 99,
+      "state": {
+        "requests": 140,
+        "ok": 140,
+        "errors": 0,
+        "p50Ms": 472,
+        "p95Ms": 1515,
+        "p99Ms": 3733,
+        "maxMs": 4188,
+        "avgBytes": 77350,
+        "outcomes": {
+          "ok": 140
+        }
+      },
+      "actions": {
+        "requests": 1204,
+        "ok": 1204,
+        "errors": 0,
+        "p50Ms": 44,
+        "p95Ms": 724,
+        "p99Ms": 1238,
+        "maxMs": 4469,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1204
+        }
+      },
+      "retries": 0
+    },
+    {
+      "seconds": 901,
+      "records": 18314,
+      "internalLoadMs": 38,
+      "ticketsClosed": 1771,
+      "ticketsInWindow": 91,
+      "state": {
+        "requests": 133,
+        "ok": 133,
+        "errors": 0,
+        "p50Ms": 698,
+        "p95Ms": 1650,
+        "p99Ms": 3457,
+        "maxMs": 4837,
+        "avgBytes": 81104,
+        "outcomes": {
+          "ok": 133
+        }
+      },
+      "actions": {
+        "requests": 1111,
+        "ok": 1111,
+        "errors": 0,
+        "p50Ms": 44,
+        "p95Ms": 769,
+        "p99Ms": 1573,
+        "maxMs": 4919,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1111
+        }
+      },
+      "retries": 0
+    }
+  ],
+  "totals": {
+    "state": {
+      "requests": 2534,
+      "ok": 2534,
+      "errors": 0,
+      "p50Ms": 230,
+      "p95Ms": 1060,
+      "p99Ms": 1916,
+      "maxMs": 4837,
+      "avgBytes": 64566,
+      "outcomes": {
+        "ok": 2534
+      }
+    },
+    "actions": {
+      "requests": 21299,
+      "ok": 21299,
+      "errors": 0,
+      "p50Ms": 42,
+      "p95Ms": 447,
+      "p99Ms": 1011,
+      "maxMs": 4919,
+      "avgBytes": 179,
+      "outcomes": {
+        "ok": 21299
+      }
+    },
+    "byType": {
+      "command.send": {
+        "requests": 1776,
+        "ok": 1776,
+        "errors": 0,
+        "p50Ms": 46,
+        "p95Ms": 748,
+        "p99Ms": 1363,
+        "maxMs": 3385,
+        "avgBytes": 301,
+        "outcomes": {
+          "ok": 1776
+        }
+      },
+      "payment.add": {
+        "requests": 1773,
+        "ok": 1773,
+        "errors": 0,
+        "p50Ms": 46,
+        "p95Ms": 745,
+        "p99Ms": 1459,
+        "maxMs": 4787,
+        "avgBytes": 456,
+        "outcomes": {
+          "ok": 1773
+        }
+      },
+      "state": {
+        "requests": 2534,
+        "ok": 2534,
+        "errors": 0,
+        "p50Ms": 230,
+        "p95Ms": 1060,
+        "p99Ms": 1916,
+        "maxMs": 4837,
+        "avgBytes": 64566,
+        "outcomes": {
+          "ok": 2534
+        }
+      },
+      "state-check": {
+        "requests": 166,
+        "ok": 166,
+        "errors": 0,
+        "p50Ms": 101,
+        "p95Ms": 644,
+        "p99Ms": 2367,
+        "maxMs": 2689,
+        "avgBytes": 1349767,
+        "outcomes": {
+          "ok": 166
+        }
+      },
+      "table.clean": {
+        "requests": 1771,
+        "ok": 1771,
+        "errors": 0,
+        "p50Ms": 53,
+        "p95Ms": 164,
+        "p99Ms": 640,
+        "maxMs": 1502,
+        "avgBytes": 109,
+        "outcomes": {
+          "ok": 1771
+        }
+      },
+      "unit.state": {
+        "requests": 10656,
+        "ok": 10656,
+        "errors": 0,
+        "p50Ms": 39,
+        "p95Ms": 136,
+        "p99Ms": 586,
+        "maxMs": 3641,
+        "avgBytes": 109,
+        "outcomes": {
+          "ok": 10656
+        }
+      },
+      "visit.close": {
+        "requests": 1771,
+        "ok": 1771,
+        "errors": 0,
+        "p50Ms": 55,
+        "p95Ms": 220,
+        "p99Ms": 842,
+        "maxMs": 3620,
+        "avgBytes": 109,
+        "outcomes": {
+          "ok": 1771
+        }
+      },
+      "visit.deliverAll": {
+        "requests": 1775,
+        "ok": 1775,
+        "errors": 0,
+        "p50Ms": 43,
+        "p95Ms": 129,
+        "p99Ms": 627,
+        "maxMs": 1532,
+        "avgBytes": 109,
+        "outcomes": {
+          "ok": 1775
+        }
+      },
+      "visit.open": {
+        "requests": 1777,
+        "ok": 1777,
+        "errors": 0,
+        "p50Ms": 48,
+        "p95Ms": 873,
+        "p99Ms": 1588,
+        "maxMs": 4919,
+        "avgBytes": 421,
+        "outcomes": {
+          "ok": 1777
+        }
+      }
+    }
+  },
+  "retries": 0,
+  "duplicateReplies": 0,
+  "deltaChecks": 19,
+  "deltaMismatches": 0,
+  "mismatchKeys": [],
+  "failures": {},
+  "verification": {
+    "ticketsVerified": 1771,
+    "notClosed": 0,
+    "unitMismatch": 0,
+    "paymentMismatch": 0,
+    "visitsWithDuplicatedUnits": 0,
+    "ledgerPaid": 57557500,
+    "storePaidForLedger": 57557500,
+    "abortedTickets": 6,
+    "auditValid": true,
+    "auditRecords": 21354,
+    "integrity": true
+  }
+}

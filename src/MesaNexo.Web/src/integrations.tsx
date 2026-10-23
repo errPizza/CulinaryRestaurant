@@ -1,5 +1,5 @@
 import React,{useState} from 'react';
-import {Button,PanelHeading,Kpis,MetricCard,Pill,Sq,Empty,Notice,DataTable,Switch,UiIcon} from './ui';
+import {Button,PanelHeading,Kpis,MetricCard,Pill,Sq,Empty,Notice,DataTable,Switch,UiIcon,Select} from './ui';
 import {DialogFrame} from './motion';
 import {cents} from './bridge';
 import {money,type Dialog} from './backoffice';
@@ -119,7 +119,7 @@ export function TerminalDialog({visit,state:s,action,ctx}:{visit:Row;state:any;a
   <div className={'pinpad '+screen[0]} aria-live="polite"><div className="pinpad-screen"><small>{terminalId}</small><b>{screen[1]}</b><span>{screen[2]}</span></div><div className="pinpad-keys" aria-hidden="true">{Array.from({length:12},(_,i)=><i key={i}/>)}</div></div>
   {!txn||txn.status==='declined'?<>
    <div className="terminal-fields">
-    {folios.length>0&&<label>Subfolio<select value={folioId} onChange={e=>setFolioId(e.target.value)}>{folios.map(f=><option key={f.id} value={f.id}>Parte {f.number} · {money(f.total)}</option>)}</select></label>}
+    {folios.length>0&&<label>Subfolio<Select value={folioId} onChange={e=>setFolioId(e.target.value)}>{folios.map(f=><option key={f.id} value={f.id}>Parte {f.number} · {money(f.total)}</option>)}</Select></label>}
     <label>Importe MXN<input inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)}/></label>
     <label>Propina MXN<input inputMode="decimal" value={tip} placeholder="0" onChange={e=>setTip(e.target.value)}/></label>
    </div>

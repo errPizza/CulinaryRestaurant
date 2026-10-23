@@ -22,7 +22,7 @@ public static class ApiHost
         if(cloud is not null)builder.Services.AddSingleton<IHostedService>(sp=>new CloudPull(sp.GetRequiredService<BranchService>(),cloud));
         if(policy is not null)builder.Services.AddSingleton<IHostedService>(sp=>new PolicyRefresh(sp.GetRequiredService<BranchService>(),policy));
         builder.Services.AddSignalR(o=>{o.MaximumReceiveMessageSize=16*1024;o.EnableDetailedErrors=false;});
-        builder.Services.AddHostedService<InventoryWorker>();
+        builder.Services.AddHostedService<InventoryWorker>();builder.Services.AddHostedService<OutboxWorker>();
         var app=builder.Build();var service=app.Services.GetRequiredService<BranchService>();
         app.Use(async(ctx,next)=>{
             ctx.Response.Headers.CacheControl="no-store";ctx.Response.Headers["X-Content-Type-Options"]="nosniff";
@@ -42,7 +42,7 @@ public static class ApiHost
         app.MapGet("/api/preview/{id}",async(string id,HttpContext c,CancellationToken ct)=>await service.Preview(Token(c),id,ct));
         app.MapGet("/api/reports",async(HttpContext c,CancellationToken ct)=>await service.Report(Token(c),c.Request.Query["from"],c.Request.Query["until"],c.Request.Query["after"],ct));
         app.MapGet("/api/audit/verify",async(HttpContext c,CancellationToken ct)=>await service.VerifyAudit(Token(c),ct));
-        app.MapGet("/api/state",async(HttpContext c,CancellationToken ct)=>await service.State(Token(c),ct));
+        app.MapGet("/api/state",async(HttpContext c,CancellationToken ct)=>await service.State(Token(c),ct,c.Request.Query.TryGetValue("since",out var since)?since.ToString():null));
         app.MapPost("/api/action",async(HttpContext c,CancellationToken ct)=>await service.Action(Token(c),await Body(c,ct),ct));
         app.MapGet("/api/operations/{id}",async(string id,HttpContext c,CancellationToken ct)=>await service.OperationStatus(Token(c),id,ct));
         if(options.ReadySocket is not null){var readiness=new Readiness(service,options.ReadySocket,options.SetupCode is not null);app.Lifetime.ApplicationStarted.Register(()=>readiness.Start());app.Lifetime.ApplicationStopping.Register(readiness.Dispose);}
