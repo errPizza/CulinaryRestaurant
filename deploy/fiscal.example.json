@@ -1,0 +1,13 @@
+{
+  "provider": "facturama",
+  "environment": "sandbox",
+  "username": "USUARIO_SANDBOX_DE_FACTURAMA",
+  "password": "CONTRASENA_SANDBOX_DE_FACTURAMA",
+  "issuer": {
+    "expeditionPlace": "06600",
+    "product": { "productCode": "90101501", "unitCode": "E48", "taxObject": "02" },
+    "products": {},
+    "delivery": { "productCode": "90101501", "unitCode": "E48", "taxObject": "02" },
+    "paymentForms": { "card": "04" }
+  }
+}

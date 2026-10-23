@@ -18,6 +18,12 @@
       },
       "mesanexo.core": {
         "type": "Project"
+      },
+      "mesanexo.integrations": {
+        "type": "Project",
+        "dependencies": {
+          "MesaNexo.Core": "[0.2.0, )"
+        }
       }
     }
   }

@@ -48,3 +48,21 @@ Comportamiento:
 - Con la integración `printer` en modo simulado, los trabajos se marcan como simulados y no sale papel.
 
 Probado contra una impresora ESC/POS simulada por TCP (`tests/MesaNexo.Tests/PrintTests.cs`); falta probarlo con una impresora y un cajón físicos.
+
+## Facturación CFDI 4.0 (sandbox de Facturama)
+
+Con `/etc/culinaryos/fiscal.json` (o `--fiscal-config <archivo>`), el backend envía las solicitudes fiscales al sandbox de Facturama y registra el timbre o el rechazo; sin ese archivo las solicitudes quedan pendientes como antes. El archivo contiene la contraseña del PAC: dueño `root`, grupo `culinaryos-app`, permisos `0640`. Ejemplo en `deploy/fiscal.example.json`:
+
+- `"environment": "sandbox"` es el único valor aceptado. Los timbres de prueba no tienen validez fiscal y se marcan `SANDBOX`. La facturación real queda rechazada hasta tener el CSD del emisor cargado en Facturama, contrato con el PAC y revisión de las claves SAT.
+- `issuer.expeditionPlace`: código postal de expedición. `issuer.product`: clave SAT por defecto para todos los productos (en restaurantes, típicamente `90101501` con unidad `E48` y objeto de impuesto `02`); `issuer.products` admite excepciones por id de producto. El IVA de cada concepto es el que quedó congelado en la venta. Las claves SAT (productos y `issuer.delivery` para el cargo de envío) deben revisarse con el contador del emisor antes de facturar en producción.
+- La forma de pago se toma de los cobros del ticket (efectivo 01, tarjeta 04, transferencia 03, monedero 05; con varias formas, la de mayor importe). `issuer.paymentForms` cambia la clave de un método, por ejemplo `"card": "28"` para débito.
+
+Garantías:
+
+- Un CFDI nunca se timbra dos veces. Si Facturama no responde o se pierde la respuesta sin su folio, la solicitud queda «Pendiente de conciliación» con el folio a buscar en Facturama. Si no aparece ahí, el gerente la reintenta con el botón «Reintentar» de la página Fiscal (`fiscal.retry`, pide el motivo), que envía el mismo folio y fecha; si aparece, no se reintenta.
+- Una respuesta sin timbre pero con el folio del proveedor se resuelve consultándolo, sin reenviar.
+- Una solicitud que no pasa la validación (clave SAT o tasa) queda bloqueada hasta que cambie la configuración, sin detener las demás.
+- Con la simulación del PAC activa en Integraciones, el sandbox no toca ninguna solicitud.
+- `/api/state` informa el servicio en `connection.fiscal` (`sandbox` o `error`).
+
+Probado contra un Facturama simulado (`tests/MesaNexo.Tests/FiscalTests.cs`); falta probarlo con una cuenta sandbox real.
