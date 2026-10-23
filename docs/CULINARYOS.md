@@ -59,7 +59,7 @@ Con `/etc/culinaryos/fiscal.json` (o `--fiscal-config <archivo>`), el backend en
 
 Garantías:
 
-- Un CFDI nunca se timbra dos veces. Si Facturama no responde o se pierde la respuesta sin su folio, la solicitud queda «Pendiente de conciliación» con el folio a buscar en Facturama. Si no aparece ahí, el gerente la reintenta (`fiscal.retry`) con el mismo folio y fecha; si aparece, no se reintenta.
+- Un CFDI nunca se timbra dos veces. Si Facturama no responde o se pierde la respuesta sin su folio, la solicitud queda «Pendiente de conciliación» con el folio a buscar en Facturama. Si no aparece ahí, el gerente la reintenta con el botón «Reintentar» de la página Fiscal (`fiscal.retry`, pide el motivo), que envía el mismo folio y fecha; si aparece, no se reintenta.
 - Una respuesta sin timbre pero con el folio del proveedor se resuelve consultándolo, sin reenviar.
 - Una solicitud que no pasa la validación (clave SAT o tasa) queda bloqueada hasta que cambie la configuración, sin detener las demás.
 - Con la simulación del PAC activa en Integraciones, el sandbox no toca ninguna solicitud.

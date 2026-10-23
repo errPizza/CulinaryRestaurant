@@ -10,6 +10,7 @@ using MesaNexo.Bridge;
 using MesaNexo.Client;
 using MesaNexo.Core;
 using MesaNexo.Desktop;
+using MesaNexo.Integrations;
 Console.InputEncoding=Encoding.UTF8;Console.OutputEncoding=new UTF8Encoding(false);
 var root=Path.GetFullPath(args[0]);var python=args[1];var directory=Path.Combine(root,".lab","hybrid-"+J.Id());Directory.CreateDirectory(directory);
 var password="Hybrid-"+J.Id()+"!";var code=J.Id();var site="hybrid-"+J.Id()[..16];
@@ -36,9 +37,18 @@ using(var setup=new NativeSession(profile,new DesktopVault(Path.Combine(director
 }
 var clients=new Dictionary<string,BridgeHost>();
 async Task<BridgeHost> Client(string id){if(!clients.TryGetValue(id,out var bridge)){await service.RotateEnrollment(code);bridge=new BridgeHost(new DesktopVault(Path.Combine(directory,"vault-"+J.Hash(id))));await bridge.Call("profile.save",(JsonObject)profileNode.DeepClone());clients[id]=bridge;}return bridge;}
+// The fiscal service against a Facturama sandbox without network: "fiscal.sandbox" processes every waiting request once.
+var facturama=new FixtureFacturama();using var pac=new FacturamaAdapter("fixture","fixture",true,facturama);
+var issuer=J.O("expeditionPlace","06600","product",J.O("productCode","90101501","unitCode","E48","taxObject","02"));
+async Task<JsonNode?> Fixture(string command,JsonObject a)
+{
+ if(command!="fiscal.sandbox")throw new InvalidOperationException("Orden de prueba desconocida");
+ facturama.Mode=a.S("mode");var processed=0;while(await service.ProcessFiscalSandbox(pac,issuer,allRequests:true))processed++;
+ return J.O("processed",processed,"stamps",new JsonArray(facturama.Stamps.Select(x=>(JsonNode)x.DeepClone()).ToArray()));
+}
 if(args.Contains("--serve")){
  Console.WriteLine(J.O("ready",true,"password",password,"enrollmentCode",code,"profile",profileNode,"directory",directory).ToJsonString());
- try{while(await Console.In.ReadLineAsync() is string line){JsonObject? message=null;JsonObject response;try{message=JsonNode.Parse(line)!.AsObject();var data=await(await Client(message.S("client"))).Call(message.S("command"),message.Obj("args"));response=J.O("id",message.S("id"),"ok",true,"data",data);}catch(Exception e){response=J.O("id",message?.S("id")??"","ok",false,"error",e.Message,"status",e is ApiFailure f?f.Status:0);}Console.WriteLine(response.ToJsonString());await Console.Out.FlushAsync();}}
+ try{while(await Console.In.ReadLineAsync() is string line){JsonObject? message=null;JsonObject response;try{message=JsonNode.Parse(line)!.AsObject();var data=message.S("client")=="fixture"?await Fixture(message.S("command"),message.Obj("args")):await(await Client(message.S("client"))).Call(message.S("command"),message.Obj("args"));response=J.O("id",message.S("id"),"ok",true,"data",data);}catch(Exception e){response=J.O("id",message?.S("id")??"","ok",false,"error",e.Message,"status",e is ApiFailure f?f.Status:0);}Console.WriteLine(response.ToJsonString());await Console.Out.FlushAsync();}}
  finally{foreach(var c in clients.Values)c.Dispose();await app.StopAsync();}return;
 }
 var checks=new JsonArray();
@@ -78,3 +88,16 @@ try{
  Check(!Directory.GetFiles(Path.Combine(directory,"vault-"+J.Hash("manager"))).Any(f=>Encoding.UTF8.GetString(File.ReadAllBytes(f)).Contains(password)),"DPAPI vault files do not expose plaintext credentials");
  Directory.CreateDirectory(Path.Combine(root,"evidence"));await File.WriteAllTextAsync(Path.Combine(root,"evidence","hybrid-bridge.json"),checks.ToJsonString(new JsonSerializerOptions{WriteIndented=true}));Console.WriteLine($"{checks.Count} hybrid bridge checks passed.");
 }finally{foreach(var c in clients.Values)c.Dispose();await app.StopAsync();}
+// Facturama's POST 3/cfdis, keeping the Folio and Date of every submission. Mode "lost" stamps and then drops the
+// connection before answering, as when the PAC stamped and the response never arrived.
+sealed class FixtureFacturama:HttpMessageHandler
+{
+    public string Mode="ok";public readonly List<JsonObject> Stamps=[];
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct)
+    {
+        if(request.Method!=HttpMethod.Post||request.RequestUri!.AbsolutePath!="/3/cfdis")return new(HttpStatusCode.NotFound);
+        var cfdi=JsonNode.Parse(await request.Content!.ReadAsStringAsync(ct))!.AsObject();Stamps.Add(J.O("folio",cfdi.S("Folio"),"date",cfdi.S("Date")));
+        if(Mode=="lost")throw new HttpRequestException("Connection reset after the PAC stamped");
+        return new(HttpStatusCode.OK){Content=new StringContent(J.O("Id",J.Id(),"Status","active","Complement",J.O("TaxStamp",J.O("Uuid",Guid.NewGuid().ToString()))).ToJsonString(),Encoding.UTF8,"application/json")};
+    }
+}

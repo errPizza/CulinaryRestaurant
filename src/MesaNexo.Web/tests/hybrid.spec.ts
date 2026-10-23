@@ -238,3 +238,29 @@ test('integrations run in simulation: terminal, platform order, PAC stamp, outbo
  await page.setViewportSize({width:390,height:844});await shot('integraciones-390');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  expect(errors).toEqual([]);
 });
+test('a PAC submission that lost its answer is retried by the manager with the same folio and date',async({page})=>{
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await login(page,'fiscal');
+ const exec=async(type:string,payload:any)=>{const r=await call('fiscal','execute',{type,payload});expect(r.ok,r.error).toBe(true);await call('fiscal','ack',{operationId:r.data.operationId});return r.data.result;};
+ // The Facturama sandbox leaves the requests alone while the PAC simulator is on.
+ await exec('integration.configure',{provider:'pac',mode:'off'});
+ let state=(await call('fiscal','state')).data;const burger=state.products.find((p:any)=>p.name==='Hamburguesa de la casa');
+ const visitId=(await exec('visit.quick',{})).id;const units=(await exec('command.send',{visitId,items:[{productId:burger.id,quantity:1}]})).unitIds;
+ for(const id of units)for(const status of ['preparing','ready','delivered'])await exec('unit.state',{id,status});
+ await exec('payment.add',{visitId,amount:18500,tip:0,method:'cash',tendered:18500});await exec('visit.close',{id:visitId});
+ const id=(await exec('fiscal.request',{visitId,rfc:'EKU9003173C9',name:'ESCUELA KEMPER URGATE',postalCode:'42501',regime:'601',use:'G03'})).id;
+ // Facturama stamps and the answer is lost: the request waits for the manager instead of being sent again.
+ let sandbox=(await call('fixture','fiscal.sandbox',{mode:'lost'})).data;
+ state=(await call('fiscal','state')).data;let request=state.fiscals.find((f:any)=>f.id===id);expect(request.status).toBe('pending-reconciliation');
+ const sent=()=>sandbox.stamps.filter((x:any)=>x.folio===request.folio);expect(sent()).toHaveLength(1);
+ await nav(page,'Fiscal');const row=page.getByRole('row').filter({hasText:visitId.slice(0,8)});await expect(row.getByText('Pendiente de conciliación')).toBeVisible();await expect(row.getByText(request.folio)).toBeVisible();
+ await row.getByRole('button',{name:'Reintentar',exact:true}).click();
+ const dialog=page.getByRole('dialog',{name:'Reintentar con el folio '+request.folio});await dialog.getByLabel('Revisé Facturama y el folio no existe').fill('No aparece en el portal de Facturama');
+ await page.waitForTimeout(650);await page.screenshot({path:path.join(evidence,'fiscal-reintento-1360.png'),fullPage:true});
+ await dialog.getByRole('button',{name:'Guardar',exact:true}).click();await expect(dialog).toHaveCount(0);
+ await expect(row.getByText(/Reintento autorizado/)).toBeVisible();await expect(row.getByRole('button',{name:'Reintentar',exact:true})).toHaveCount(0);
+ // The retry sends the same Folio and Date, so a stamp that did happen would be found instead of duplicated.
+ sandbox=(await call('fixture','fiscal.sandbox',{mode:'ok'})).data;expect(sent()).toHaveLength(2);expect(sent().every((x:any)=>x.date===request.issuedLocal)).toBe(true);
+ state=(await call('fiscal','state')).data;request=state.fiscals.find((f:any)=>f.id===id);expect(request.status).toBe('sandbox-stamped');expect(request.retryReason).toBe('No aparece en el portal de Facturama');
+ await expect(row.getByText('Prueba sandbox · sin validez fiscal')).toBeVisible();
+ expect(errors).toEqual([]);
+});

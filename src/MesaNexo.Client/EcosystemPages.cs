@@ -87,6 +87,10 @@ public sealed partial class MainView{
     Control FiscalPage()
     {
         var list=Stack(Button("Configurar URL del portal",()=>Form("Portal público separado",[new("url","URL HTTPS")],p=>Act("fiscal.portal.configure",p))),Text("CFDI 4.0 · Las solicitudes pendientes no son facturas timbradas. El PAC y los datos fiscales del emisor se configuran en el servicio autorizado.",13,Muted),Button("Solicitud fiscal",()=>Form("Datos de receptor",[new("visitId","Ticket cerrado","select","",Options("visit",v=>v.S("status")=="closed")),new("rfc","RFC"),new("name","Razón social"),new("postalCode","Código postal fiscal"),new("regime","Régimen fiscal"),new("use","Uso CFDI")],p=>Act("fiscal.request",p))),Button("Enlace de autofacturación",()=>Form("Token con vigencia de 24 horas",[new("visitId","Ticket cerrado","select","",Options("visit",v=>v.S("status")=="closed"))],async p=>{var token=await Act("fiscal.token",p);using var data=QRCoder.QRCodeGenerator.GenerateQrCode(token.S("url"),QRCoder.QRCodeGenerator.ECCLevel.Q);using var qr=new QRCoder.PngByteQRCode(data);var bitmap=new Avalonia.Media.Imaging.Bitmap(new System.IO.MemoryStream(qr.GetGraphic(5)));ShowModal("Autofacturación",Stack(new Image{Source=bitmap,Width=240,Height=240},Text(token.S("url"),14,Graphite,true),Text("Vence: "+DateLabel(token.S("expires")),12,Muted)));})));
-        foreach(var f in Items("fiscal").Reverse())list.Children.Add(Card(Stack(Text("Ticket "+f.S("visitId")[..Math.Min(8,f.S("visitId").Length)],17,Graphite,true),Badge(f.S("status")),Text(f.S("message"),13,Muted),Text(f.S("fiscalUuid"),12,Muted))));return list;
+        foreach(var f in Items("fiscal").Reverse()){
+            // A submission the PAC never answered waits for a manager, who first checks in Facturama that the folio does not exist.
+            var actions=Wrap();if(f.S("status")=="pending-reconciliation"&&f.S("providerId")=="")actions.Children.Add(Button("Reintentar",()=>Form("Reintentar con el folio "+f.S("folio"),[new("reason","Revisé Facturama y el folio no existe")],p=>Act("fiscal.retry",WithId(p,f.S("id"))))));
+            list.Children.Add(Card(Stack(Text("Ticket "+f.S("visitId")[..Math.Min(8,f.S("visitId").Length)],17,Graphite,true),Badge(f.S("status")),Text(f.S("message"),13,Muted),Text(f.S("fiscalUuid"),12,Muted),actions)));
+        }return list;
     }
 }
