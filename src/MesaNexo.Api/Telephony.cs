@@ -24,7 +24,9 @@ public sealed partial class BranchService
 {
     public async Task RecordCaller(CallerEvent call,CancellationToken ct=default)
     {
-        var id=J.Hash(call.CallId+":"+call.Number)[..32];for(int attempt=0;attempt<8;attempt++){var s=await Load(ct);if(s.List("call").Any(x=>x.S("id")==id))return;var customer=s.List("customer").FirstOrDefault(x=>x.S("phone")==call.Number);s.Add("call",J.O("id",id,"siteId",siteId,"number",call.Number,"name",call.Name[..Math.Min(call.Name.Length,150)],"customerId",customer?.S("id"),"at",J.Now(),"source","asterisk-ami-tls"));try{await Commit(s,id,"configured-telephony-service",J.Hash(call.CallId),J.O("id",id),"callerid.received",ct);return;}catch(StoreException e)when(e.Code=="COS-DATA-CONFLICT"&&attempt<7){}}
+        // Same match as the simulator: the last 10 digits, so +52, 044 and spaces do not matter.
+        static string Digits(string value)=>new(value.Where(char.IsDigit).ToArray());var number=Digits(call.Number);var tail=number[^Math.Min(10,number.Length)..];
+        var id=J.Hash(call.CallId+":"+call.Number)[..32];for(int attempt=0;attempt<8;attempt++){var s=await Load(ct);if(!Domain.IsLive(s,"callerid")||number.Length<7||s.List("call").Any(x=>x.S("id")==id))return;var customer=s.List("customer").FirstOrDefault(x=>Digits(x.S("phone")) is {Length:>=7} phone&&phone.EndsWith(tail,StringComparison.Ordinal));s.Add("call",J.O("id",id,"siteId",siteId,"number",call.Number,"name",call.Name[..Math.Min(call.Name.Length,150)],"customerId",customer?.S("id"),"at",J.Now(),"source","asterisk-ami-tls"));try{await Commit(s,id,"configured-telephony-service",J.Hash(call.CallId),J.O("id",id),"callerid.received",ct);return;}catch(StoreException e)when(e.Code=="COS-DATA-CONFLICT"&&attempt<7){}}
     }
 }
 public sealed class GoogleGeocoder(HttpClient http,string apiKey)

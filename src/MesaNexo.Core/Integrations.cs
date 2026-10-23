@@ -163,7 +163,7 @@ public sealed partial class Restaurant
             var system=config.S("system");var reference=Ref(system=="opera"?"OPERA":"CLDB");var pay=InternalPayment(s,u,v,amount,"room");pay["reference"]=reference;pay["room"]=number;
             result=Add(s,"pmspost",J.O("room",number,"guest",room.S("guest"),"amount",amount,"visitId",v.S("id"),"paymentId",pay.S("id"),"system",system,"reference",reference,"status","posted","actor",u.S("id"),"at",J.Now()));
             Log(s,u,"pms","charge","posted","Cargo a habitación "+number+" · "+Pesos(amount),reference);break;}
-        case "geo.lookup":{Role(u,"mesero","manager");var text=Text(p,"text",500);result=Geocode(s,text);Log(s,u,"maps","geocode","ok","Dirección ubicada a "+result["distanceKm"]+" km");break;}
+        case "geo.lookup":{Role(u,"mesero","manager");Need(!IsLive(s,"maps"),"Con Google Maps real la ubicación se calcula al guardar la dirección del cliente");var text=Text(p,"text",500);result=Geocode(s,text);Log(s,u,"maps","geocode","ok","Dirección ubicada a "+result["distanceKm"]+" km");break;}
         case "callerid.simulate":{
             Role(u,"mesero","manager");Simulator(s,"callerid","identificador de llamadas");var number=Digits(Text(p,"number",40));Need(number.Length is >=7 and <=15,"Número telefónico inválido");var tail=number[^Math.Min(10,number.Length)..];
             var customer=s.List("customer").FirstOrDefault(x=>Digits(x.S("phone")).EndsWith(tail,StringComparison.Ordinal)&&Digits(x.S("phone")).Length>=7);
@@ -200,6 +200,8 @@ public sealed partial class Restaurant
     // Runs after every action, including nested ones; each step is idempotent.
     void IntegrationAfterAction(BranchState s,JsonObject u,string type,JsonObject p,JsonObject result)
     {
+        // Live maps already measured the route when they located the address.
+        if(type=="delivery.create"&&IsLive(s,"maps")){var d=s.Get("delivery",result.S("id"));var a=d.Obj("addressSnapshot");if(d.S("mode")=="delivery"&&a.ContainsKey("routeKm")){d["distanceKm"]=a["routeKm"]!.DeepClone();d["etaMinutes"]=a.L("routeMinutes");}}
         if(type=="delivery.create"&&Simulated(s,"maps") is {} maps){var d=s.Get("delivery",result.S("id"));var a=d.Obj("addressSnapshot");if(d.S("mode")=="delivery"&&a.ContainsKey("lat")){var config=maps.Obj("settings");var km=Distance((double)Coordinate(config,"centerLat",90),(double)Coordinate(config,"centerLon",180),(double)Coordinate(a,"lat",90),(double)Coordinate(a,"lon",180));d["distanceKm"]=Math.Round((decimal)km,1);d["etaMinutes"]=Eta(km);}}
         if(type=="delivery.dispatch"){var d=s.Get("delivery",p.S("id"));var c=s.Related("customer","id",d.S("customerId")).FirstOrDefault();var courier=s.Related("courier","id",d.S("courierId")).FirstOrDefault();if(c is not null)Message(s,"whatsapp",c.S("phone"),"dispatch",d.S("id"),"Hola "+c.S("name")+", tu pedido de "+s.Meta.S("name")+" ya va en camino"+(courier is null?"":" con "+courier.S("name"))+(d.L("etaMinutes")>0?". Llega en unos "+d.L("etaMinutes")+" minutos":"")+".",c.S("name"),s.Meta.S("name"),courier?.S("name")??"nuestro repartidor",d.L("etaMinutes")>0?d.L("etaMinutes")+" minutos":"poco tiempo");}
         if(type=="unit.state"&&p.S("status")=="ready"){
