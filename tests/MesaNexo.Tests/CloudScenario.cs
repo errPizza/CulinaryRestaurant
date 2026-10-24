@@ -14,11 +14,10 @@ namespace MesaNexo.Tests;
 
 static class CloudScenario {
     static int Port() { var l = new TcpListener(IPAddress.Loopback, 0); l.Start(); var p = ((IPEndPoint)l.LocalEndpoint).Port; l.Stop(); return p; }
-    public static async Task Run(string root, string python, string folder, CentralStore centralStore, ProviderService central, BranchService branch, string token, string credentials, int receiver, X509Certificate2 clientCert, string publicKey, List<JsonObject> evidence) {
+    public static async Task Run(string root, string python, string folder, CentralStore centralStore, CentralService central, BranchService branch, string token, string credentials, int receiver, X509Certificate2 clientCert, string publicKey, List<JsonObject> evidence) {
 
         void Check(bool ok, string name) { if (!ok) throw new Exception(name); evidence.Add(J.O("test", name, "result", "passed")); Console.WriteLine("PASS " + name); }
         async Task<JsonObject> Act(string type, JsonObject p) => (await branch.Action(token, J.O("operationId", J.Id(), "type", type, "payload", p))).Obj("result");
-        centralStore.ProvisionTenant(J.O("tenantId", "restaurant-alpha", "branchId", "main", "slug", "restaurant-alpha-main", "tenantName", "Alpha", "branchName", "Main", "siteId", "alpha-test", "certificateSha256", clientCert.GetCertHashString(HashAlgorithmName.SHA256), "ownerName", "Owner", "ownerUsername", "restaurant-owner", "ownerPassword", "Test-" + J.Id(), "ownerEnrollmentCode", J.Id()), new Passwords());
         var waiter = await Act("user.save", J.O("name", "Web service", "username", "web-service", "role", "mesero", "password", "Test-" + J.Id()));
         await Act("commerce.configure", J.O("tenantId", "restaurant-alpha", "branchId", "main", "waiterId", waiter.S("id"), "enabled", true));
         await Act("catalog.category", J.O("name", "Web food"));
@@ -60,6 +59,7 @@ static class CloudScenario {
             using (var copyRuntime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), Path.Combine(folder, "branch-store"), "alpha-test")) {
 
                 var restarted = new BranchService(copyRuntime, "alpha-test", new Passwords());
+                TestLicense.Attach(restarted);
                 var originalEnvelope = central.PendingCloud(clientCert);
                 var ack = await restarted.ReceiveCloudProposals(originalEnvelope, publicKey);
                 Check(ack.Single().S("status") == "accepted-local" && (await restarted.Load()).List("unit").Count() == before, "branch restart replays durable local ACK without duplicating order units");

@@ -71,6 +71,7 @@ const labels: Record<string, string> = {
     "unavailable": "No disponible",
     "cancelled": "Cancelado",
     "open": "Abierta",
+    "answered": "Respondida",
     "closed": "Cerrada",
     "merged": "Unida",
     "pending": "Pendiente",

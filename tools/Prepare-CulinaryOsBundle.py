@@ -4,9 +4,12 @@ import argparse, hashlib, json, shutil, sys
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
 parser.add_argument('--revision', type=int, default=1)
+parser.add_argument('--license-server', required=True, help='HTTPS address of CulinaryServer, where branches activate and renew')
 args = parser.parse_args()
 if not 1 <= args.revision <= 99:
     raise SystemExit('Invalid revision')
+if not args.license_server.startswith('https://'):
+    raise SystemExit('--license-server must be HTTPS')
 tag = '' if args.revision == 1 else '-r' + str(args.revision)
 OUT = ROOT / ('artifacts/culinaryos-cd' + tag)
 if OUT.exists():
@@ -39,6 +42,9 @@ for name in ('src', 'icons', 'capabilities'):
 tree('src/MesaNexo.Web/dist', 'client-source/dist')
 tree('deploy/culinaryos', 'deploy/culinaryos')
 copy('deploy/culinaryos/install.sh', 'instalar.sh')
+(OUT / 'deploy/culinaryos/license-server.txt').write_text(args.license_server.rstrip('/') + '
+', encoding='ascii', newline='
+')
 copy('deploy/install-runtime-extension.py', 'deploy/install-runtime-extension.py')
 copy('runtime/mesanexo_ipc.py', 'runtime/mesanexo_ipc.py')
 copy('vendor/culinaryos/source-hashes.json', 'vendor/culinaryos/source-hashes.json')

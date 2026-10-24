@@ -21,55 +21,28 @@ static class CentralTests {
         var folder = Path.Combine(root, ".lab", "central-" + J.Id());
         Directory.CreateDirectory(folder);
         var key = RandomNumberGenerator.GetBytes(32);
-        var database = Path.Combine(folder, "provider.sqlite");
+        var database = Path.Combine(folder, "central.sqlite");
         using var store = new CentralStore(database, (byte[])key.Clone());
         store.Initialize();
         using var signer = RSA.Create(3072);
-        var signing = Path.Combine(folder, "signing-test-only.pem");
+        var signing = Path.Combine(folder, "cloud-signing-test-only.pem");
         var pub = Path.Combine(folder, "public.pem");
         File.WriteAllText(signing, signer.ExportRSAPrivateKeyPem());
         File.WriteAllText(pub, signer.ExportSubjectPublicKeyInfoPem());
-        var packages = Path.Combine(folder, "packages");
-        Directory.CreateDirectory(packages);
-        var password = "CentralTest-" + J.Id();
-        var code = J.Id();
-        var central = new ProviderService(store, new Passwords(), "provider-test", packages, signing);
-        central.Initialize(J.O("name", "Test owner", "username", "owner-test", "password", password, "enrollmentCode", code));
-        var login = central.Login(J.O("siteId", "provider-test", "username", "owner-test", "password", password, "deviceId", J.Id(), "deviceSecret", J.Id(), "deviceName", "test only", "enrollmentCode", code));
-        var token = login.S("token");
-        JsonObject Act(string type, JsonObject payload, string? id = null) => central.Action(token, J.O("operationId", id ?? J.Id(), "type", type, "payload", payload)).Obj("result");
+        var central = new CentralService(store, new Passwords(), "central-test", signing);
         using var clientKey = RSA.Create(2048);
         var req = new CertificateRequest("CN=branch-alpha-test", clientKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         var eku = new OidCollection { new("1.3.6.1.5.5.7.3.2") };
         req.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(eku, true));
         using var ephemeralClient = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddDays(2));
         using var clientCert = X509CertificateLoader.LoadPkcs12(ephemeralClient.Export(X509ContentType.Pfx), null, X509KeyStorageFlags.UserKeySet);
-        var alpha = Act("owner.restaurant", J.O("name", "Alpha", "siteId", "alpha-test", "status", "active", "planId", "base", "mode", "licencia", "deployment", "central", "clientCertificateSha256", clientCert.GetCertHashString(HashAlgorithmName.SHA256)));
-        var beta = Act("owner.restaurant", J.O("name", "Beta", "siteId", "beta-test", "status", "active", "planId", "base", "mode", "codigo", "deployment", "dedicated"));
-        Check(!central.State(token).ToJsonString().Contains("argon2id"), "provider snapshot excludes secret hashes");
-        await Deny(() => Task.Run(() => Act("owner.service", J.O("id", alpha.S("id"), "service", "usage", "until", DateTimeOffset.UtcNow.AddYears(2).ToString("O")))), "permanent license cannot become usage subscription");
-        await Deny(() => Task.Run(() => Act("owner.service", J.O("id", alpha.S("id"), "service", "support", "until", DateTimeOffset.UtcNow.AddYears(2).ToString("O")))), "included support cannot be charged again");
-        var op = J.Id();
-        var payload = J.O("id", alpha.S("id"), "modules", new[] { "reservations" });
-        Act("owner.modules", payload, op);
-        Act("owner.modules", payload, op);
-        Check(central.State(token).A("restaurants").Objects().Single(x => x.S("id") == alpha.S("id")).L("revision") == 2, "provider retry is durably idempotent");
-        var fixture = Encoding.UTF8.GetBytes("MZ TEST FIXTURE ONLY - never a distributable installer");
-        File.WriteAllBytes(Path.Combine(packages, "fixture.exe"), fixture);
-        var release = Act("owner.release", J.O("filename", "fixture.exe", "version", "1.0.0", "platform", "win-x64", "description", "Test fixture", "changes", "Signature test only"));
-        Act("owner.publish", J.O("releaseId", release.S("id"), "restaurantIds", new[] { alpha.S("id") }));
-        var bundle = Act("owner.updateBundle", J.O("id", alpha.S("id"), "platform", "win-x64"));
-        var bundleFile = Path.Combine(folder, "bundle.json");
-        File.WriteAllText(bundleFile, bundle.ToJsonString());
-        var fingerprint = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(pub)));
-        await Updates.Verify(bundleFile, Path.Combine(packages, "fixture.exe"), pub, fingerprint, "alpha-test", "win-x64");
-        Check(true, "signed update verifies real bytes and bound recipient");
-        await Deny(() => Updates.Verify(bundleFile, Path.Combine(packages, "fixture.exe"), pub, fingerprint, "beta-test", "win-x64"), "update for another branch rejected");
-        await Deny(() => Task.Run(() => Act("owner.updateBundle", J.O("id", beta.S("id"), "platform", "win-x64"))), "source-code purchase does not include provider updates");
         var data = Encoding.UTF8.GetBytes(J.Canonical(J.O("protocol", "culinaryos-events-v1", "site_id", "alpha-test", "event_id", "event-test", "record_id", "record-test", "version", 1, "data", J.O("test", true))));
         var digest = Convert.ToHexStringLower(SHA256.HashData(data));
+        await Deny(() => Task.Run(() => central.Receive(data, digest, clientCert)), "certificate not registered with --provision-tenant is rejected");
+        // The registry CulinaryServer lists for the panel (GET /admin/v1/registry) is what the operator provisions here.
+        store.ProvisionTenant(J.O("tenantId", "restaurant-alpha", "branchId", "main", "slug", "restaurant-alpha-main", "tenantName", "Alpha", "branchName", "Main", "siteId", "alpha-test", "certificateSha256", clientCert.GetCertHashString(HashAlgorithmName.SHA256), "ownerName", "Owner", "ownerUsername", "restaurant-owner", "ownerPassword", "Test-" + J.Id(), "ownerEnrollmentCode", J.Id()), new Passwords());
         central.Receive(data, digest, clientCert);
-        using (var reopened = new CentralStore(database, (byte[])key.Clone())) { reopened.Initialize(); var second = new ProviderService(reopened, new Passwords(), "provider-test", packages, signing); var ack = second.Receive(data, digest, clientCert); Check(ack.S("status") == "committed" && ack.S("event_id") == "event-test", "receiver restart deduplicates persisted event and returns committed ACK"); }
+        using (var reopened = new CentralStore(database, (byte[])key.Clone())) { reopened.Initialize(); var second = new CentralService(reopened, new Passwords(), "central-test", signing); var ack = second.Receive(data, digest, clientCert); Check(ack.S("status") == "committed" && ack.S("event_id") == "event-test", "receiver restart deduplicates persisted event and returns committed ACK"); }
         var changed = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(data).Replace("true", "false"));
         await Deny(() => Task.Run(() => central.Receive(changed, Convert.ToHexStringLower(SHA256.HashData(changed)), clientCert)), "same event ID with changed body rejected");
         var wrong = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(data).Replace("alpha-test", "beta-test"));
@@ -77,59 +50,37 @@ static class CentralTests {
         using var serverCert = LabCertificate.Create(Path.Combine(folder, "tls"));
         var admin = Port();
         var receiver = Port();
-        await using var app = CentralHost.Build(central, "provider-test", packages, serverCert, admin, receiver, "127.0.0.1");
+        await using var app = CentralHost.Build(central, "central-test", serverCert, admin, receiver, "127.0.0.1");
         await app.StartAsync();
         HttpClient Http(bool client) { var h = new SocketsHttpHandler { UseProxy = false }; h.SslOptions = new SslClientAuthenticationOptions { CertificateChainPolicy = new X509ChainPolicy { TrustMode = X509ChainTrustMode.CustomRootTrust, CustomTrustStore = { serverCert }, RevocationMode = X509RevocationMode.NoCheck } }; if (client) h.SslOptions.ClientCertificates = new X509CertificateCollection { clientCert }; return new HttpClient(h) { BaseAddress = new Uri($"https://localhost:{receiver}/"), Timeout = TimeSpan.FromSeconds(5) }; }
         using (var http = Http(true)) { using var message = new HttpRequestMessage(HttpMethod.Post, "v1/events") { Content = new ByteArrayContent(data) }; message.Headers.Add("Idempotency-Key", "event-test"); message.Headers.Add("X-CulinaryOs-SHA256", digest); var response = await http.SendAsync(message); Check(response.IsSuccessStatusCode, "real HTTPS mTLS receiver accepts provisioned branch certificate"); }
-        using (var http = Http(false)) { try { var response = await http.GetAsync("v1/releases/latest?platform=win-x64"); Check(!response.IsSuccessStatusCode, "receiver denies client without mTLS certificate"); } catch (HttpRequestException) { Check(true, "receiver denies client without mTLS certificate"); } }
-        var providerBackup = Act("owner.backup", new());
-        Check(File.Exists(central.BackupFile(token, providerBackup.S("id"))), "provider backup action creates an authenticated encrypted snapshot");
-        var credentials = Path.Combine(folder, "policy-credentials");
+        using (var http = Http(false)) { try { var response = await http.GetAsync("v1/cloud/pending"); Check(!response.IsSuccessStatusCode, "receiver denies client without mTLS certificate"); } catch (HttpRequestException) { Check(true, "receiver denies client without mTLS certificate"); } }
+        using (var http = new HttpClient(new SocketsHttpHandler { UseProxy = false, SslOptions = new SslClientAuthenticationOptions { CertificateChainPolicy = new X509ChainPolicy { TrustMode = X509ChainTrustMode.CustomRootTrust, CustomTrustStore = { serverCert }, RevocationMode = X509RevocationMode.NoCheck } } }) { BaseAddress = new Uri($"https://localhost:{admin}/") }) {
+
+            foreach (var gone in new[] { "v1/entitlement", "v1/releases/latest?platform=win-x64", "api/backups/" + J.Id(), "api/operations/" + J.Id() }) { using var response = await http.GetAsync(gone); Check(response.StatusCode == HttpStatusCode.NotFound, "central no longer serves provider route " + gone.Split('?')[0]); }
+
+        }
+        var credentials = Path.Combine(folder, "central-credentials");
         Directory.CreateDirectory(credentials);
         File.WriteAllText(Path.Combine(credentials, "central-ca"), serverCert.ExportCertificatePem());
         File.WriteAllText(Path.Combine(credentials, "central-cert"), clientCert.ExportCertificatePem());
         File.WriteAllText(Path.Combine(credentials, "central-key"), clientKey.ExportPkcs8PrivateKeyPem());
         using var runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), Path.Combine(folder, "branch-store"), "alpha-test");
         var branch = new BranchService(runtime, "alpha-test", new Passwords());
-        var branchPassword = "Policy-" + J.Id();
+        var branchPassword = "Central-" + J.Id();
         var branchCode = J.Id();
-        await branch.Initialize(J.O("siteId", "alpha-test", "name", "Alpha local", "mode", "licencia", "managerName", "Manager", "managerUsername", "local", "managerPassword", branchPassword, "enrollmentCode", branchCode, "modules", Array.Empty<string>()));
-        var policy = new PolicyRefresh(branch, new($"https://localhost:{receiver}/v1/entitlement", credentials, pub));
-        Check(await policy.Refresh() && (await branch.Load()).Meta.A("modules").Strings().Contains("reservations"), "signed central policy applies to the correct local branch over mTLS");
-        Check(!await policy.Refresh(), "same policy revision cannot be reapplied");
-        Act("owner.modules", J.O("id", alpha.S("id"), "modules", Array.Empty<string>()));
-        await policy.Refresh();
-        Check((await branch.Load()).Meta.A("modules").Count == 0, "module withdrawal reaches backend authorization through signed policy");
-        var branchLogin = await branch.Login(J.O("username", "local", "password", branchPassword, "deviceId", J.Id(), "deviceSecret", J.Id(), "deviceName", "Support test terminal", "enrollmentCode", branchCode));
-        var localToken = branchLogin.S("token");
-        var created = await branch.Action(localToken, J.O("operationId", J.Id(), "type", "ticket.create", "payload", J.O("subject", "Consulta real de prueba", "message", "Necesitamos revisión del catálogo")));
-        var tid = created.Obj("result").S("id");
-        async Task MirrorTicket(string eventId) { var local = await branch.Load(); var record = local.Get("ticket", tid); var raw = Encoding.UTF8.GetBytes(J.Canonical(J.O("protocol", "culinaryos-events-v1", "site_id", "alpha-test", "event_id", eventId, "record_id", "tx_" + eventId, "version", 1, "data", J.O("contract", "mesa-nexo-transaction-v1", "changes", new[] { J.O("record_id", BranchState.Key("ticket", tid), "expected_version", local.Original[BranchState.Key("ticket", tid)].Version - 1, "data", record) })))); central.Receive(raw, Convert.ToHexStringLower(SHA256.HashData(raw)), clientCert); }
-        await MirrorTicket("support-ticket-created");
-        var mirrored = central.State(token).A("tickets").Objects().Single(x => x.S("ticketId") == tid);
-        Check(mirrored.S("subject") == "Consulta real de prueba", "branch ticket projected in same transaction as central event receipt");
-        var reply = Act("owner.ticket.reply", J.O("id", mirrored.S("id"), "message", "Respuesta del proveedor autorizada"));
-        Check(reply.B("queued") && central.State(token).A("supportOutbox").Count == 1, "provider reply is pending until branch durable acceptance");
-        await policy.Refresh();
-        var localTicket = (await branch.Load()).Get("ticket", tid);
-        Check(localTicket.A("messages").Objects().Count(x => x.S("id") == reply.S("messageId")) == 1, "signed provider reply persisted exactly once at branch");
-        await policy.Refresh();
-        await MirrorTicket("support-ticket-echo");
-        Check(central.State(token).A("supportOutbox").Count == 0, "branch echo durably acknowledges provider support reply");
-        await UiTests.RunProvider(root, central.State(token), evidence);
-        await CloudScenario.Run(root, python, folder, store, central, branch, localToken, credentials, receiver, clientCert, pub, evidence);
-        var forged = central.Entitlement(clientCert);
-        forged.Obj("data")["modules"] = new JsonArray("courses");
-        await Deny(() => branch.ApplyEntitlement(forged, pub), "tampered commercial policy rejected before persistence");
+        await TestLicense.Initialize(branch, J.O("siteId", "alpha-test", "name", "Alpha local", "managerName", "Manager", "managerUsername", "local", "managerPassword", branchPassword, "enrollmentCode", branchCode, "modules", Array.Empty<string>()));
+        var branchLogin = await branch.Login(J.O("username", "local", "password", branchPassword, "deviceId", J.Id(), "deviceSecret", J.Id(), "deviceName", "Central test terminal", "enrollmentCode", branchCode));
+        await CloudScenario.Run(root, python, folder, store, central, branch, branchLogin.S("token"), credentials, receiver, clientCert, pub, evidence);
         await app.StopAsync();
-        try { await policy.Refresh(); throw new Exception("Stopped central should fail"); } catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { Check(await branch.Ready(), "central outage preserves locally authorized branch readiness"); }
         var snapshot = Path.Combine(folder, "central-backup.sqlite");
         var backupHash = store.Snapshot(snapshot);
-        Act("owner.plan", J.O("name", "Posterior", "maxUsers", 20, "maxTables", 40, "maxBranches", 2));
-        store.Restore(snapshot, backupHash, "provider-test");
-        Check(!store.Read()!.A("plans").Objects().Any(x => x.S("name") == "Posterior") && store.Read()!.A("sessions").Objects().All(x => x.B("revoked")), "central restore validates encrypted snapshot and revokes restored sessions");
+        store.ProvisionTenant(J.O("tenantId", "restaurant-beta", "branchId", "main", "slug", "restaurant-beta-main", "tenantName", "Beta", "branchName", "Main", "siteId", "beta-test", "certificateSha256", new string('b', 64), "ownerName", "Owner", "ownerUsername", "beta-owner", "ownerPassword", "Test-" + J.Id(), "ownerEnrollmentCode", J.Id()), new Passwords());
+        store.Restore(snapshot, backupHash);
+        Check(store.CertificateSite(new string('b', 64)) is null && store.CertificateSite(clientCert.GetCertHashString(HashAlgorithmName.SHA256)) == "alpha-test", "central restore validates encrypted snapshot and returns to its content");
+        using (var foreign = new CentralStore(Path.Combine(folder, "foreign.sqlite"), RandomNumberGenerator.GetBytes(32))) { foreign.Initialize(); await Deny(() => Task.Run(() => foreign.Restore(snapshot, backupHash)), "central refuses a snapshot sealed under another central's key"); }
         var encrypted = File.ReadAllBytes(database);
-        Check(!Encoding.UTF8.GetString(encrypted).Contains("owner-test"), "central provider metadata encrypted under independent key");
+        Check(!Encoding.UTF8.GetString(encrypted).Contains("restaurant-owner\""), "tenant owner record encrypted under the central key");
 
     }
 }

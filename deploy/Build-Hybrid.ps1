@@ -1,6 +1,8 @@
-param([switch]$Development,[switch]$Installer)
+param([switch]$Development,[switch]$Installer,[string]$RootPublicKey)
 $ErrorActionPreference='Stop'
 $repositoryRoot=Split-Path -Parent $PSScriptRoot
+# A development build trusts the test root; a distributable one needs the provider's root.
+if($Development){& (Join-Path $repositoryRoot 'tools/Use-RootKey.ps1') -Test}else{& (Join-Path $repositoryRoot 'tools/Use-RootKey.ps1') -Path $RootPublicKey}
 $web=Join-Path $repositoryRoot 'src/MesaNexo.Web'
 $env:DOTNET_CLI_HOME=Join-Path $repositoryRoot '.dotnet'
 $env:NUGET_PACKAGES=Join-Path $repositoryRoot '.packages'

@@ -8,7 +8,7 @@ public readonly record struct TenantScope(string TenantId, string BranchId);
 public sealed partial class CentralStore {
     void InitializeTenants(SqliteConnection db) {
 
-        using (var inspect = Command(db, null, "SELECT name FROM sqlite_master WHERE type='table' AND name='tenant'")) if (inspect.ExecuteScalar() is null) { using var existing = Command(db, null, "SELECT 1 FROM provider LIMIT 1"); if (existing.ExecuteScalar() is not null) Snapshot(database + ".before-devmap-" + J.Id() + ".sqlite"); }
+        using (var inspect = Command(db, null, "SELECT name FROM sqlite_master WHERE type='table' AND name='tenant'")) if (inspect.ExecuteScalar() is null) { using var existing = Command(db, null, "SELECT 1 FROM event LIMIT 1"); if (existing.ExecuteScalar() is not null) Snapshot(database + ".before-devmap-" + J.Id() + ".sqlite"); }
         using var migration = db.BeginTransaction();
         using var cmd = Command(db, migration, """
         CREATE TABLE IF NOT EXISTS tenant(id TEXT PRIMARY KEY,slug TEXT UNIQUE NOT NULL,name TEXT NOT NULL);
@@ -110,6 +110,13 @@ public sealed partial class CentralStore {
         using var r = cmd.ExecuteReader();
         Need(r.Read(), "Certificado sin empresa y sucursal autorizadas", 403);
         return new(r.GetString(0), r.GetString(1));
+
+    }
+    public string? CertificateSite(string fingerprint) {
+
+        using var db = Open();
+        using var cmd = Command(db, null, "SELECT site_id FROM tenant_branch WHERE certificate=$fp", ("$fp", fingerprint.ToLowerInvariant()));
+        return cmd.ExecuteScalar() as string;
 
     }
     public TenantScope PublicScope(string slug) {

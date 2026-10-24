@@ -13,7 +13,7 @@ static class BusinessTests {
         var service = new BranchService(runtime, "rules-site", new Passwords());
         var password = "Rules-" + J.Id();
         var code = J.Id();
-        await service.Initialize(J.O("siteId", "rules-site", "name", "Reglas aisladas", "mode", "licencia", "managerName", "Gerente", "managerUsername", "manager", "managerPassword", password, "enrollmentCode", code, "modules", Restaurant.Modules));
+        await TestLicense.Initialize(service, J.O("siteId", "rules-site", "name", "Reglas aisladas", "mode", "licencia", "managerName", "Gerente", "managerUsername", "manager", "managerPassword", password, "enrollmentCode", code, "modules", Restaurant.Modules));
         var device = J.O("deviceId", J.Id(), "deviceSecret", J.Id(), "deviceName", "rules terminal", "siteId", "rules-site", "username", "manager", "password", password, "enrollmentCode", code);
         var login = await service.Login(device);
         var token = login.S("token");
@@ -76,11 +76,6 @@ static class BusinessTests {
         await Act("reservation.save", reservation);
         await Act("review.simulate", J.O("visitId", vid, "food", 5, "service", 4, "overall", 5, "comment", "Privada"));
         await Deny(() => Act("review.simulate", J.O("visitId", vid, "food", 5, "service", 5, "overall", 5)), "closed visit review can be simulated only once");
-        var grant = await Act("support.grant", J.O("hours", 1, "reason", "Consulta autorizada"));
-        var preview = await service.SupportPreview(grant.S("token"));
-        Check(preview.B("simulation") && preview.S("scope") == "read-only-business-preview", "support consent allows only audited business preview");
-        await Act("support.revoke", J.O("id", grant.S("id")));
-        await Deny(() => service.SupportPreview(grant.S("token")), "support revocation applies immediately at branch server");
         var report = await service.Report(token, "", "", null);
         Check(report.L("count") == 1 && report.L("paid") == balance && report.L("tips") == 1000, "full-history report uses recorded integer totals and tips");
         Check(!(await service.CanInstall(device)).B("allowed"), "client update blocked while installation session remains active");

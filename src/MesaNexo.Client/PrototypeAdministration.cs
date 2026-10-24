@@ -76,17 +76,4 @@ public sealed partial class MainView {
         return Stack(stats, products, Card(Stack(SectionHeading("Historial administrativo"), Audit())));
 
     }
-    Control ProviderPortfolio() {
-
-        var restaurants = CentralItems("restaurants").ToArray();
-        var title = Stack(Eyebrow("TU PLATAFORMA, BAJO CONTROL", Brush.Parse("#E9C774")), Text("Cada restaurante, a su ritmo.", ViewWidth <= 650 ? 25 : 29, Brushes.White, true), Text("Controla contratación, configuración y versiones de cada instalación.", 13, Pale));
-        var banner = Card(Stack(title, Button("+ Nuevo restaurante", () => EditRestaurant(new()), true)), true);
-        banner.BorderBrush = Brush.Parse("#455269");
-        banner.Padding = new Thickness(29, 25);
-        var stats = Stats(("Restaurantes", restaurants.Length.ToString(), "Clientes independientes", "food"), ("Instalaciones", state!.ContainsKey("installations") ? state.A("installations").Count.ToString() : "—", "Credenciales separadas", "users"), ("Releases", CentralItems("releases").Count().ToString(), "Publicación dirigida", "cloud"), ("Solicitudes de soporte", CentralItems("tickets").Count(t => t.S("status") == "open").ToString(), "Acceso con consentimiento", "help"));
-        var table = Card(Stack(SectionHeading("Portafolio de restaurantes", "El panel del proveedor está separado de la operación.", Button("Seguridad de mi cuenta", () => Form("Cambiar contraseña del propietario", [new("currentPassword", "Contraseña actual", "password"), new("newPassword", "Contraseña nueva (mínimo 14 caracteres)", "password")], p => Act("owner.password", p)))), Table(["Restaurante", "Modalidad / plan", "Estado", "Configuración", "Despliegue", "Acción"], restaurants.Select(r => new Control[] { Text(r.S("name"), 13, Graphite, true), Text(Label(r.Obj("commercial").S("mode")) + " · " + CentralItems("plans").FirstOrDefault(p => p.S("id") == r.S("planId"))?.S("name"), 12), Badge(r.S("status")), Text("Rev. " + r.L("revision"), 12), Text(Label(r.S("deployment")), 12), Button("Administrar", () => EditRestaurant(r)) }))));
-        var identities = Card(Stack(SectionHeading("Servidores e identidades de sucursal", "Cada sucursal conserva su autoridad local."), Table(["Restaurante", "Sucursal / sitio", "Contratación", "Acción"], restaurants.Select(r => new Control[] { Text(r.S("name"), 13), Text(r.S("siteId"), 12), TextButton("Exportar contratación firmada", async () => { var entitlement = await Act("owner.entitlement", J.O("id", r.S("id"))); await SaveJson("contratacion-" + r.S("siteId") + ".json", entitlement); }), Button("Registrar otra sucursal", () => Form("Nueva identidad y servidor de sucursal", [new("name", "Nombre"), new("siteId", "Identidad real del nuevo servidor"), new("clientCertificateSha256", "Huella mTLS aprovisionada")], async p => { p["restaurantId"] = r.S("id"); await Act("owner.branch", p); })) }))));
-        return Stack(banner, stats, table, identities);
-
-    }
 }

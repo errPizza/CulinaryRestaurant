@@ -12,7 +12,7 @@ namespace MesaNexo.Api;
 
 public sealed record ApiOptions(string SiteId, int Port = 8443, string Bind = "0.0.0.0", string Socket = "/run/culinaryos-data/store.sock", string? Credentials = null, string? LabPython = null, string? LabScript = null, string? LabDirectory = null, string? ReadySocket = "/run/culinaryos-app/ready.sock", string? SetupCode = null);
 public static class ApiHost {
-    public static WebApplication Build(ApiOptions options, IBranchStore store, X509Certificate2 cert, PolicyOptions? policy = null, CloudOptions? cloud = null, IPrintDriver? printer = null, FiscalOptions? fiscal = null, IntegrationConfig? integrations = null) {
+    public static WebApplication Build(ApiOptions options, IBranchStore store, X509Certificate2 cert, LicenseOptions? licensing = null, CloudOptions? cloud = null, IPrintDriver? printer = null, FiscalOptions? fiscal = null, IntegrationConfig? integrations = null) {
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions{ Args = [], ContentRootPath = AppContext.BaseDirectory });
         builder.Logging.ClearProviders();
@@ -25,7 +25,7 @@ public static class ApiHost {
         builder.Services.AddRateLimiter(o => o.AddPolicy("login", ctx => RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown", _=> new FixedWindowRateLimiterOptions{ PermitLimit = 8, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }))); 
        
         if (cloud is not null) builder.Services.AddSingleton<IHostedService>(sp => new CloudPull(sp.GetRequiredService<BranchService> (), cloud));
-        if (policy is not null) builder.Services.AddSingleton<IHostedService>(sp => new PolicyRefresh(sp.GetRequiredService<BranchService> (), policy));
+        if (licensing?.ServerUrl is not null) builder.Services.AddSingleton<IHostedService>(sp => new LicenseWorker(sp.GetRequiredService<BranchService> (), sp.GetRequiredService<ILogger<LicenseWorker>> ()));
        
         builder.Services.AddSignalR(o => { o.MaximumReceiveMessageSize = 16 * 1024; o.EnableDetailedErrors = false; });
         builder.Services.AddHostedService<InventoryWorker> (); builder.Services.AddHostedService<OutboxWorker> ();
@@ -42,6 +42,7 @@ public static class ApiHost {
         var app = builder.Build();
         var service = app.Services.GetRequiredService<BranchService> ();
         service.UseIntegrations(integrations, terminals);
+        if (licensing is not null) service.UseLicensing(licensing);
 
         app.Use(async(ctx, next) => {
 
@@ -59,10 +60,14 @@ public static class ApiHost {
         app.MapGet("/api/identity", () => J.O("name", "Culinary Restaurant", "siteId", options.SiteId, "protocol", 1));
         app.MapGet("/api/health", async(CancellationToken ct) => await service.Ready(ct) ? Results.Json(J.O("ready", true, "site_id", options.SiteId)): Results.StatusCode(503));
         app.MapPost("/api/login", async(HttpContext c, CancellationToken ct) => { var p = await Body(c, ct); Rules.Need(p.S("siteId") == options.SiteId, "Sucursal equivocada", 403); return await service.Login(p, ct); }).RequireRateLimiting("login");
+        // Before sign-in: the lock screen reads the license state, and a locked branch accepts a new activation.
+        app.MapGet("/api/license", async(CancellationToken ct) => await service.LicenseStatus(ct));
+        app.MapPost("/api/license/activate", async(HttpContext c, CancellationToken ct) => await service.Activate(await Body(c, ct), ct)).RequireRateLimiting("login");
         app.MapGet("/api/setup", async(CancellationToken ct) => J.O("needsSetup", options.SetupCode is not null && await service.AwaitingSetup(ct), "siteId", options.SiteId));
         app.MapPost("/api/setup", async(HttpContext c, CancellationToken ct) => await service.Setup(await Body(c, ct), options.SetupCode, ct)).RequireRateLimiting("login");
+        app.MapPost("/api/updates/check", async(HttpContext c, CancellationToken ct) => await service.CheckUpdate(await Body(c, ct), ct)).RequireRateLimiting("login");
+        app.MapPost("/api/updates/download", async(HttpContext c, CancellationToken ct) => { var response = await service.DownloadUpdate(await Body(c, ct), ct); c.Response.RegisterForDispose(response); return Results.Stream(await response.Content.ReadAsStreamAsync(ct), "application/octet-stream"); });
         app.MapPost("/api/device/can-install", async(HttpContext c, CancellationToken ct) => await service.CanInstall(await Body(c, ct), ct));
-        app.MapGet("/api/support/preview", async(HttpContext c, CancellationToken ct) => await service.SupportPreview(Token(c), ct));
         app.MapGet("/api/preview/{id}", async(string id, HttpContext c, CancellationToken ct) => await service.Preview(Token(c), id, ct));
         app.MapGet("/api/reports", async(HttpContext c, CancellationToken ct) => await service.Report(Token(c), c.Request.Query["from"], c.Request.Query["until"], c.Request.Query["after"], ct));
         app.MapGet("/api/audit/verify", async(HttpContext c, CancellationToken ct) => await service.VerifyAudit(Token(c), ct));

@@ -9,6 +9,7 @@ using MesaNexo.Api;
 using MesaNexo.Bridge;
 using MesaNexo.Client;
 using MesaNexo.Core;
+using MesaNexo.Tests;
 using MesaNexo.Desktop;
 using MesaNexo.Integrations;
 Console.InputEncoding = Encoding.UTF8;
@@ -29,7 +30,7 @@ using var store = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_ho
 var options = new ApiOptions(site, Port: port, Bind: "127.0.0.1", LabPython: python, LabScript: Path.Combine(root, "runtime", "lab_host.py"), LabDirectory: directory, ReadySocket: null);
 await using var app = ApiHost.Build(options, store, certificate);
 var service = app.Services.GetRequiredService<BranchService>();
-await service.Initialize(J.O("siteId", site, "name", "Culinary Restaurant · prueba aislada", "mode", "licencia", "managerName", "Gerencia", "managerUsername", "gerencia", "managerPassword", password, "enrollmentCode", code, "modules", Restaurant.Modules));
+await TestLicense.Initialize(service, J.O("siteId", site, "name", "Culinary Restaurant · prueba aislada", "mode", "licencia", "managerName", "Gerencia", "managerUsername", "gerencia", "managerPassword", password, "enrollmentCode", code, "modules", Restaurant.Modules));
 await app.StartAsync();
 var profile = new ConnectionProfile($"https://localhost:{port}", site, Path.Combine(directory, "lab-ca.crt"), certificate.GetCertHashString(HashAlgorithmName.SHA256));
 var profileNode = JsonSerializer.SerializeToNode(profile)!.AsObject();
@@ -54,9 +55,12 @@ async Task<BridgeHost> Client(string id) { if (!clients.TryGetValue(id, out var 
 var facturama = new FixtureFacturama();
 using var pac = new FacturamaAdapter("fixture", "fixture", true, facturama);
 var issuer = J.O("expeditionPlace", "06600", "product", J.O("productCode", "90101501", "unitCode", "E48", "taxObject", "02"));
+var licenseRevision = 1L;
 async Task<JsonNode?> Fixture(string command, JsonObject a) {
 
     if (command == "integration.ready") { service.Integrations.Ready(a.S("key")); service.UseIntegrations(service.Integrations, (JsonArray)service.Domain.LiveCatalog.A("terminals").DeepClone()); return J.O("ready", a.S("key")); }
+    // The provider lets the license lapse, then renews it: revisions only grow, as CulinaryServer issues them.
+    if (command is "license.expire" or "license.restore") { var expired = command == "license.expire"; await service.InstallLicense(TestLicense.Sign(Jws.License, TestLicense.Payload(service, Restaurant.Modules, plan: "annual", expires: expired ? DateTimeOffset.UtcNow.AddDays(-2) : DateTimeOffset.UtcNow.AddYears(1), revision: ++licenseRevision))); return await service.LicenseStatus(); }
     if (command != "fiscal.sandbox") throw new InvalidOperationException("Orden de prueba desconocida");
     facturama.Mode = a.S("mode");
     var processed = 0;

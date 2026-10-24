@@ -10,7 +10,7 @@ static class SchemaTests {
         var folder = Path.Combine(root, ".lab", "schema-" + J.Id());
         using var runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), folder, "schema-site");
         var service = new BranchService(runtime, "schema-site", new Passwords());
-        await service.Initialize(J.O("siteId", "schema-site", "name", "Schema fixture", "mode", "licencia", "managerName", "Manager", "managerUsername", "manager", "managerPassword", "Test-" + J.Id(), "enrollmentCode", J.Id(), "modules", Array.Empty<string>()));
+        await TestLicense.Initialize(service, J.O("siteId", "schema-site", "name", "Schema fixture", "mode", "licencia", "managerName", "Manager", "managerUsername", "manager", "managerPassword", "Test-" + J.Id(), "enrollmentCode", J.Id(), "modules", Array.Empty<string>()));
         var old = await service.Load();
         old.Meta["schemaVersion"] = 1;
         old.Meta["revision"] = old.Meta.L("revision") + 1;

@@ -35,7 +35,7 @@ static class LiveIntegrationTests {
         var live = new IntegrationConfig();
         foreach (var key in new[] { "terminal", "onlinepay", "messaging", "maps", "pms", "aggregators" }) live.Ready(key);
         service.UseIntegrations(live, new JsonArray(J.O("id", "caja-1", "name", "Caja 1", "provider", "mercadopago", "manual", false), J.O("id", "barra", "name", "Barra", "provider", "clip", "manual", false), J.O("id", "bbva", "name", "Salón BBVA", "provider", "bbva", "manual", true)));
-        await service.Initialize(J.O("siteId", "live-site", "name", "Taquería Real", "mode", "licencia", "managerName", "Gerencia", "managerUsername", "manager", "managerPassword", password, "enrollmentCode", enrollment, "modules", Restaurant.Modules));
+        await TestLicense.Initialize(service, J.O("siteId", "live-site", "name", "Taquería Real", "mode", "licencia", "managerName", "Gerencia", "managerUsername", "manager", "managerPassword", password, "enrollmentCode", enrollment, "modules", Restaurant.Modules));
         var token = (await service.Login(J.O("siteId", "live-site", "deviceId", J.Id(), "deviceSecret", J.Id(), "deviceName", "office", "username", "manager", "password", password, "enrollmentCode", enrollment))).S("token");
         async Task<JsonObject> Act(string type, JsonObject p) => (await service.Action(token, J.O("operationId", J.Id(), "type", type, "payload", p))).Obj("result");
         async Task<JsonObject> Get(string kind, string id) => (await service.Load()).Get(kind, id);

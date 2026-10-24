@@ -9,14 +9,10 @@ const restaurantGroups: Group[] = [
     },
     { id: 'restaurant', name: 'Restaurante', icon: 'store', keys: ['reservations', 'reviews', 'loyalty', 'integrations', 'settings', 'support'] },
 ];
-const providerGroups: Group[] = [
-    { id: 'business', name: 'Negocio', icon: 'grid', keys: ['overview', 'modules', 'commercial', 'releases'] },
-    { id: 'platform', name: 'Plataforma', icon: 'shield', keys: ['support', 'backups', 'audit'] },
-];
 const preparationGroups: Group[] = [{ id: 'preparation', name: 'Preparación', icon: 'flame', keys: ['kitchen', 'history'] }];
 const descriptions: Record<string, string> = { kitchen: 'Comandas por estación', history: 'Tiempos por comanda', cash: 'Pagos, movimientos y arqueo', delivery: 'Pedidos para llevar y reparto', catalog: 'Productos y categorías', inventory: 'Existencias, recetas y conteos', purchases: 'Órdenes, proveedores y por pagar', loyalty: 'Monedero, cashback y clientes', integrations: 'Proveedores simulados, listos para activar', expenses: 'Cuentas de gasto y caja chica', promotions: 'Horarios y combos', reports: 'Resultados por periodo', team: 'Permisos y sesiones', fiscal: 'Solicitudes CFDI', printing: 'Trabajos y conciliación', reservations: 'Agenda y solicitudes', reviews: 'Opiniones privadas', settings: 'Identidad, mesas y reglas', support: 'Solicitudes y permisos', backups: 'Copias cifradas del central', audit: 'Operaciones del proveedor' };
-function groups(role: string) { if (role === 'dueno') return [{ id: 'analytics', name: 'Analítica', icon: 'chart', keys: ['analytics'] }]; if (role === 'cajero') return [{ id: 'cashier', name: 'Caja', icon: 'wallet', keys: ['blind'] }]; return role === 'owner' ? providerGroups : role === 'cocina' ? preparationGroups : restaurantGroups; }
-export function navigationGroup(role: string, page: string) { if (role === 'owner') return 'Plataforma'; if (role === 'dueno') return 'Dirección'; if (role === 'cajero') return 'Caja'; return groups(role).find(group => group.keys.includes(page))?.name || 'Servicio'; }
+function groups(role: string) { if (role === 'dueno') return [{ id: 'analytics', name: 'Analítica', icon: 'chart', keys: ['analytics'] }]; if (role === 'cajero') return [{ id: 'cashier', name: 'Caja', icon: 'wallet', keys: ['blind'] }]; return role === 'cocina' ? preparationGroups : restaurantGroups; }
+export function navigationGroup(role: string, page: string) { if (role === 'dueno') return 'Dirección'; if (role === 'cajero') return 'Caja'; return groups(role).find(group => group.keys.includes(page))?.name || 'Servicio'; }
 
 export function StudioNavigation({ items, page, role, pending, counts = {}, onNavigate, icon }: {
     items: string[][]; page: string; role: string; pending: number; counts?: Record<string, number>; onNavigate: (page: string) => void; icon: (name: string) => React.ReactNode;

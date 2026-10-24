@@ -198,7 +198,10 @@
         }
       },
       "mesanexo.core": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "BouncyCastle.Cryptography": "[2.7.0, )"
+        }
       },
       "mesanexo.integrations": {
         "type": "Project",

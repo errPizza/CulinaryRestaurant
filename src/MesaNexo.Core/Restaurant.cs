@@ -17,15 +17,17 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
         return J.O("gross", gross, "discount", discount, "total", gross - discount, "paid", paid, "balance", gross - discount - paid, "tax", IncludedTax(s, v, gross - discount));
 
     }
+    // The verified license of the branch, supplied by its server. Features and limits come only from it, never from meta.
+    public Func<BranchState, LicenseView> License { get; set; } = _ => LicenseView.Missing;
     public void Usage(BranchState s, JsonObject u) {
 
         Role(u, "mesero", "cocina", "manager", "cajero");
-        var m = s.Meta;
-        Need(m.S("status", "active") == "active", "Sucursal suspendida", 403);
-        if (m.S("mode") == "renta") Need(DateTimeOffset.TryParse(m.S("usageUntil"), out var until) && until > DateTimeOffset.UtcNow, "Derecho de uso de renta vencido", 403);
+        var license = License(s);
+        Need(license.Usable, license.Message, 423);
 
     }
-    void Module(BranchState s, string module) => Need(s.Meta.A("modules").Strings().Contains(module), "Módulo no contratado: " + module, 403);
+    bool Licensed(BranchState s, string module) => License(s).Features.Contains(module);
+    void Module(BranchState s, string module) => Need(Licensed(s, module), "Módulo no contratado: " + module, 403);
     JsonObject Own(BranchState s, JsonObject u, string id) { var v = s.Get("visit", id); Need(v.S("status") == "open", "La cuenta está cerrada"); Need(u.S("role") == "manager" || v.S("waiterId") == u.S("id"), "La cuenta pertenece a otro mesero", 403); return v; }
     JsonObject Add(BranchState s, string kind, JsonObject value) { value["siteId"] = s.Meta.S("siteId"); return s.Add(kind, value); }
     JsonObject Notice(BranchState s, JsonObject v, string message, string kind, string? unitId = null) => Add(s, "notification", J.O("visitId", v.S("id"), "waiterId", v.S("waiterId"), "message", message, "type", kind, "unitId", unitId, "at", J.Now(), "attended", false));
@@ -83,6 +85,11 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
         var me = u.S("id");
         var meta = (JsonObject)s.Meta.DeepClone();
         meta.Remove("enrollmentHash");
+        var license = License(s);
+        meta["modules"] = J.N(license.Features);
+        meta["maxUsers"] = license.MaxUsers;
+        meta["maxTables"] = license.MaxTables;
+        meta["license"] = license.Summary();
         var outp = new StateParts();
         outp["user"] = SafeUser(u);
         outp["sessionId"] = session;
@@ -203,7 +210,7 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
                         var listPrice = ListPrice(s, v, prod, out var priceListId);
                         var price = checked(listPrice + extras.Sum(e => e.L("price")) + modifiers.Sum(m => m.L("price")));
                         string? promoId = null;
-                        if (s.Meta.A("modules").Strings().Contains("promotions")) {
+                        if (Licensed(s, "promotions")) {
 
                             var tz = TimeZoneInfo.FindSystemTimeZoneById("America/Mexico_City");
                             var hour = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, tz).Hour;
@@ -465,7 +472,7 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
                 }
             case "table.save": {
 
-                    if (id == "") Need(s.List("table").Count() < s.Meta.L("maxTables", 30), "Límite de mesas del plan");
+                    if (id == "") Need(s.List("table").Count() < License(s).MaxTables, "Límite de mesas del plan");
                     var t = id != "" ? s.Get("table", id) : Add(s, "table", J.O("status", "free"));
                     Need(id == "" || !s.Related("visit", "tableId", id).Any(x => x.S("status") == "open"), "Mesa con cuentas abiertas");
                     t["name"] = Text(p, "name", 100);
@@ -501,7 +508,7 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
                     Need(user.S("id") != u.S("id") || (p.B("active", true) && role == "manager"), "No puedes quitarte el acceso de gerente");
                     var username = Text(p, "username", 100);
                     Need(!s.Related("user", "username", username).Any(x => x.S("id") != user.S("id")), "Usuario existente");
-                    Need(id != "" || s.List("user").Count() <= s.Meta.L("maxUsers", 15), "Límite de empleados del plan");
+                    Need(id != "" || s.List("user").Count() <= License(s).MaxUsers, "Límite de empleados del plan");
                     user["name"] = Text(p, "name", 100);
                     user["username"] = username;
                     user["role"] = role;
@@ -584,19 +591,6 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
                 result = Add(s, "ticket", J.O("subject", Text(p, "subject", 200), "status", "open", "at", J.Now(), "messages", new[] { J.O("id", J.Id(), "actor", u.S("id"), "name", u.S("name"), "message", Text(p, "message"), "at", J.Now()) }));
                 break;
             case "ticket.reply": { var ticket = s.Get("ticket", id); Need(ticket.A("messages").Count < 20, "Abre otro ticket para continuar"); ticket.A("messages").Add(J.O("id", J.Id(), "actor", u.S("id"), "name", u.S("name"), "message", Text(p, "message"), "at", J.Now())); break; }
-            case "support.grant": {
-
-                    Need(DateTimeOffset.TryParse(s.Meta.S("supportUntil"), out var until) && until > DateTimeOffset.UtcNow, "No hay cobertura vigente de soporte", 403);
-                    var hours = Amount(p, "hours", 1, 24);
-                    var grantToken = Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
-                    var grant = Add(s, "grant", J.O("authorizedBy", u.S("id"), "tokenHash", J.Hash(grantToken), "reason", Text(p, "reason"), "at", J.Now(), "expires", DateTimeOffset.UtcNow.AddHours(hours).ToString("O"), "revoked", false, "simulation", true));
-                    result = J.O("id", grant.S("id"), "token", grantToken, "expires", grant.S("expires"), "simulation", true);
-                    break;
-
-                }
-            case "support.revoke":
-                s.Get("grant", id)["revoked"] = true;
-                break;
             default:
                 throw new BusinessException(404, "Operación no implementada: " + type);
         }

@@ -5,6 +5,7 @@ $env:DOTNET_CLI_HOME=Join-Path $projectRoot '.dotnet'
 $env:NUGET_PACKAGES=Join-Path $projectRoot '.packages'
 $env:PYTHONDONTWRITEBYTECODE='1'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT='1'
+& (Join-Path $PSScriptRoot 'Use-RootKey.ps1') -Test
 Push-Location $projectRoot
 try{
  & $Python -B tests/test_runtime_extension.py

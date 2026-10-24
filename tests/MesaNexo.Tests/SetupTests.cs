@@ -48,6 +48,8 @@ static class SetupTests {
             Check(status == 200 && created.B("initialized") && created.S("username") == "gerente" && created.S("enrollmentCode").Length >= 20, "setup creates the branch and returns a one-time device code");
             Check(await service.Ready() && !await service.AwaitingSetup() && !(await Status(profile)).B("needsSetup"), "branch becomes active and setup mode closes");
             Check((await Post(profile, Form("setup-site", setupCode, password))).status == 409, "setup cannot overwrite an initialized branch");
+            using (var early = new NativeSession(profile, new MemoryVault())) { var status423 = 0; try { await early.Login("gerente", password, "Setup kiosk", created.S("enrollmentCode")); } catch (ApiFailure e) { status423 = e.Status; } Check(status423 == 423, "a freshly set up branch asks for its license before anyone signs in"); }
+            await TestLicense.Grant(service, new JsonObject());
             using var session = new NativeSession(profile, new MemoryVault());
             var login = await session.Login("gerente", password, "Setup kiosk", created.S("enrollmentCode"));
             var state = await session.State();

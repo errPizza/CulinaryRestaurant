@@ -26,8 +26,8 @@ public sealed partial class MainView {
 
     }
     Button TextButton(string label, Func<Task> action) { var b = Button(label, action); b.Classes.Add("text"); b.Background = Brushes.Transparent; b.BorderThickness = new Thickness(0); b.Foreground = Brush.Parse("#775300"); b.FontSize = 12; b.Padding = new Thickness(7); return b; }
-    string GroupName() => user?.S("role") == "owner" ? page switch { "Portafolio" or "Planes y módulos" or "Licencias y servicios" => "Negocio", "Soporte" => "Atención", _ => "Software" } : user?.S("role") == "cocina" ? "Preparación" : page switch { "Catálogo" or "Caja" or "Reportes" or "Equipo y dispositivos" or "Promociones" => "Administración", "Reservaciones" or "Evaluaciones" or "Restaurante" or "Soporte" => "Restaurante", _ => "Servicio" };
-    static string PageIcon(string value) => value switch { "Resumen del turno" or "Portafolio" => "grid", "Mesas y cuentas" or "Cocina en vivo" => "food", "Bandeja de pendientes" => "bell", "Catálogo" or "Historial de preparación" or "Respaldos" => "book", "Caja" or "Licencias y servicios" => "wallet", "Equipo y dispositivos" => "users", "Reservaciones" or "Promociones" => "calendar", "Soporte" => "help", "Restaurante" or "Planes y módulos" => "settings", "Actualizaciones" => "cloud", _ => "chart" };
+    string GroupName() => user?.S("role") == "cocina" ? "Preparación" : page switch { "Catálogo" or "Caja" or "Reportes" or "Equipo y dispositivos" or "Promociones" => "Administración", "Reservaciones" or "Evaluaciones" or "Restaurante" or "Soporte" => "Restaurante", _ => "Servicio" };
+    static string PageIcon(string value) => value switch { "Resumen del turno" => "grid", "Mesas y cuentas" or "Cocina en vivo" => "food", "Bandeja de pendientes" => "bell", "Catálogo" or "Historial de preparación" => "book", "Caja" => "wallet", "Equipo y dispositivos" => "users", "Reservaciones" or "Promociones" => "calendar", "Soporte" => "help", "Restaurante" or "Planes y módulos" => "settings", "Actualizaciones" => "cloud", _ => "chart" };
     Task Navigate(string name) { page = name; visit = ""; Render(); return Task.CompletedTask; }
     async Task Logout() {
 
@@ -90,13 +90,13 @@ public sealed partial class MainView {
         var right = Horizontal(new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(4), Background = Brush.Parse("#46BE82") }, profileButton, version);
         right.Spacing = mobile ? 8 : 12;
         var role = user.S("role");
-        var quick = role == "dueno" ? new[] { "Analítica" } : role == "cajero" ? new[] { "Arqueo ciego" } : role == "owner" ? new[] { "Portafolio", "Planes y módulos", "Licencias y servicios" } : role == "cocina" ? new[] { "Cocina en vivo", "Historial de preparación" } : role == "manager" ? new[] { "Resumen del turno", "Mesas y cuentas", "Bandeja de pendientes" } : new[] { "Resumen del turno", "Mesas y cuentas", "Bandeja de pendientes" };
+        var quick = role == "dueno" ? new[] { "Analítica" } : role == "cajero" ? new[] { "Arqueo ciego" } : role == "cocina" ? new[] { "Cocina en vivo", "Historial de preparación" } : role == "manager" ? new[] { "Resumen del turno", "Mesas y cuentas", "Bandeja de pendientes" } : new[] { "Resumen del turno", "Mesas y cuentas", "Bandeja de pendientes" };
         var nav = Stack();
         nav.Spacing = 7;
         Control quickView;
         if (mobile) { var grid = new UniformGrid { Columns = 2, Rows = 0 }; foreach (var name in quick) { var b = NavigationButton(name); b.Margin = new Thickness(0, 0, 6, 6); b.HorizontalAlignment = HorizontalAlignment.Stretch; grid.Children.Add(b); } quickView = grid; } else { var row = Horizontal(quick.Select(NavigationButton).Cast<Control>().ToArray()); row.Spacing = 6; quickView = row; }
         var groups = new List<(string Name, string Icon, string[] Pages)>();
-        if (role == "owner") { groups.Add(("Software", "cloud", ["Actualizaciones", "Respaldos", "Historial"])); groups.Add(("Atención", "help", ["Soporte"])); } else if (role == "manager") {
+        if (role == "manager") {
 
             groups.Add(("Administración", "chart", ["Cocina en vivo", "Historial de preparación", "Catálogo", "Caja", "Inventario", "Delivery y clientes", "Impresión", "Fiscal", "Reportes", "Equipo y dispositivos", .. (state!.Obj("restaurant").A("modules").Strings().Contains("promotions") ? new[] { "Promociones" } : Array.Empty<string>())]));
             var restaurant = new List<string>();
@@ -165,12 +165,12 @@ public sealed partial class MainView {
             return Task.CompletedTask;
 
         }
-        var login = Button("Entrar a la operación", async () => { profile = new ConnectionProfile(url.Text?.Trim() ?? "", site.Text?.Trim() ?? "", ca.Text?.Trim() ?? "", fingerprint.Text?.Trim() ?? "", profile?.ServerUrl == url.Text?.Trim() ? profile?.ConnectAddress : null, tenant.Text?.Trim() ?? "", branchId.Text?.Trim() ?? ""); session?.Dispose(); session = new NativeSession(profile, vault); var result = await session.Login(username.Text ?? "", password.Text ?? "", Environment.MachineName, enrollment.Text ?? ""); password.Text = ""; enrollment.Text = ""; user = result.Obj("user"); state = await session.State(); page = user.S("role") == "dueno" ? "Analítica" : user.S("role") == "cajero" ? "Arqueo ciego" : user.S("role") == "cocina" ? "Cocina en vivo" : user.S("role") == "owner" ? "Portafolio" : "Resumen del turno"; await vault.Write("profile", JsonSerializer.Serialize(profile)); Render(); timer.Start(); try { await session.StartLive(async () => await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(RefreshLive)); } catch { } }, true);
+        var login = Button("Entrar a la operación", async () => { profile = new ConnectionProfile(url.Text?.Trim() ?? "", site.Text?.Trim() ?? "", ca.Text?.Trim() ?? "", fingerprint.Text?.Trim() ?? "", profile?.ServerUrl == url.Text?.Trim() ? profile?.ConnectAddress : null, tenant.Text?.Trim() ?? "", branchId.Text?.Trim() ?? ""); session?.Dispose(); session = new NativeSession(profile, vault); var result = await session.Login(username.Text ?? "", password.Text ?? "", Environment.MachineName, enrollment.Text ?? ""); password.Text = ""; enrollment.Text = ""; user = result.Obj("user"); state = await session.State(); page = user.S("role") == "dueno" ? "Analítica" : user.S("role") == "cajero" ? "Arqueo ciego" : user.S("role") == "cocina" ? "Cocina en vivo" : "Resumen del turno"; await vault.Write("profile", JsonSerializer.Serialize(profile)); Render(); timer.Start(); try { await session.StartLive(async () => await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(RefreshLive)); } catch { } }, true);
         login.HorizontalAlignment = HorizontalAlignment.Stretch;
         login.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         login.Content = Horizontal(Text("Entrar a la operación", 13, Brush.Parse("#29210C"), true), Brand.Icon("arrow-right", Graphite, 17));
         AutomationProperties.SetName(login, "Entrar a la operación");
-        var fieldsLogin = Stack(Eyebrow("BIENVENIDO A TU TURNO"), Text("Inicia sesión", 34, Raised, true), Text("Usa tu cuenta del restaurante o del propietario.", 13, Muted));
+        var fieldsLogin = Stack(Eyebrow("BIENVENIDO A TU TURNO"), Text("Inicia sesión", 34, Raised, true), Text("Usa tu cuenta del restaurante.", 13, Muted));
         fieldsLogin.Spacing = 15;
         fieldsLogin.Children.Add(Stack(Text("Usuario", 13, Graphite, true), username));
         fieldsLogin.Children.Add(Stack(Text("Contraseña", 13, Graphite, true), password));
@@ -202,10 +202,10 @@ public sealed partial class MainView {
         clockRefresh.Clear();
         Header();
         if (accountDrawer is not null) { shell.Children.Remove(accountDrawer); accountDrawer = null; }
-        var title = Stack(Eyebrow((user.S("role") == "owner" ? "PLATAFORMA" : state.Obj("restaurant").S("name").ToUpperInvariant()) + " / " + GroupName().ToUpperInvariant()), Text(page, ViewWidth <= 650 ? 27 : ViewWidth <= 900 ? 28 : 31, Graphite, true));
+        var title = Stack(Eyebrow(state.Obj("restaurant").S("name").ToUpperInvariant() + " / " + GroupName().ToUpperInvariant()), Text(page, ViewWidth <= 650 ? 27 : ViewWidth <= 900 ? 28 : 31, Graphite, true));
         title.Spacing = 9;
         var tools = Horizontal();
-        if (user.S("role") != "owner") { var branch = new ComboBox { ItemsSource = new[] { state.Obj("restaurant").S("branchName", "Sucursal Centro") }, SelectedIndex = 0, MinHeight = 40, Width = ViewWidth <= 380 ? 110 : 160, FontSize = 12 }; AutomationProperties.SetName(branch, "Sucursal"); tools.Children.Add(branch); }
+        { var branch = new ComboBox { ItemsSource = new[] { state.Obj("restaurant").S("branchName", "Sucursal Centro") }, SelectedIndex = 0, MinHeight = 40, Width = ViewWidth <= 380 ? 110 : 160, FontSize = 12 }; AutomationProperties.SetName(branch, "Sucursal"); tools.Children.Add(branch); }
         var connection = Button("Conexión", ConnectionDialog);
         connection.FontSize = 11;
         connection.Padding = new Thickness(10, 9);
@@ -221,10 +221,10 @@ public sealed partial class MainView {
         body.HorizontalAlignment = HorizontalAlignment.Stretch;
         if (error != "") body.Children.Add(new Border { Background = Brush.Parse("#FFF0E9"), BorderBrush = Brush.Parse("#E8BFAE"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(11), Padding = new Thickness(18, 13), Child = Text(error, 12, Brush.Parse("#A33424")) });
         if (session?.Connection == ConnectionState.Uncertain) body.Children.Add(Button("Reconciliar / reintentar operación pendiente", async () => { await session.Reconcile(true); state = await session.State(); Render(); }));
-        Control view = user.S("role") == "owner" ? ProviderPage() : page switch { "Analítica" => OwnerAnalytics(), "Resumen del turno" => Overview(), "Mesas y cuentas" => Tables(), "Cocina en vivo" => Kitchen(false), "Historial de preparación" => Kitchen(true), "Bandeja de pendientes" => Notices(), "Catálogo" => Catalog(), "Caja" => Cash(), "Arqueo ciego" => BlindCash(), "Inventario" => InventoryPage(), "Delivery y clientes" => DeliveryPage(), "Impresión" => PrintJobsPage(), "Fiscal" => FiscalPage(), "Reportes" => Reports(), "Equipo y dispositivos" => Team(), "Restaurante" => Settings(), "Reservaciones" => Reservations(), "Evaluaciones" => Reviews(), "Promociones" => Promotions(), "Soporte" => Support(), "Historial" => Audit(), _ => Text("Selecciona una pantalla") };
+        Control view = page switch { "Analítica" => OwnerAnalytics(), "Resumen del turno" => Overview(), "Mesas y cuentas" => Tables(), "Cocina en vivo" => Kitchen(false), "Historial de preparación" => Kitchen(true), "Bandeja de pendientes" => Notices(), "Catálogo" => Catalog(), "Caja" => Cash(), "Arqueo ciego" => BlindCash(), "Inventario" => InventoryPage(), "Delivery y clientes" => DeliveryPage(), "Impresión" => PrintJobsPage(), "Fiscal" => FiscalPage(), "Reportes" => Reports(), "Equipo y dispositivos" => Team(), "Restaurante" => Settings(), "Reservaciones" => Reservations(), "Evaluaciones" => Reviews(), "Promociones" => Promotions(), "Soporte" => Support(), "Historial" => Audit(), _ => Text("Selecciona una pantalla") };
         body.Children.Add(view);
         var footer = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(0, 4, 0, 0) };
-        footer.Children.Add(Text(Brand.Name + " · " + (user.S("role") == "owner" ? "Administración del proveedor" : "Aplicación interna"), 10, Muted));
+        footer.Children.Add(Text(Brand.Name + " · " + "Aplicación interna", 10, Muted));
         var stamp = Text("Datos persistentes · Versión 0.2.0", 10, Muted);
         if (ViewWidth > 500) { Grid.SetColumn(stamp, 1); footer.Children.Add(stamp); }
         body.Children.Add(new Border { BorderBrush = Line, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 22, 0, 0), Child = footer });

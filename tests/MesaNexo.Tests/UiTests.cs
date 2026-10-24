@@ -108,33 +108,28 @@ public static class UiTests {
         }, CancellationToken.None);
 
     }
-    public static async Task RunProvider(string root, JsonObject state, List<JsonObject> evidence) {
+    // The lock screen replaces everything while the license is unusable; it must fit and name plan and expiry.
+    public static async Task RunLicenseLock(string root, List<JsonObject> evidence) {
 
-        File.WriteAllText(Path.Combine(root, ".lab", "ui-provider.json"), state.ToJsonString());
         await using var ui = HeadlessUnitTestSession.StartNew(typeof(UiTests));
         await ui.Dispatch(() => {
 
             var view = new MainView(new MemoryVault());
-            typeof(MainView).GetField("state", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(view, state);
-            typeof(MainView).GetField("user", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(view, state.Obj("user"));
             var window = new Window { Content = view, Width = 1440, Height = 1000 };
             window.Show();
-            foreach (var width in new[] { 360, 834, 1440 }) {
+            foreach (var (license, expected) in new[] { (J.O("state", "expired", "plan", "monthly", "expiresAt", "2026-10-12T15:00:00.000Z"), "Tu licencia venció"), (J.O("state", "expired", "plan", "trial", "expiresAt", "2026-10-12T15:00:00.000Z"), "Tu periodo de prueba terminó"), (J.O("state", "missing"), "Activa Culinary Restaurant") })
+            foreach (var width in new[] { 360, 1440 }) {
 
                 window.Width = width;
-                foreach (var page in new[] { "Portafolio", "Planes y módulos", "Licencias y servicios", "Actualizaciones", "Soporte", "Respaldos", "Historial" }) {
-
-                    typeof(MainView).GetField("page", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(view, page);
-                    typeof(MainView).GetMethod("Render", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(view, null);
-                    window.UpdateLayout();
-                    Dispatcher.UIThread.RunJobs();
-                    PrototypeMotion.SuppressAnimations = true;
-                    var ok = view.GetVisualDescendants().OfType<ScrollViewer>().All(s => s.Extent.Width <= s.Viewport.Width + 2);
-                    if (!ok) throw new Exception("Provider layout overflow: " + page);
-                    evidence.Add(J.O("test", $"provider layout {page} at {width}px fits horizontal viewport", "result", "passed"));
-                    using (var frame = window.CaptureRenderedFrame()) { frame!.Save(Path.Combine(root, "evidence", $"native-provider-{page.Replace((char)32, (char)45)}-{width}.png")); if (page == "Portafolio") frame.Save(Path.Combine(root, "evidence", $"native-provider-{width}.png")); }
-
-                }
+                typeof(MainView).GetMethod("RenderLicenseLock", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(view, [license]);
+                window.UpdateLayout();
+                Dispatcher.UIThread.RunJobs();
+                var texts = view.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToArray();
+                if (!texts.Contains(expected)) throw new Exception("Lock screen without title: " + expected + " · " + string.Join(" | ", texts.Take(12)));
+                if (license.S("plan") != "" && !texts.Any(t => t.StartsWith("Plan ") && t.Contains("12"))) throw new Exception("Lock screen without plan and expiry");
+                if (!view.GetVisualDescendants().OfType<ScrollViewer>().All(sv => sv.Extent.Width <= sv.Viewport.Width + 2)) throw new Exception("Lock screen overflow at " + width);
+                evidence.Add(J.O("test", $"native lock screen '{expected}' at {width}px shows plan and fits", "result", "passed"));
+                using (var frame = window.CaptureRenderedFrame()) frame!.Save(Path.Combine(root, "evidence", $"native-license-{license.S("state")}-{license.S("plan", "none")}-{width}.png"));
 
             }
             window.Close();

@@ -266,7 +266,7 @@ test('support stays visible and saves requests, replies and revocable consent', 
     await menu.locator('summary').filter({ hasText: 'Restaurante' }).click();
     await menu.getByRole('button', { name: 'Soporte', exact: true }).click();
     await expect(page.locator('main h1')).toHaveText('Soporte');
-    await expect(page.getByText('Cobertura hasta', { exact: false })).toBeVisible();
+    await expect(page.getByText(/Vigente hasta|Sin fecha de vencimiento/)).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Sin solicitudes de soporte' })).toBeVisible();
     await page.getByRole('button', { name: 'Nueva solicitud', exact: true }).click();
     let dialog = page.getByRole('dialog', { name: 'Crear solicitud' });
@@ -280,19 +280,10 @@ test('support stays visible and saves requests, replies and revocable consent', 
     await dialog.getByLabel('Respuesta', { exact: true }).fill('Respuesta de prueba registrada.');
     await dialog.getByRole('button', { name: 'Guardar', exact: true }).click();
     await expect(ticket.getByText('Respuesta de prueba registrada.', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Autorizar consulta de soporte', exact: true }).click();
-    dialog = page.getByRole('dialog', { name: 'Autorizar soporte temporal' });
-    await expect(dialog.getByLabel('Vigencia en horas (máximo 24)')).toHaveAttribute('min', '1');
-    await dialog.getByLabel('Motivo y consentimiento', { exact: true }).fill('Consulta temporal de prueba, sin acceso al sistema.');
-    await dialog.getByRole('button', { name: 'Guardar', exact: true }).click();
-    const row = page.getByRole('row').filter({ hasText: 'Consulta temporal de prueba, sin acceso al sistema.' });
-    await expect(row.getByRole('button', { name: 'Revocar', exact: true })).toBeEnabled();
-    await row.getByRole('button', { name: 'Revocar', exact: true }).click();
-    await page.getByRole('dialog', { name: 'Revocar soporte' }).getByRole('button', { name: 'Confirmar', exact: true }).click();
-    await expect(row.getByRole('cell', { name: 'Revocada', exact: true })).toBeVisible();
+    // The provider's consented data preview was removed with the provider panel.
+    await expect(page.getByRole('button', { name: 'Autorizar consulta de soporte' })).toHaveCount(0);
     const state = (await call('support-ui', 'state')).data;
     expect(state.tickets.find((t: any) => t.subject === 'Consulta de prueba de soporte').messages).toHaveLength(2);
-    expect(state.grants.find((g: any) => g.reason === 'Consulta temporal de prueba, sin acceso al sistema.').revoked).toBe(true);
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(450);
     await page.screenshot({ path: path.join(evidence, 'support-fixed-1360.png'), fullPage: true });
@@ -326,7 +317,7 @@ test('approved design uses aligned controls, semantic icons and responsive real-
     await page.screenshot({ path: path.join(evidence, 'approved-tables-1360.png'), fullPage: true });
     await nav(page, 'Soporte');
     await expect(page.locator('.coverage-card')).toHaveCount(2);
-    await expect(page.getByRole('heading', { name: 'Consulta temporal', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Consulta temporal', exact: true })).toHaveCount(0);
     await page.getByRole('group', { name: 'Filtrar solicitudes' }).getByRole('button', { name: /Cerradas/ }).click();
     await expect(page.locator('article.ticket')).toHaveCount(0);
     await page.getByRole('group', { name: 'Filtrar solicitudes' }).getByRole('button', { name: /Todas/ }).click();
@@ -661,6 +652,30 @@ test('a PAC submission that lost its answer is retried by the manager with the s
     expect(request.status).toBe('sandbox-stamped');
     expect(request.retryReason).toBe('No aparece en el portal de Facturama');
     await expect(row.getByText('Prueba sandbox · sin validez fiscal')).toBeVisible();
+    expect(errors).toEqual([]);
+
+});
+test('an expired license replaces sign-in with the lock screen and nothing else', async ({ page }) => {
+
+    const errors: string[] = [];
+    page.on('pageerror', e => errors.push(e.message));
+    expect((await call('fixture', 'license.expire', {})).data.state).toBe('expired');
+    try {
+
+        await attach(page, 'license-lock');
+        await expect(page.getByRole('heading', { name: 'Tu licencia venció' }).first()).toBeVisible();
+        await expect(page.getByText(/Plan Anual · venció el/)).toBeVisible();
+        await expect(page.getByLabel('Contraseña', { exact: true })).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Ver último catálogo guardado' })).toHaveCount(0);
+        await page.screenshot({ path: path.join(evidence, 'hybrid-license-expired-1360.png'), fullPage: true });
+        await page.setViewportSize({ width: 390, height: 844 });
+        await expect(page.getByRole('button', { name: 'Reintentar' })).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        await page.screenshot({ path: path.join(evidence, 'hybrid-license-expired-390.png'), fullPage: true });
+
+    } finally { await call('fixture', 'license.restore', {}); }
+    await page.getByRole('button', { name: 'Reintentar' }).click();
+    await expect(page.getByRole('heading', { name: 'Inicia sesión' })).toBeVisible();
     expect(errors).toEqual([]);
 
 });
