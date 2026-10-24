@@ -47,7 +47,7 @@ def invoke(directory, site, port, expected_success=True):
 
 
 def record_digest(directory):
-    with sqlite3.connect((directory/'store.sqlite').as_uri()+'?mode=ro', uri=True) as db:
+    with sqlite3.connect((directory / 'store.sqlite').as_uri() + '?mode=ro', uri=True) as db:
         rows = db.execute('SELECT id,version,envelope FROM records ORDER BY id').fetchall()
     return hashlib.sha256(json.dumps(rows).encode()).hexdigest()
 
@@ -73,7 +73,7 @@ try:
             ready = message
             break
     directory = Path(ready['directory']).resolve()
-    assert directory.is_relative_to(ROOT/'.lab') and directory.name.startswith('hybrid-')
+    assert directory.is_relative_to(ROOT / '.lab') and directory.name.startswith('hybrid-')
     site = ready['profile']['SiteId']
     port = urllib.parse.urlparse(ready['profile']['ServerUrl']).port
     before = record_digest(directory)
@@ -88,7 +88,7 @@ try:
     build = Path(restarted['BuildRoot']).resolve()
     check(not restarted['Reused'] and restarted['Ready'] and owned_backend,
           'stopped lab starts successfully from a fresh isolated build')
-    check(build.is_relative_to(ROOT/'.lab/start-builds') and Path(restarted['ApiAssembly']).is_file(),
+    check(build.is_relative_to(ROOT / '.lab/start-builds') and Path(restarted['ApiAssembly']).is_file(),
           'new API artifacts stay outside the shared Debug directory')
     check(record_digest(directory) == before, 'restart preserves initialized users and business records')
     second = invoke(directory, site, port)
@@ -105,8 +105,8 @@ try:
     check(foreign.returncode != 0 and 'LAB_RESULT_JSON:' not in foreign.stdout,
           'untrusted occupied port is rejected instead of bypassing TLS or starting another backend')
     check(record_digest(directory) == before, 'rejected foreign service cannot reinitialize stored data')
-    (ROOT/'evidence/lab-launcher.json').write_text(json.dumps(evidence, indent=2)+'\n', encoding='utf-8')
-    print(str(len(evidence))+' launcher checks passed.', flush=True)
+    (ROOT / 'evidence/lab-launcher.json').write_text(json.dumps(evidence, indent=2) + '\n', encoding='utf-8')
+    print(str(len(evidence)) + ' launcher checks passed.', flush=True)
 finally:
     if server:
         server.shutdown()
