@@ -107,9 +107,13 @@ class KioskRecovery(unittest.TestCase):
 
     def test_restoration_returns_previous_app_and_removes_only_added_config(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(os, "chown", create=True), patch.object(installer, "secure_parent"):
-            root = Path(tmp); app = root / "app"; (app / "client").mkdir(parents=True)
-            binary = app / "client/culinary-restaurant"; binary.write_bytes(b"old binary")
-            config = root / "lightdm.conf"; backup = root / "backup"
+            root = Path(tmp)
+            app = root / "app"
+            (app / "client").mkdir(parents=True)
+            binary = app / "client/culinary-restaurant"
+            binary.write_bytes(b"old binary")
+            config = root / "lightdm.conf"
+            backup = root / "backup"
             with patch.object(installer, "APP", app), patch.object(installer, "LIGHTDM", config):
                 installer.commit([(binary, b"new binary", 0o755), (config, b"new session", 0o644)], backup)
                 self.assertEqual(binary.read_bytes(), b"new binary")
@@ -119,10 +123,14 @@ class KioskRecovery(unittest.TestCase):
 
     def test_overriding_lightdm_config_rolls_back_all_destinations(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(os, "chown", create=True), patch.object(installer, "secure_parent"):
-            root = Path(tmp); app = root / "app"; (app / "client").mkdir(parents=True)
-            binary = app / "client/culinary-restaurant"; binary.write_bytes(b"old binary")
-            config = root / "lightdm.conf"; backup = root / "backup"
-            def rejected():raise ValueError("configuration override")
+            root = Path(tmp)
+            app = root / "app"
+            (app / "client").mkdir(parents=True)
+            binary = app / "client/culinary-restaurant"
+            binary.write_bytes(b"old binary")
+            config = root / "lightdm.conf"
+            backup = root / "backup"
+            def rejected(): raise ValueError("configuration override")
             with patch.object(installer, "APP", app), patch.object(installer, "LIGHTDM", config):
                 with self.assertRaises(ValueError):
                     installer.commit([(binary, b"new", 0o755), (config, b"new session", 0o644)], backup, validate=rejected)
@@ -137,13 +145,18 @@ class KioskRecovery(unittest.TestCase):
     def test_manifest_rejects_changed_and_unlisted_files(self):
         import hashlib
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp); data = root / "safe.txt"; data.write_bytes(b"safe")
+            root = Path(tmp)
+            data = root / "safe.txt"
+            data.write_bytes(b"safe")
             (root / "SHA256SUMS").write_text(hashlib.sha256(b"safe").hexdigest() + "  safe.txt\n")
             installer.verify_bundle(root)
             data.write_bytes(b"changed")
-            with self.assertRaises(ValueError):installer.verify_bundle(root)
-            data.write_bytes(b"safe"); (root / "extra.txt").write_bytes(b"unlisted")
-            with self.assertRaises(ValueError):installer.verify_bundle(root)
+            with self.assertRaises(ValueError):
+                installer.verify_bundle(root)
+            data.write_bytes(b"safe")
+            (root / "extra.txt").write_bytes(b"unlisted")
+            with self.assertRaises(ValueError):
+                installer.verify_bundle(root)
 
     def test_cache_requires_complete_build_owned_by_current_administrator(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -153,22 +166,26 @@ class KioskRecovery(unittest.TestCase):
             cargo.parent.mkdir(parents=True)
             cargo.write_bytes(b"fixture tool")
             uid = work.stat().st_uid
-            with self.assertRaises(ValueError):installer.cache_for(uid, root)
+            with self.assertRaises(ValueError):
+                installer.cache_for(uid, root)
             (work / "client-source/src-tauri/target").mkdir(parents=True)
             self.assertEqual(installer.cache_for(uid, root), work)
-            with self.assertRaises(ValueError):installer.cache_for(uid + 1, root)
+            with self.assertRaises(ValueError):
+                installer.cache_for(uid + 1, root)
 
     def test_manifest_rejects_traversal_and_duplicate(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             for text in ("a" * 64 + "  ../outside\n", "a" * 64 + "  /etc/shadow\n"):
                 (root / "SHA256SUMS").write_text(text)
-                with self.assertRaises(ValueError):installer.verify_bundle(root)
+                with self.assertRaises(ValueError):
+                    installer.verify_bundle(root)
             import hashlib
             (root / "file.txt").write_bytes(b"fixture")
             row = hashlib.sha256(b"fixture").hexdigest() + "  file.txt\n"
             (root / "SHA256SUMS").write_text(row + row)
-            with self.assertRaises(ValueError):installer.verify_bundle(root)
+            with self.assertRaises(ValueError):
+                installer.verify_bundle(root)
 
 
 if __name__ == "__main__":

@@ -2,31 +2,90 @@ using System.Text.Json.Nodes;
 using MesaNexo.Api;
 using MesaNexo.Core;
 namespace MesaNexo.Tests;
-static class BusinessTests
-{
-    public static async Task Run(string root,string python,List<JsonObject> evidence)
-    {
-        void Check(bool ok,string name){if(!ok)throw new Exception(name);evidence.Add(J.O("test",name,"result","passed"));Console.WriteLine("PASS "+name);}
-        async Task Deny(Func<Task> action,string name){try{await action();throw new Exception("Expected rejection: "+name);}catch(BusinessException){Check(true,name);}}
-        var folder=Path.Combine(root,".lab","rules-"+J.Id());using var runtime=new RuntimeStore(python,Path.Combine(root,"runtime","lab_host.py"),folder,"rules-site");var service=new BranchService(runtime,"rules-site",new Passwords());var password="Rules-"+J.Id();var code=J.Id();await service.Initialize(J.O("siteId","rules-site","name","Reglas aisladas","mode","licencia","managerName","Gerente","managerUsername","manager","managerPassword",password,"enrollmentCode",code,"modules",Restaurant.Modules));var device=J.O("deviceId",J.Id(),"deviceSecret",J.Id(),"deviceName","rules terminal","siteId","rules-site","username","manager","password",password,"enrollmentCode",code);var login=await service.Login(device);var token=login.S("token");
-        async Task<JsonObject> Act(string type,JsonObject p,string? id=null)=>(await service.Action(token,J.O("operationId",id??J.Id(),"type",type,"payload",p))).Obj("result");
-        var waiter=await Act("user.save",J.O("name","Servicio","username","service","role","mesero","password",password,"active",true));await Act("catalog.category",J.O("name","Comida"));var product=await Act("catalog.product",J.O("name","Principal","price",10000,"category","Comida","station","Cocina","supportsCooking",true,"extras",new[]{J.O("name","Extra","price",2000)}));var drink=await Act("catalog.product",J.O("name","Bebida","price",5000,"category","Comida","station","Barra","supportsCooking",false,"extras",Array.Empty<object>()));var table=await Act("table.save",J.O("name","Mesa 1","zone","Salón","capacity",4));var target=await Act("table.save",J.O("name","Mesa 2","zone","Salón","capacity",4));var cash=await Act("cash.open",J.O("initial",50000));
-        var visit=await Act("visit.open",J.O("tableId",table.S("id"),"people",2,"waiterId",waiter.S("id")));var vid=visit.S("id");
-        JsonObject Command(params JsonObject[] items)=>J.O("visitId",vid,"items",items);
-        var stable=J.Id();var body=Command(J.O("productId",product.S("id"),"quantity",2,"extras",new[]{"Extra"},"cooking","Medio","held",true,"person",2,"course","entrada"));var command=await Act("command.send",body,stable);var again=await Act("command.send",body,stable);Check(command.S("id")==again.S("id"),"same UUID returns original command receipt");await Deny(()=>Act("command.send",Command(J.O("productId",product.S("id"),"quantity",3)),stable),"operation UUID reuse with different payload rejected");
-        var ids=command.A("unitIds").Strings();await Deny(()=>Act("unit.state",J.O("id",ids[0],"status","preparing")),"held units cannot skip course release");await Act("unit.state",J.O("id",ids[0],"status","received"));await Act("unit.state",J.O("id",ids[0],"status","preparing"));await Act("unit.state",J.O("id",ids[0],"status","ready"));Check((await service.Load()).Get("unit",ids[0]).L("price")==12000,"extras and cooking snapshotted in confirmed unit");
-        await Deny(()=>Act("command.send",Command(J.O("productId",product.S("id"),"quantity",1,"extras",new[]{"Extra","Extra"}))),"duplicate extras rejected atomically");await Deny(()=>Act("command.send",Command(J.O("productId",product.S("id"),"quantity",1.5))),"fractional unit quantity rejected");await Deny(()=>Act("command.send",Command(J.O("productId",product.S("id"),"quantity",1,"cooking","Inválido"))),"unsupported cooking term rejected");
-        var request=await Act("request.create",J.O("visitId",vid,"type","change","unitId",ids[0],"productId",drink.S("id"),"notes","Sin azúcar","reason","Cambio de producto"));await Act("request.decide",J.O("id",request.S("id"),"approve",true));var changed=(await service.Load()).Get("unit",ids[0]);Check(changed.S("status")=="received"&&changed.S("cooking")==""&&changed.A("extras").Count==0&&changed.L("price")==5000,"authorized product replacement clears incompatible extras/cooking and restarts preparation");
-        var discount=await Act("request.create",J.O("visitId",vid,"type","discount","discount",J.O("kind","percent","value",9.5m),"reason","Cortesía"));await Act("request.decide",J.O("id",discount.S("id"),"approve",true));var s=await service.Load();Check(service.Domain.Totals(s,s.Get("visit",vid)).L("discount")==1615,"fractional percentage rounds to whole minor units");await Deny(()=>Act("visit.split",J.O("id",vid,"unitIds",new[]{ids[0]})),"accounts with discounts require reconciliation before split");
-        await Act("visit.move",J.O("id",vid,"tableId",target.S("id")));s=await service.Load();Check(s.Get("table",table.S("id")).S("status")=="cleaning"&&s.List("command").Count()==1,"moving table preserves kitchen command and releases old table for cleaning");
-        var invalid=J.O("visitId",vid,"amount",10.5,"method","cash");await Deny(()=>Act("payment.add",invalid),"fractional cent payment rejected");
-        var balance=service.Domain.Totals(s,s.Get("visit",vid)).L("balance");await Act("payment.add",J.O("visitId",vid,"amount",balance,"tip",1000,"method","cash"));await Deny(()=>Act("unit.state",J.O("id",ids[0],"status","unavailable","reason","Agotado")),"unavailable unit cannot make paid balance negative");await Deny(()=>Act("visit.close",J.O("id",vid)),"account cannot close before preparation and delivery");
-        foreach(var uid in ids){var current=(await service.Load()).Get("unit",uid);if(current.S("status")=="held")await Act("unit.state",J.O("id",uid,"status","received"));await Act("unit.state",J.O("id",uid,"status","preparing"));await Act("unit.state",J.O("id",uid,"status","ready"));await Act("unit.state",J.O("id",uid,"status","delivered"));}await Act("visit.close",J.O("id",vid));
-        foreach(var type in new[]{"income","expense","withdrawal"})await Act("cash.movement",J.O("cashId",cash.S("id"),"type",type,"amount",1000,"reason","Prueba"));await Act("cash.close",J.O("id",cash.S("id"),"counted",50000+balance));s=await service.Load();Check(s.Get("cash",cash.S("id")).L("difference")==0,"cash close reconciles payment tip income expense and withdrawal");
-        var reservation=J.O("name","Reserva","contact","local","start",DateTimeOffset.UtcNow.AddDays(1).ToString("O"),"people",2,"tableId",table.S("id"),"status","proposed");var proposed=await Act("reservation.save",reservation);reservation["id"]=proposed.S("id");reservation["status"]="confirmed";await Deny(()=>Act("reservation.save",reservation),"proposed reservation requires explicit acceptance");reservation["accepted"]=true;await Act("reservation.save",reservation);
-        await Act("review.simulate",J.O("visitId",vid,"food",5,"service",4,"overall",5,"comment","Privada"));await Deny(()=>Act("review.simulate",J.O("visitId",vid,"food",5,"service",5,"overall",5)),"closed visit review can be simulated only once");
-        var grant=await Act("support.grant",J.O("hours",1,"reason","Consulta autorizada"));var preview=await service.SupportPreview(grant.S("token"));Check(preview.B("simulation")&&preview.S("scope")=="read-only-business-preview","support consent allows only audited business preview");await Act("support.revoke",J.O("id",grant.S("id")));await Deny(()=>service.SupportPreview(grant.S("token")),"support revocation applies immediately at branch server");
-        var report=await service.Report(token,"","",null);Check(report.L("count")==1&&report.L("paid")==balance&&report.L("tips")==1000,"full-history report uses recorded integer totals and tips");
-        Check(!(await service.CanInstall(device)).B("allowed"),"client update blocked while installation session remains active");await Act("session.logout",new());Check((await service.CanInstall(device)).B("allowed"),"client update permitted only after local accounts and device session close");
+
+static class BusinessTests {
+    public static async Task Run(string root, string python, List<JsonObject> evidence) {
+
+        void Check(bool ok, string name) { if (!ok) throw new Exception(name); evidence.Add(J.O("test", name, "result", "passed")); Console.WriteLine("PASS " + name); }
+        async Task Deny(Func<Task> action, string name) { try { await action(); throw new Exception("Expected rejection: " + name); } catch (BusinessException) { Check(true, name); } }
+        var folder = Path.Combine(root, ".lab", "rules-" + J.Id());
+        using var runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), folder, "rules-site");
+        var service = new BranchService(runtime, "rules-site", new Passwords());
+        var password = "Rules-" + J.Id();
+        var code = J.Id();
+        await service.Initialize(J.O("siteId", "rules-site", "name", "Reglas aisladas", "mode", "licencia", "managerName", "Gerente", "managerUsername", "manager", "managerPassword", password, "enrollmentCode", code, "modules", Restaurant.Modules));
+        var device = J.O("deviceId", J.Id(), "deviceSecret", J.Id(), "deviceName", "rules terminal", "siteId", "rules-site", "username", "manager", "password", password, "enrollmentCode", code);
+        var login = await service.Login(device);
+        var token = login.S("token");
+        async Task<JsonObject> Act(string type, JsonObject p, string? id = null) => (await service.Action(token, J.O("operationId", id ?? J.Id(), "type", type, "payload", p))).Obj("result");
+        var waiter = await Act("user.save", J.O("name", "Servicio", "username", "service", "role", "mesero", "password", password, "active", true));
+        await Act("catalog.category", J.O("name", "Comida"));
+        var product = await Act("catalog.product", J.O("name", "Principal", "price", 10000, "category", "Comida", "station", "Cocina", "supportsCooking", true, "extras", new[] { J.O("name", "Extra", "price", 2000) }));
+        var drink = await Act("catalog.product", J.O("name", "Bebida", "price", 5000, "category", "Comida", "station", "Barra", "supportsCooking", false, "extras", Array.Empty<object>()));
+        var table = await Act("table.save", J.O("name", "Mesa 1", "zone", "Salón", "capacity", 4));
+        var target = await Act("table.save", J.O("name", "Mesa 2", "zone", "Salón", "capacity", 4));
+        var cash = await Act("cash.open", J.O("initial", 50000));
+        var visit = await Act("visit.open", J.O("tableId", table.S("id"), "people", 2, "waiterId", waiter.S("id")));
+        var vid = visit.S("id");
+        JsonObject Command(params JsonObject[] items) => J.O("visitId", vid, "items", items);
+        var stable = J.Id();
+        var body = Command(J.O("productId", product.S("id"), "quantity", 2, "extras", new[] { "Extra" }, "cooking", "Medio", "held", true, "person", 2, "course", "entrada"));
+        var command = await Act("command.send", body, stable);
+        var again = await Act("command.send", body, stable);
+        Check(command.S("id") == again.S("id"), "same UUID returns original command receipt");
+        await Deny(() => Act("command.send", Command(J.O("productId", product.S("id"), "quantity", 3)), stable), "operation UUID reuse with different payload rejected");
+        var ids = command.A("unitIds").Strings();
+        await Deny(() => Act("unit.state", J.O("id", ids[0], "status", "preparing")), "held units cannot skip course release");
+        await Act("unit.state", J.O("id", ids[0], "status", "received"));
+        await Act("unit.state", J.O("id", ids[0], "status", "preparing"));
+        await Act("unit.state", J.O("id", ids[0], "status", "ready"));
+        Check((await service.Load()).Get("unit", ids[0]).L("price") == 12000, "extras and cooking snapshotted in confirmed unit");
+        await Deny(() => Act("command.send", Command(J.O("productId", product.S("id"), "quantity", 1, "extras", new[] { "Extra", "Extra" }))), "duplicate extras rejected atomically");
+        await Deny(() => Act("command.send", Command(J.O("productId", product.S("id"), "quantity", 1.5))), "fractional unit quantity rejected");
+        await Deny(() => Act("command.send", Command(J.O("productId", product.S("id"), "quantity", 1, "cooking", "Inválido"))), "unsupported cooking term rejected");
+        var request = await Act("request.create", J.O("visitId", vid, "type", "change", "unitId", ids[0], "productId", drink.S("id"), "notes", "Sin azúcar", "reason", "Cambio de producto"));
+        await Act("request.decide", J.O("id", request.S("id"), "approve", true));
+        var changed = (await service.Load()).Get("unit", ids[0]);
+        Check(changed.S("status") == "received" && changed.S("cooking") == "" && changed.A("extras").Count == 0 && changed.L("price") == 5000, "authorized product replacement clears incompatible extras/cooking and restarts preparation");
+        var discount = await Act("request.create", J.O("visitId", vid, "type", "discount", "discount", J.O("kind", "percent", "value", 9.5m), "reason", "Cortesía"));
+        await Act("request.decide", J.O("id", discount.S("id"), "approve", true));
+        var s = await service.Load();
+        Check(service.Domain.Totals(s, s.Get("visit", vid)).L("discount") == 1615, "fractional percentage rounds to whole minor units");
+        await Deny(() => Act("visit.split", J.O("id", vid, "unitIds", new[] { ids[0] })), "accounts with discounts require reconciliation before split");
+        await Act("visit.move", J.O("id", vid, "tableId", target.S("id")));
+        s = await service.Load();
+        Check(s.Get("table", table.S("id")).S("status") == "cleaning" && s.List("command").Count() == 1, "moving table preserves kitchen command and releases old table for cleaning");
+        var invalid = J.O("visitId", vid, "amount", 10.5, "method", "cash");
+        await Deny(() => Act("payment.add", invalid), "fractional cent payment rejected");
+        var balance = service.Domain.Totals(s, s.Get("visit", vid)).L("balance");
+        await Act("payment.add", J.O("visitId", vid, "amount", balance, "tip", 1000, "method", "cash"));
+        await Deny(() => Act("unit.state", J.O("id", ids[0], "status", "unavailable", "reason", "Agotado")), "unavailable unit cannot make paid balance negative");
+        await Deny(() => Act("visit.close", J.O("id", vid)), "account cannot close before preparation and delivery");
+        foreach (var uid in ids) { var current = (await service.Load()).Get("unit", uid); if (current.S("status") == "held") await Act("unit.state", J.O("id", uid, "status", "received")); await Act("unit.state", J.O("id", uid, "status", "preparing")); await Act("unit.state", J.O("id", uid, "status", "ready")); await Act("unit.state", J.O("id", uid, "status", "delivered")); }
+        await Act("visit.close", J.O("id", vid));
+        foreach (var type in new[] { "income", "expense", "withdrawal" }) await Act("cash.movement", J.O("cashId", cash.S("id"), "type", type, "amount", 1000, "reason", "Prueba"));
+        await Act("cash.close", J.O("id", cash.S("id"), "counted", 50000 + balance));
+        s = await service.Load();
+        Check(s.Get("cash", cash.S("id")).L("difference") == 0, "cash close reconciles payment tip income expense and withdrawal");
+        var reservation = J.O("name", "Reserva", "contact", "local", "start", DateTimeOffset.UtcNow.AddDays(1).ToString("O"), "people", 2, "tableId", table.S("id"), "status", "proposed");
+        var proposed = await Act("reservation.save", reservation);
+        reservation["id"] = proposed.S("id");
+        reservation["status"] = "confirmed";
+        await Deny(() => Act("reservation.save", reservation), "proposed reservation requires explicit acceptance");
+        reservation["accepted"] = true;
+        await Act("reservation.save", reservation);
+        await Act("review.simulate", J.O("visitId", vid, "food", 5, "service", 4, "overall", 5, "comment", "Privada"));
+        await Deny(() => Act("review.simulate", J.O("visitId", vid, "food", 5, "service", 5, "overall", 5)), "closed visit review can be simulated only once");
+        var grant = await Act("support.grant", J.O("hours", 1, "reason", "Consulta autorizada"));
+        var preview = await service.SupportPreview(grant.S("token"));
+        Check(preview.B("simulation") && preview.S("scope") == "read-only-business-preview", "support consent allows only audited business preview");
+        await Act("support.revoke", J.O("id", grant.S("id")));
+        await Deny(() => service.SupportPreview(grant.S("token")), "support revocation applies immediately at branch server");
+        var report = await service.Report(token, "", "", null);
+        Check(report.L("count") == 1 && report.L("paid") == balance && report.L("tips") == 1000, "full-history report uses recorded integer totals and tips");
+        Check(!(await service.CanInstall(device)).B("allowed"), "client update blocked while installation session remains active");
+        await Act("session.logout", new());
+        Check((await service.CanInstall(device)).B("allowed"), "client update permitted only after local accounts and device session close");
+
     }
 }

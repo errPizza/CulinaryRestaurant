@@ -88,8 +88,11 @@ def replace_atomic(path, data, mode):
     fd, temporary = tempfile.mkstemp(prefix=".kiosk-", dir=path.parent)
     try:
         with os.fdopen(fd, "wb") as stream:
-            stream.write(data); stream.flush(); os.fsync(stream.fileno())
-        os.chmod(temporary, mode); os.chown(temporary, 0, 0)
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temporary, mode)
+        os.chown(temporary, 0, 0)
         os.replace(temporary, path)
     finally:
         Path(temporary).unlink(missing_ok=True)
@@ -168,7 +171,8 @@ def install(bundle):
         path = APP / "client" / name
         if path.is_symlink() or path.stat().st_uid != 0:
             raise PermissionError("Ejecutable instalado inesperado")
-    elf(APP / "client/culinary-restaurant"); elf(APP / "client/culinary-bridge")
+    elf(APP / "client/culinary-restaurant")
+    elf(APP / "client/culinary-bridge")
     config = lightdm_config()
     if autologin_user(config) != "operador":
         raise ValueError("Se requiere el autologin de operador ya existente; este instalador no cambia la autenticacion de Linux")
@@ -210,7 +214,8 @@ def install(bundle):
     bin_dir = work / "verified-bin"
     bin_dir.mkdir(mode=0o755)
     for src, name in ((compiled, "culinary-restaurant"), (APP / "client/culinary-bridge", "culinary-bridge")):
-        shutil.copyfile(src, bin_dir / name); os.chmod(bin_dir / name, 0o755)
+        shutil.copyfile(src, bin_dir / name)
+        os.chmod(bin_dir / name, 0o755)
     os.chown(bin_dir, uid, admin.pw_gid)
     verify_env = {k: v for k, v in env.items() if k not in ("DBUS_SESSION_BUS_ADDRESS", "DISPLAY", "XAUTHORITY")}
     verify_env.update(HOME=str(smoke), XDG_DATA_HOME=str(smoke / "data"),

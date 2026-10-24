@@ -57,14 +57,16 @@ def verify_click_focus(window):
         subprocess.run(["wmctrl", "-a", "Culinary focus probe"], check=True)
         deadline = time.monotonic() + 3
         while active_window() in (0, int(window, 16)) and time.monotonic() < deadline:
-            helper.update(); time.sleep(.05)
+            helper.update()
+            time.sleep(.05)
         if active_window() in (0, int(window, 16)):
             raise RuntimeError("No se pudo preparar la perdida de foco para la prueba")
         # Blank client area, outside the sign-in controls; no credential entry or submit.
         pointer_click(int(helper.winfo_screenwidth() * .95), int(helper.winfo_screenheight() * .95))
         deadline = time.monotonic() + 3
         while active_window() != int(window, 16) and time.monotonic() < deadline:
-            helper.update(); time.sleep(.05)
+            helper.update()
+            time.sleep(.05)
         if active_window() != int(window, 16):
             raise RuntimeError("El clic no devuelve el foco a Culinary Restaurant")
     finally:
@@ -130,7 +132,8 @@ def main():
         try:
             wm.wait(timeout=3)
         except subprocess.TimeoutExpired:
-            wm.kill(); wm.wait()
+            wm.kill()
+            wm.wait()
         listener.close()
 
 
