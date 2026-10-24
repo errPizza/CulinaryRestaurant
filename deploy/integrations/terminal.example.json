@@ -1,0 +1,9 @@
+{
+  "mercadopago": { "accessToken": "APP_USR-TOKEN_DE_LA_CUENTA_DEL_RESTAURANTE" },
+  "clip": { "apiKey": "API_KEY_DE_CLIP", "secretKey": "SECRET_KEY_DE_CLIP" },
+  "terminals": [
+    { "id": "caja-1", "name": "Caja 1 · Mercado Pago", "provider": "mercadopago", "deviceId": "PAX_A910__SMARTPOS0000000000" },
+    { "id": "barra", "name": "Barra · Clip", "provider": "clip", "deviceId": "P8220724000042" },
+    { "id": "bbva-salon", "name": "Salón · BBVA", "provider": "bbva" }
+  ]
+}

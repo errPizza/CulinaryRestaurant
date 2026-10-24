@@ -1,1 +1,3 @@
-<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup><ItemGroup><ProjectReference Include="../MesaNexo.Core/MesaNexo.Core.csproj"/></ItemGroup></Project>
+<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup><ItemGroup><ProjectReference Include="../MesaNexo.Core/MesaNexo.Core.csproj" /></ItemGroup><ItemGroup>
+  <PackageReference Include="MailKit" Version="4.18.2" />
+</ItemGroup></Project>

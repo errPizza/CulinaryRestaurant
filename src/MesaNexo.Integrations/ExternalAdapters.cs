@@ -33,6 +33,13 @@ public sealed class FacturamaAdapter:IPacAdapter,IDisposable
             if(!Guid.TryParse(uuid,out _))return new("pending-reconciliation",data.S("Id"),Message:"Respuesta sin timbre verificable; consultar PAC antes de reintentar");return new(data.S("Status")=="canceled"?"cancelled":"stamped",data.S("Id"),uuid,"Respuesta HTTPS del PAC");
         }catch(OperationCanceledException)when(!ct.IsCancellationRequested){return new("pending-reconciliation",Message:"Respuesta PAC incierta; conservar Folio y Date");}catch(HttpRequestException){return new("pending-reconciliation",Message:"PAC no disponible; conservar Folio y Date");}
     }
+    // Facturama e-mails the PDF and XML itself (API Web: POST Cfdi?cfdiType=issued&cfdiId=…&email=…, empty body).
+    public async Task<bool> Email(string id,string email,CancellationToken ct=default)
+    {
+        Need(id.Length is >0 and <=100&&System.Text.RegularExpressions.Regex.IsMatch(email,@"^[^@\s]+@[^@\s]+\.[^@\s]+$")&&email.Length<=150,"Correo del receptor inválido");
+        try{using var response=await http.PostAsync("Cfdi?cfdiType=issued&cfdiId="+Uri.EscapeDataString(id)+"&email="+Uri.EscapeDataString(email),new StringContent("{}",Encoding.UTF8,"application/json"),ct);return response.IsSuccessStatusCode;}
+        catch(Exception e)when(e is HttpRequestException or OperationCanceledException&&!ct.IsCancellationRequested){return false;}
+    }
     public void Dispose()=>http.Dispose();
 }
 public static class JwtTokens

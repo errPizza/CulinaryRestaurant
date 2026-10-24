@@ -39,7 +39,7 @@ static class FiscalTests
         void Check(bool ok,string name){if(!ok)throw new Exception("FAIL: "+name);evidence.Add(J.O("test",name,"result","passed","pac","simulated Facturama API Web; no network"));Console.WriteLine("PASS "+name);}
         async Task Deny(Func<Task> action,string contains,string name){try{await action();throw new Exception("Expected rejection: "+name);}catch(BusinessException e){Check(e.Message.Contains(contains),name);}}
         var folder=Path.Combine(root,".lab","fiscal-"+J.Id());Directory.CreateDirectory(folder);var password="Test-"+J.Id();var enrollment=J.Id();
-        using var runtime=new RuntimeStore(python,Path.Combine(root,"runtime","lab_host.py"),folder,"fiscal-site");var service=new BranchService(runtime,"fiscal-site",new Passwords());
+        using var runtime=new RuntimeStore(python,Path.Combine(root,"runtime","lab_host.py"),folder,"fiscal-site");var service=new BranchService(runtime,"fiscal-site",new Passwords());var credentials=new IntegrationConfig();credentials.Ready("pac");service.UseIntegrations(credentials);
         await service.Initialize(J.O("siteId","fiscal-site","name","Taquería Fiscal","mode","licencia","managerName","Gerencia","managerUsername","manager","managerPassword",password,"enrollmentCode",enrollment,"modules",Restaurant.Modules));
         var token=(await service.Login(J.O("siteId","fiscal-site","deviceId",J.Id(),"deviceSecret",J.Id(),"deviceName","fiscal test","username","manager","password",password,"enrollmentCode",enrollment))).S("token");
         async Task<JsonObject> Act(string type,JsonObject p)=>(await service.Action(token,J.O("operationId",J.Id(),"type",type,"payload",p))).Obj("result");
@@ -61,12 +61,12 @@ static class FiscalTests
         async Task Patch(string id,Action<JsonObject> change){var state=await service.Load();change(state.Get("fiscal",id));state.Meta["revision"]=state.Meta.L("revision")+1;await runtime.CallAsync(J.O("op","transaction_v1","protocol",1,"event_id",J.Id(),"receipt",J.O("actor","fiscal-fixture","fingerprint",J.Id(),"result",new JsonObject()),"changes",new JsonArray(state.Changes().Select(x=>(JsonNode)x).ToArray())));}
         var issuer=J.O("expeditionPlace","06600","product",J.O("productCode","90101501","unitCode","E48","taxObject","02"));
         var facturama=new SimulatedFacturama("sandbox-user","sandbox-pass");using var pac=new FacturamaAdapter("sandbox-user","sandbox-pass",true,facturama);
-        Task<bool> Process(JsonObject? config=null)=>service.ProcessFiscalSandbox(pac,config??issuer,allRequests:true);
+        Task<bool> Process(JsonObject? config=null)=>service.ProcessFiscal(pac,config??issuer,allRequests:true);
 
         // Configuration of the branch.
         var config=Path.Combine(folder,"fiscal.json");
         File.WriteAllText(config,J.O("provider","facturama","environment","production","username","u","password","p","issuer",issuer).ToJsonString());
-        Check(Throws(()=>FiscalOptions.Load(config),"CSD"),"production stamping stays refused until there is a CSD and a reviewed contract");
+        Check(!FiscalOptions.Load(config).Adapter().IsSandbox,"a production configuration stamps on Facturama's production API");
         File.WriteAllText(config,J.O("provider","facturama","environment","sandbox","username","u","password","p","issuer",J.O("expeditionPlace","06600")).ToJsonString());
         Check(Throws(()=>FiscalOptions.Load(config),"clave SAT por defecto"),"sandbox configuration needs a default SAT key for products");
         File.WriteAllText(config,J.O("provider","facturama","environment","sandbox","username","u","password","p","issuer",issuer).ToJsonString());
@@ -129,7 +129,7 @@ static class FiscalTests
         // With the PAC simulator on, the sandbox stays out of it.
         await Act("integration.configure",J.O("provider","pac","mode","simulated"));var simulatedRequest=await Request(await Ticket());calls=facturama.StampCalls;
         Check(!await Process()&&facturama.StampCalls==calls&&(await Fiscal(simulatedRequest)).S("status")=="pending","the sandbox does not touch requests while the PAC simulator is on");
-        await Act("integration.configure",J.O("provider","pac","mode","off"));
+        await Act("integration.configure",J.O("provider","pac","mode","live"));
 
         // The service a branch runs.
         var worker=new FiscalWorker(service,pac,issuer,NullLogger<FiscalWorker>.Instance);await worker.StartAsync(CancellationToken.None);

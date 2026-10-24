@@ -1,0 +1,6 @@
+{
+  "apiKey": "CLAVE_DE_GOOGLE_RESTRINGIDA_A_GEOCODING_Y_ROUTES",
+  "region": "mx",
+  "language": "es",
+  "travelMode": "TWO_WHEELER"
+}

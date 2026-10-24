@@ -1,0 +1,5 @@
+{
+  "provider": "stripe",
+  "secretKey": "sk_live_LLAVE_SECRETA_DE_STRIPE",
+  "successUrl": "https://turestaurante.mx/gracias"
+}

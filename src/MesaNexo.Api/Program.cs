@@ -22,10 +22,13 @@ public static class Program
             if(Arg("initialize") is string initial){var config=JsonNode.Parse(await File.ReadAllTextAsync(initial))!.AsObject();await service.Initialize(config);Console.WriteLine("Sucursal inicializada. Retira el archivo de aprovisionamiento que contiene credenciales.");return 0;}
             if(Arg("enrollment-file") is string enrollment){await service.RotateEnrollment((await File.ReadAllTextAsync(enrollment)).Trim());Console.WriteLine("Código de alta actualizado.");return 0;}
             X509Certificate2 certificate=lab?LabCertificate.Create(options.LabDirectory!):X509Certificate2.CreateFromPemFile(Path.Combine(options.Credentials??throw new Exception("CREDENTIALS_DIRECTORY requerido"),"tls-cert"),Path.Combine(options.Credentials!,"tls-key"));
-            // The receipt printer is optional: an explicit --printer-config, or the branch file when there is one.
-            var printerFile=Arg("printer-config")??(!lab&&File.Exists("/etc/culinaryos/printer.json")?"/etc/culinaryos/printer.json":null);var printer=printerFile is null?null:new EscPosPrintDriver(PrinterOptions.Load(printerFile));
-            var fiscalFile=Arg("fiscal-config")??(!lab&&File.Exists("/etc/culinaryos/fiscal.json")?"/etc/culinaryos/fiscal.json":null);var fiscal=fiscalFile is null?null:FiscalOptions.Load(fiscalFile);
-            using(certificate){var policy=Arg("policy-url") is string policyUrl?new PolicyOptions(policyUrl,options.Credentials??throw new Exception(),Arg("provider-public-key")??throw new Exception()):null;await using var app=ApiHost.Build(options,store,certificate,policy,Arg("cloud-url") is string cloudUrl?new CloudOptions(cloudUrl,options.Credentials??throw new Exception(),Arg("provider-public-key")??throw new Exception()):null,printer,fiscal);await app.RunAsync();}return 0;
+            // Live integrations are optional: their credentials directory, plus the printer and PAC files from before it existed.
+            // A broken file only marks its provider; the backend still starts.
+            var integrations=IntegrationConfig.Load(Arg("integrations-dir")??(lab?null:IntegrationConfig.Directory))
+                .Adopt("printer",Arg("printer-config")??(lab?null:"/etc/culinaryos/printer.json"),Arg("printer-config") is not null)
+                .Adopt("pac",Arg("fiscal-config")??(lab?null:"/etc/culinaryos/fiscal.json"),Arg("fiscal-config") is not null);
+            var printer=integrations.Use<IPrintDriver>("printer",o=>new EscPosPrintDriver(PrinterOptions.From(o)));var fiscal=integrations.Use("pac",FiscalOptions.From);
+            using(certificate){var policy=Arg("policy-url") is string policyUrl?new PolicyOptions(policyUrl,options.Credentials??throw new Exception(),Arg("provider-public-key")??throw new Exception()):null;await using var app=ApiHost.Build(options,store,certificate,policy,Arg("cloud-url") is string cloudUrl?new CloudOptions(cloudUrl,options.Credentials??throw new Exception(),Arg("provider-public-key")??throw new Exception()):null,printer,fiscal,integrations);await app.RunAsync();}return 0;
         }catch(BusinessException e){Console.Error.WriteLine(e.Message);return 1;}catch(Exception){Console.Error.WriteLine("No se pudo iniciar Culinary Restaurant. Comprueba identidad, configuración, credenciales y runtime.");return 1;}
     }
 }

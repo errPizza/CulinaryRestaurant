@@ -1,0 +1,24 @@
+{
+  "whatsapp": {
+    "phoneNumberId": "ID_DEL_NUMERO_EN_META",
+    "accessToken": "TOKEN_PERMANENTE_DEL_USUARIO_DEL_SISTEMA",
+    "apiVersion": "v23.0",
+    "countryCode": "52",
+    "templates": {
+      "dispatch": { "name": "pedido_en_camino", "language": "es_MX" },
+      "pickup-ready": { "name": "pedido_listo", "language": "es_MX" },
+      "paylink": { "name": "liga_de_pago", "language": "es_MX" },
+      "owner-notice": { "name": "aviso_sucursal", "language": "es_MX" },
+      "test": { "name": "mensaje_de_prueba", "language": "es_MX" }
+    }
+  },
+  "smtp": {
+    "host": "smtp.turestaurante.mx",
+    "port": 587,
+    "username": "avisos@turestaurante.mx",
+    "password": "CONTRASENA_DEL_BUZON",
+    "from": "avisos@turestaurante.mx",
+    "fromName": "Tu Restaurante",
+    "implicitTls": false
+  }
+}

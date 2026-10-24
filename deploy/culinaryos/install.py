@@ -115,6 +115,14 @@ def connection(site,ca):
     if pem.count('-----BEGIN CERTIFICATE-----')!=1:raise ValueError('Se requiere una unica CA')
     return {'ServerUrl':'https://'+site['server_name']+':8443','SiteId':site['site_id'],'CaFile':str(ca),'CaSha256':hashlib.sha256(ssl.PEM_cert_to_DER_cert(pem)).hexdigest(),'ConnectAddress':site['server_address'],'TenantId':'','BranchId':''}
 
+def integrations_directory():
+    # Credentials of the live integrations, one JSON per provider (examples in deploy/integrations): only root writes and the
+    # backend reads. Files placed here should be root:culinaryos-app 0640.
+    account=pwd.getpwnam('culinaryos-app');directory=CONFIG/'integrations'
+    if directory.is_symlink():raise ValueError('/etc/culinaryos/integrations no puede ser un enlace')
+    directory.mkdir(mode=0o750,exist_ok=True);os.chown(directory,0,account.pw_gid);os.chmod(directory,0o750)
+    return directory
+
 def certificates(site,temporary_root="/run"):
     directory=CONFIG/'secrets';directory.mkdir(mode=0o700,exist_ok=True)
     ca=CONFIG/'restaurant-ca.crt';cakey=directory/'restaurant-ca.key'
@@ -217,6 +225,7 @@ def install(bundle,client):
     initialize_branch(site)
     ca,cert,key=certificates(site)
     write_new(CONFIG/'restaurant-connection.json',(json.dumps(connection(site,ca),indent=2)+'\n').encode())
+    integrations_directory()
     manifest={'version':1,'mode':'server','ui_argv':[ENTRY],'backend_argv':[str(APP/'backend/MesaNexo.Api'),'--site',site['site_id'],'--port','8443'],'port':8443,'readiness_socket':'/run/culinaryos-app/ready.sock','tls_ca_file':str(ca),'credentials':{'tls-key':str(key),'tls-cert':str(cert)}}
     file=APP/'application.json';write_new(file,(json.dumps(manifest,indent=2)+'\n').encode())
     write_new(Path('/etc/systemd/system/culinaryos-backend.service.d/restaurant.conf'),b'[Service]\nEnvironment=DOTNET_BUNDLE_EXTRACT_BASE_DIR=/var/lib/culinaryos-app/dotnet-bundle\n')
@@ -232,7 +241,7 @@ def install(bundle,client):
     write_new(APP/'culinary-restaurant-installed.json',json.dumps({'version':'0.3.0','site_id':site['site_id'],'backendReady':True,'autostart':True,'osLoginPolicyChanged':False}).encode())
     print('Backend registrado, TLS verificado y arranque de la app al entrar en la sesion configurado.')
     print('Linux puede pedir crear/desbloquear el llavero. Se conserva la politica de login del sistema.')
-    print('Los adaptadores externos permanecen aislados; el central no se configura ni se activa aqui.')
+    print('Integraciones reales: coloca sus credenciales en /etc/culinaryos/integrations (ver deploy/integrations) y elige Real en la app; el central no se configura aqui.')
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)

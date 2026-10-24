@@ -31,7 +31,7 @@ El API puede consumir propuestas nube por salida HTTPS/mTLS (`--cloud-url`) con 
 
 ## Impresora de tickets y cajón
 
-El backend imprime cuentas, cortes Z y aperturas de cajón en una impresora térmica ESC/POS cuando existe `/etc/culinaryos/printer.json` (o se pasa `--printer-config <archivo>`); sin ese archivo no imprime nada y los trabajos quedan pendientes, igual que antes. Ejemplo en `deploy/printer.example.json`:
+El backend imprime cuentas, cortes Z y aperturas de cajón en una impresora térmica ESC/POS cuando existe `/etc/culinaryos/integrations/printer.json` (o el anterior `/etc/culinaryos/printer.json`, o `--printer-config <archivo>`) y la integración «Impresora y cajón» está en modo real, que es el modo por omisión cuando hay archivo; sin él no imprime nada y los trabajos quedan pendientes. Ejemplo en `deploy/integrations/printer.example.json`:
 
 - `"uri": "tcp://10.77.0.20:9100"`: impresora de red en su puerto RAW (9100 en la mayoría de las térmicas Ethernet). Darle IP fija dentro de la red operativa.
 - `"uri": "file:///dev/usb/lp0"`: impresora USB. El usuario `culinaryos-app` necesita el grupo `lp` (`usermod -aG lp culinaryos-app` y reiniciar el backend).
@@ -49,11 +49,12 @@ Comportamiento:
 
 Probado contra una impresora ESC/POS simulada por TCP (`tests/MesaNexo.Tests/PrintTests.cs`); falta probarlo con una impresora y un cajón físicos.
 
-## Facturación CFDI 4.0 (sandbox de Facturama)
+## Facturación CFDI 4.0 (Facturama)
 
-Con `/etc/culinaryos/fiscal.json` (o `--fiscal-config <archivo>`), el backend envía las solicitudes fiscales al sandbox de Facturama y registra el timbre o el rechazo; sin ese archivo las solicitudes quedan pendientes como antes. El archivo contiene la contraseña del PAC: dueño `root`, grupo `culinaryos-app`, permisos `0640`. Ejemplo en `deploy/fiscal.example.json`:
+Con `/etc/culinaryos/integrations/pac.json` (o el anterior `/etc/culinaryos/fiscal.json`, o `--fiscal-config <archivo>`) y la facturación en modo real, el backend envía las solicitudes fiscales a Facturama y registra el timbre o el rechazo; sin ese archivo las solicitudes quedan pendientes. El archivo contiene la contraseña del PAC: dueño `root`, grupo `culinaryos-app`, permisos `0640`. Ejemplo en `deploy/integrations/pac.example.json`:
 
-- `"environment": "sandbox"` es el único valor aceptado. Los timbres de prueba no tienen validez fiscal y se marcan `SANDBOX`. La facturación real queda rechazada hasta tener el CSD del emisor cargado en Facturama, contrato con el PAC y revisión de las claves SAT.
+- `"environment": "sandbox"` timbra sin validez fiscal y marca todo como `SANDBOX`. `"production"` timbra CFDI reales en `api.facturama.mx` con el CSD que el emisor cargó en el panel de Facturama: antes hacen falta el contrato con el PAC y la revisión de las claves SAT.
+- `"emailReceiver": true` hace que Facturama envíe el PDF y el XML al correo del receptor una vez timbrado.
 - `issuer.expeditionPlace`: código postal de expedición. `issuer.product`: clave SAT por defecto para todos los productos (en restaurantes, típicamente `90101501` con unidad `E48` y objeto de impuesto `02`); `issuer.products` admite excepciones por id de producto. El IVA de cada concepto es el que quedó congelado en la venta. Las claves SAT (productos y `issuer.delivery` para el cargo de envío) deben revisarse con el contador del emisor antes de facturar en producción.
 - La forma de pago se toma de los cobros del ticket (efectivo 01, tarjeta 04, transferencia 03, monedero 05; con varias formas, la de mayor importe). `issuer.paymentForms` cambia la clave de un método, por ejemplo `"card": "28"` para débito.
 
@@ -63,6 +64,18 @@ Garantías:
 - Una respuesta sin timbre pero con el folio del proveedor se resuelve consultándolo, sin reenviar.
 - Una solicitud que no pasa la validación (clave SAT o tasa) queda bloqueada hasta que cambie la configuración, sin detener las demás.
 - Con la simulación del PAC activa en Integraciones, el sandbox no toca ninguna solicitud.
-- `/api/state` informa el servicio en `connection.fiscal` (`sandbox` o `error`).
+- `/api/state` informa el servicio en `connection.fiscal` (`sandbox`, `production` o `error`).
 
-Probado contra un Facturama simulado (`tests/MesaNexo.Tests/FiscalTests.cs`); falta probarlo con una cuenta sandbox real.
+Probado contra un Facturama simulado (`tests/MesaNexo.Tests/FiscalTests.cs`); falta probarlo con una cuenta real.
+
+## Integraciones reales
+
+El instalador crea `/etc/culinaryos/integrations` (`root:culinaryos-app`, `0750`). Cada proveedor lleva ahí su archivo, dueño `root`, grupo `culinaryos-app`, permisos `0640`; los ejemplos están en `deploy/integrations/` y la tabla de proveedores en [PROVEEDORES.md](PROVEEDORES.md). Después de copiar un archivo se reinicia el backend; la tarjeta de la integración muestra «Credenciales listas» o el error del archivo, y el gerente elige «Real».
+
+- `terminal.json`: terminales de la sucursal con su proveedor. Mercado Pago necesita el token de la cuenta y cada terminal en modo PDV (su id sale de `GET /terminals/v1/list`); Clip, la API key y la secret key, y el número de serie del lector con la app PinPad activa. BBVA no tiene API: se cobra en su terminal y se captura la autorización del voucher.
+- `onlinepay.json`: llave secreta de Stripe y la dirección HTTPS a la que vuelve el cliente después de pagar. No hace falta webhook: la sucursal consulta cada liga abierta.
+- `messaging.json`: WhatsApp Cloud API (id del número, token permanente y una plantilla aprobada por evento, con las variables en el orden de `LiveMessaging.cs`) y el buzón SMTP.
+- `maps.json`: clave de Google restringida a Geocoding y Routes. El punto de partida es el que se configura en la tarjeta de Mapas.
+- `callerid.json`: conmutador Asterisk con AMI sobre TLS (puerto 5039) y un usuario de sólo lectura.
+- `pms.json`: Cloudbeds (llave de API y propiedad) u OPERA por OHIP (gateway, endpoint OAuth, app key, hotel, código de transacción del restaurante), más el crédito por habitación.
+- `aggregators.json`: credenciales de Deliverect, cuenta y ubicación. Los pedidos llegan al portal público en `POST /webhooks/deliverect/{slug}`, que se inicia con `--deliverect-config <archivo>` (secreto HMAC por ubicación e ids de canal; ejemplo en `deploy/integrations/deliverect.central.example.json`). Requiere la Central publicada en internet.

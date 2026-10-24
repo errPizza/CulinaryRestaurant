@@ -1165,6 +1165,8 @@ a.ui-button{text-decoration:none}
 .integration-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px;margin:0 0 22px}
 .integration-card{display:flex;flex-direction:column;gap:10px;padding:18px 20px;transition:box-shadow var(--fast)}
 .integration-card.on{box-shadow:var(--e2),inset 0 0 0 1.5px color-mix(in srgb,var(--amber-bar) 55%,transparent)}
+.integration-card.live{box-shadow:var(--e2),inset 0 0 0 1.5px color-mix(in srgb,var(--green) 55%,transparent)}
+.integration-card .seg{align-self:flex-start}
 .integration-card header{display:flex;align-items:center;gap:12px}
 .integration-card header .w{flex:1;min-width:0}
 .integration-card header b{display:block;color:var(--ink);font-size:14.5px}

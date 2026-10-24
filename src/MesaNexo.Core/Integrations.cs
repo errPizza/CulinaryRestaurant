@@ -5,11 +5,21 @@ using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using static MesaNexo.Core.Rules;
 namespace MesaNexo.Core;
-// Stage 4: simulated third parties. Each simulator drives the same records and states a real adapter would, but nothing leaves the branch:
-// no network, no money and no fiscal validity. Live mode stays locked until there is a contract, server-side credentials and explicit authorization.
+// Third parties. Each simulator drives the same records and states a real adapter does, but nothing leaves the branch: no network, no
+// money and no fiscal validity. Live mode needs the provider's credentials on the server (LiveCatalog) and a manager choosing it; then
+// the domain only queues the work and the server's integration services call the provider and report back through IntegrationResult.
 public sealed partial class Restaurant
 {
     public static readonly string[] IntegrationKeys=["pac","terminal","onlinepay","messaging","aggregators","pms","maps","callerid","printer"];
+    // What the server can do for real, without secrets: {providers:[keys with valid credentials], terminals:[{id,name,provider,manual}]}.
+    public JsonObject LiveCatalog{get;set;}=new();
+    // Services that already ran from their own file before modes existed: without a saved mode they stay live.
+    static readonly string[] LiveByDefault=["pac","printer"];
+    bool Ready(string key)=>LiveCatalog.A("providers").Strings().Contains(key);
+    public bool IsLive(BranchState s,string key){var row=s.Related("integration","id",key).FirstOrDefault();return Ready(key)&&(row?.S("mode")=="live"||row is null&&LiveByDefault.Contains(key));}
+    // The settings of a provider that is on, simulated or live.
+    JsonObject? Active(BranchState s,string key)=>Simulated(s,key)??(IsLive(s,key)?s.Related("integration","id",key).FirstOrDefault()??J.O("settings",new JsonObject()):null);
+    JsonObject Enabled(BranchState s,string key,string name)=>(Active(s,key)??throw new BusinessException(400,"Activa "+name+" en Integraciones")).Obj("settings");
     static readonly Dictionary<string,string> Platforms=new(){["uber"]="UBER EATS",["rappi"]="RAPPI",["didi"]="DIDI FOOD"};
     // Test cards of the simulated PIN pad: the outcome picks brand and last four digits. Card data never enters the branch.
     static readonly Dictionary<string,(string Brand,string Last4)> TestCards=new(){["approve"]=("Visa","4242"),["decline"]=("Mastercard","0002"),["timeout"]=("Visa","0119")};
@@ -19,17 +29,20 @@ public sealed partial class Restaurant
     static string Digits(string value)=>new(value.Where(char.IsDigit).ToArray());
     static string Plain(string value)=>new string(value.Normalize(NormalizationForm.FormD).Where(c=>CharUnicodeInfo.GetUnicodeCategory(c)!=UnicodeCategory.NonSpacingMark).ToArray()).ToLowerInvariant();
     // Hotels verify the surname: any word after the first name of the registered guest must appear in what the waiter typed.
-    static bool SameGuest(string registered,string given){var words=Plain(given).Split(' ',StringSplitOptions.RemoveEmptyEntries);var names=Plain(registered).Split(' ',StringSplitOptions.RemoveEmptyEntries);return names.Skip(names.Length>1?1:0).Where(w=>w.Length>=3).Any(words.Contains);}
+    public static bool SameGuest(string registered,string given){var words=Plain(given).Split(' ',StringSplitOptions.RemoveEmptyEntries);var names=Plain(registered).Split(' ',StringSplitOptions.RemoveEmptyEntries);return names.Skip(names.Length>1?1:0).Where(w=>w.Length>=3).Any(words.Contains);}
     static string Pick(JsonObject p,string key,string fallback,params string[] choices){var value=p.S(key);if(value=="")value=fallback;Need(choices.Contains(value),key+": valor inválido");return value;}
     JsonObject? Simulated(BranchState s,string key)=>s.Related("integration","id",key).FirstOrDefault(x=>x.S("mode")=="simulated");
     JsonObject Simulator(BranchState s,string key,string name)=>(Simulated(s,key)??throw new BusinessException(400,"Activa la simulación de "+name+" en Integraciones")).Obj("settings");
-    JsonObject Log(BranchState s,JsonObject u,string provider,string operation,string status,string summary,string reference="")=>Add(s,"integrationlog",J.O("provider",provider,"operation",operation,"status",status,"summary",Sanitize(summary,200),"reference",reference,"actor",u.S("id"),"at",J.Now(),"simulated",true));
-    // Simulated WhatsApp and e-mail: one message per event, reference and channel, stored as sent without contacting anyone.
-    JsonObject? Message(BranchState s,string channel,string to,string kind,string refId,string body)
+    JsonObject Log(BranchState s,JsonObject u,string provider,string operation,string status,string summary,string reference="",bool simulated=true)=>Add(s,"integrationlog",J.O("provider",provider,"operation",operation,"status",status,"summary",Sanitize(summary,200),"reference",reference,"actor",u.S("id"),"at",J.Now(),"simulated",simulated));
+    // WhatsApp and e-mail: one message per event, reference and channel. Simulated, it is stored as sent without contacting anyone;
+    // live, it is queued for the messaging service. `values` are the body variables of the event's WhatsApp template, in order.
+    JsonObject? Message(BranchState s,string channel,string to,string kind,string refId,string body,params string[] values)
     {
-        var config=Simulated(s,"messaging")?.Obj("settings");to=to.Trim();if(config is null||!config.B(channel)||to=="")return null;
+        var config=Active(s,"messaging")?.Obj("settings");to=to.Trim();if(config is null||!config.B(channel,true)||to=="")return null;
         var prior=s.Related("message","event",kind).FirstOrDefault(x=>x.S("refId")==refId&&x.S("channel")==channel);if(prior is not null)return prior;
-        return Add(s,"message",J.O("channel",channel,"to",to,"event",kind,"refId",refId,"body",Sanitize(body,600),"status","simulated-sent","providerId",Ref(channel=="whatsapp"?"WAMID":"MSG"),"at",J.Now()));
+        var message=Add(s,"message",J.O("channel",channel,"to",to,"event",kind,"refId",refId,"body",Sanitize(body,600),"values",J.N(values.Select(v=>Sanitize(v,200)).ToArray()),"at",J.Now()));
+        if(IsLive(s,"messaging"))message["status"]="queued";else{message["status"]="simulated-sent";message["providerId"]=Ref(channel=="whatsapp"?"WAMID":"MSG");}
+        return message;
     }
     JsonObject IntegrationSettings(BranchState s,string key,JsonObject p)
     {
@@ -76,17 +89,20 @@ public sealed partial class Restaurant
         if(r.S("email")!="")Message(s,"email",r.S("email"),"invoice",f.S("id"),"Tu factura de "+s.Meta.S("name")+" por "+Pesos(totals.L("total"))+" quedó timbrada. UUID "+uuid+". SIMULADA: no tiene validez fiscal.");
         return f;
     }
-    void ApproveTerminal(BranchState s,JsonObject u,JsonObject txn)
+    // A live terminal gives its own authorization (or none, as Mercado Pago Point and Clip only identify the payment).
+    void ApproveTerminal(BranchState s,JsonObject u,JsonObject txn,string? auth=null,bool simulated=true)
     {
-        var pay=Act(s,u,"payment.add",J.O("visitId",txn.S("visitId"),"amount",txn.L("amount"),"tip",txn.L("tip"),"method","card","folioId",txn.S("folioId")));var auth=Code(6);
-        s.Get("payment",pay.S("id"))["terminal"]=J.O("terminalId",txn.S("terminalId"),"brand",txn.S("brand"),"last4",txn.S("last4"),"authCode",auth,"reference",txn.S("reference"),"simulated",true);
-        txn["status"]="approved";txn["authCode"]=auth;txn["paymentId"]=pay.S("id");txn["message"]="Aprobada · autorización "+auth;
+        var pay=Act(s,u,"payment.add",J.O("visitId",txn.S("visitId"),"amount",txn.L("amount"),"tip",txn.L("tip"),"method","card","folioId",txn.S("folioId")));auth??=Code(6);
+        s.Get("payment",pay.S("id"))["terminal"]=J.O("terminalId",txn.S("terminalId"),"brand",txn.S("brand"),"last4",txn.S("last4"),"authCode",auth,"reference",txn.S("reference"),"simulated",simulated,"provider",txn.S("provider"));
+        txn["status"]="approved";txn["authCode"]=auth;txn["paymentId"]=pay.S("id");txn["message"]=auth==""?"Aprobada":"Aprobada · autorización "+auth;
     }
     void AcceptAggregator(BranchState s,JsonObject u,JsonObject order)
     {
-        Need(order.S("status")=="pending","Pedido de plataforma ya resuelto");var config=Simulator(s,"aggregators","plataformas de reparto");
+        Need(order.S("status")=="pending","Pedido de plataforma ya resuelto");var config=Enabled(s,"aggregators","las plataformas de reparto");
+        Need(order.A("unmapped").Count==0,"Hay productos de la plataforma que no existen en el catálogo ("+string.Join(", ",order.A("unmapped").Strings())+"): corrige el PLU en Deliverect o rechaza el pedido");
         var visit=Act(s,u,"visit.quick",J.O("customerName",order.S("platformName")+" · "+order.S("customerName")));var v=s.Get("visit",visit.S("id"));v["channel"]="aggregator";v["platform"]=order.S("platform");v["priceListId"]="base";v["aggregatorOrderId"]=order.S("id");
-        Act(s,u,"command.send",J.O("visitId",v.S("id"),"items",new JsonArray(order.A("items").Objects().Select((x,i)=>(JsonNode)J.O("productId",x.S("productId"),"quantity",x.L("quantity"),"notes",i==0?order.S("notes"):"")).ToArray())));
+        Act(s,u,"command.send",J.O("visitId",v.S("id"),"items",new JsonArray(order.A("items").Objects().Select((x,i)=>(JsonNode)J.O("productId",x.S("productId"),"quantity",x.L("quantity"),"notes",string.Join(" · ",new[]{i==0?order.S("notes"):"",x.S("notes")}.Where(n=>n!="")))).ToArray())));
+        if(order.B("live"))PlatformSync(s,order,20,"");
         // The platform already charged the customer; the branch records what it will be paid, priced locally, minus the commission.
         var total=Totals(s,v).L("total");var commission=(long)Math.Round(total*config.L("commissionBps")/10000m,MidpointRounding.AwayFromZero);
         if(total>0){var pay=InternalPayment(s,u,v,total,"platform");pay["platform"]=order.S("platform");pay["reference"]=order.S("externalId");}
@@ -103,14 +119,16 @@ public sealed partial class Restaurant
         result=J.O("ok",true);var id=p.S("id");
         switch(type){
         case "integration.configure":{
-            Role(u,"manager");var key=Choice(p,"provider",IntegrationKeys);var mode=p.S("mode");
-            Need(mode!="live","La conexión real necesita contrato con el proveedor, credenciales guardadas en el servidor y tu autorización expresa; por ahora sólo está disponible la simulación",403);Need(mode is "simulated" or "off","Modo inválido");
+            Role(u,"manager");var key=Choice(p,"provider",IntegrationKeys);var mode=p.S("mode");Need(mode is "simulated" or "off" or "live","Modo inválido");
+            Need(mode!="live"||Ready(key),"El servidor no tiene credenciales válidas para esta integración: van en /etc/culinaryos/integrations/"+key+".json");
             var row=s.Related("integration","id",key).FirstOrDefault()??Add(s,"integration",J.O("id",key,"key",key,"since",J.Now()));
             row["settings"]=p["settings"] is JsonObject given?IntegrationSettings(s,key,given):row["settings"] is JsonObject prior&&prior.Count>0?prior.DeepClone():IntegrationSettings(s,key,new());
-            row["mode"]=mode;row["updatedBy"]=u.S("id");row["updatedAt"]=J.Now();Log(s,u,key,"configure",mode,mode=="simulated"?"Simulación activa":"Integración apagada");result=row;break;}
+            row["mode"]=mode;row["updatedBy"]=u.S("id");row["updatedAt"]=J.Now();Log(s,u,key,"configure",mode,mode=="simulated"?"Simulación activa":mode=="live"?"Conexión real activa":"Integración apagada",simulated:mode!="live");result=row;break;}
         case "pac.stamp":Role(u,"manager");result=StampSimulated(s,u,s.Get("fiscal",id));break;
         case "terminal.charge":{
-            Role(u,"mesero","manager");Need(u.S("role")=="manager"||u.Obj("permissions").B("payments",true),"Permiso de pagos deshabilitado",403);var config=Simulator(s,"terminal","la terminal bancaria");var v=Own(s,u,p.S("visitId"));
+            Role(u,"mesero","manager");Need(u.S("role")=="manager"||u.Obj("permissions").B("payments",true),"Permiso de pagos deshabilitado",403);
+            if(IsLive(s,"terminal")){result=LiveCharge(s,u,p);break;}
+            var config=Simulator(s,"terminal","la terminal bancaria");var v=Own(s,u,p.S("visitId"));
             var amount=Amount(p,"amount",1);var tip=Amount(p,"tip");Need(amount<=Totals(s,v).L("balance"),"El pago supera el saldo");Need(s.Related("cash","status","open").Any(),"Abre una caja antes de registrar pagos");
             Need(!s.Related("terminaltxn","visitId",v.S("id")).Any(x=>x.S("status")=="uncertain"),"Hay un cobro con terminal sin respuesta en esta cuenta; consúltalo antes de cobrar otra vez");
             var outcome=p.S("card","approve");Need(TestCards.ContainsKey(outcome),"Tarjeta de prueba inválida");var card=TestCards[outcome];
@@ -120,12 +138,15 @@ public sealed partial class Restaurant
             else{txn["status"]="uncertain";txn["message"]="La terminal no respondió. Consulta el resultado antes de cobrar de nuevo";}
             Log(s,u,"terminal","charge",txn.S("status"),card.Brand+" •••• "+card.Last4+" · "+Pesos(amount+tip),txn.S("reference"));result=txn;break;}
         case "terminal.reconcile":{
-            Role(u,"mesero","manager");Simulator(s,"terminal","la terminal bancaria");var txn=s.Get("terminaltxn",id);Need(txn.S("status")=="uncertain","Ese cobro ya tiene resultado");var v=s.Get("visit",txn.S("visitId"));Need(u.S("role")=="manager"||v.S("waiterId")==u.S("id"),"La cuenta pertenece a otro mesero",403);
+            Role(u,"mesero","manager");if(s.Get("terminaltxn",id).B("live")){result=LiveReconcile(s,u,s.Get("terminaltxn",id),p);break;}
+            Simulator(s,"terminal","la terminal bancaria");var txn=s.Get("terminaltxn",id);Need(txn.S("status")=="uncertain","Ese cobro ya tiene resultado");var v=s.Get("visit",txn.S("visitId"));Need(u.S("role")=="manager"||v.S("waiterId")==u.S("id"),"La cuenta pertenece a otro mesero",403);
             // The simulated bank reports that the silent charge did go through: it is applied once, or reversed if the account was covered meanwhile.
             if(v.S("status")=="open"&&txn.L("amount")<=Totals(s,v).L("balance"))ApproveTerminal(s,u,txn);else{txn["status"]="reversed";txn["message"]="El banco sí cobró, pero la cuenta ya estaba cubierta: la terminal revirtió el cargo";}
             txn["reconciledAt"]=J.Now();txn["reconciledBy"]=u.S("id");Log(s,u,"terminal","reconcile",txn.S("status"),"Consulta de cobro sin respuesta · "+Pesos(txn.L("amount")+txn.L("tip")),txn.S("reference"));result=txn;break;}
+        case "terminal.cancel":Role(u,"mesero","manager");result=LiveCancel(s,u,s.Get("terminaltxn",id));break;
+        case "terminal.manual":Role(u,"mesero","manager");Need(u.S("role")=="manager"||u.Obj("permissions").B("payments",true),"Permiso de pagos deshabilitado",403);result=ManualCharge(s,u,p);break;
         case "paylink.create":{
-            Role(u,"mesero","manager");var config=Simulator(s,"onlinepay","pagos en línea");var v=Own(s,u,p.S("visitId"));var balance=Totals(s,v).L("balance");Need(balance>0,"La cuenta no tiene saldo pendiente");var amount=p.ContainsKey("amount")?Amount(p,"amount",1,balance):balance;
+            Role(u,"mesero","manager");if(IsLive(s,"onlinepay")){result=LiveLink(s,u,p);break;}var config=Simulator(s,"onlinepay","pagos en línea");var v=Own(s,u,p.S("visitId"));var balance=Totals(s,v).L("balance");Need(balance>0,"La cuenta no tiene saldo pendiente");var amount=p.ContainsKey("amount")?Amount(p,"amount",1,balance):balance;
             Need(!s.Related("folio","visitId",v.S("id")).Any(f=>!f.B("void")),"Con subfolios usa otra forma de pago");Need(!s.Related("paylink","visitId",v.S("id")).Any(x=>x.S("status")=="pending"),"Ya hay una liga de pago vigente para esta cuenta");
             var provider=config.S("provider");var token=Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(12));
             var link=Add(s,"paylink",J.O("visitId",v.S("id"),"amount",amount,"provider",provider,"payUrl","https://pagos.simulado.invalid/"+provider+"/"+token,"reference",(provider=="stripe"?"plink_sim_":"pref_sim_")+token[..12],"status","pending","expiresAt",DateTimeOffset.UtcNow.AddMinutes(config.L("expiresMinutes",60)).ToString("O"),"actor",u.S("id"),"at",J.Now()));
@@ -140,9 +161,9 @@ public sealed partial class Restaurant
                 else{link["status"]="refunded";link["message"]="Llegó el pago pero la cuenta ya estaba cubierta; el proveedor lo reembolsó";}
             }else{link["status"]=outcome;link["message"]=outcome=="failed"?"El proveedor rechazó el pago del cliente":"La liga venció sin pago";}
             Log(s,u,"onlinepay","webhook."+outcome,link.S("status"),"Aviso del proveedor · "+Pesos(link.L("amount")),link.S("reference"));result=link;break;}
-        case "paylink.cancel":{Role(u,"mesero","manager");var link=s.Get("paylink",id);Need(link.S("status")=="pending","La liga ya no está vigente");var v=s.Get("visit",link.S("visitId"));Need(u.S("role")=="manager"||v.S("waiterId")==u.S("id"),"La cuenta pertenece a otro mesero",403);link["status"]="cancelled";link["cancelledBy"]=u.S("id");Log(s,u,"onlinepay","link.cancel","cancelled","Liga cancelada · "+Pesos(link.L("amount")),link.S("reference"));result=link;break;}
+        case "paylink.cancel":{Role(u,"mesero","manager");var link=s.Get("paylink",id);if(link.B("live")){result=LiveLinkCancel(s,u,link);break;}Need(link.S("status")=="pending","La liga ya no está vigente");var v=s.Get("visit",link.S("visitId"));Need(u.S("role")=="manager"||v.S("waiterId")==u.S("id"),"La cuenta pertenece a otro mesero",403);link["status"]="cancelled";link["cancelledBy"]=u.S("id");Log(s,u,"onlinepay","link.cancel","cancelled","Liga cancelada · "+Pesos(link.L("amount")),link.S("reference"));result=link;break;}
         case "pms.charge":{
-            Role(u,"mesero","manager");Need(u.S("role")=="manager"||u.Obj("permissions").B("payments",true),"Permiso de pagos deshabilitado",403);var config=Simulator(s,"pms","el hotel (PMS)");var v=Own(s,u,p.S("visitId"));
+            Role(u,"mesero","manager");Need(u.S("role")=="manager"||u.Obj("permissions").B("payments",true),"Permiso de pagos deshabilitado",403);if(IsLive(s,"pms")){result=LivePost(s,u,p);break;}var config=Simulator(s,"pms","el hotel (PMS)");var v=Own(s,u,p.S("visitId"));
             var number=Text(p,"room",10).ToUpperInvariant();var room=config.A("rooms").Objects().FirstOrDefault(x=>x.S("room")==number);Need(room is not null,"El PMS no tiene un huésped registrado en la habitación "+number,404);
             Need(SameGuest(room!.S("guest"),Text(p,"guest",100)),"El apellido no coincide con el huésped de la habitación "+number,403);Need(!s.Related("folio","visitId",v.S("id")).Any(f=>!f.B("void")),"Con subfolios usa otra forma de pago");
             var balance=Totals(s,v).L("balance");var amount=p.ContainsKey("amount")?Amount(p,"amount",1,balance):balance;var limit=room.L("limit");var used=s.Related("pmspost","room",number).Where(x=>x.S("status")=="posted").Sum(x=>x.L("amount"));
@@ -150,15 +171,15 @@ public sealed partial class Restaurant
             var system=config.S("system");var reference=Ref(system=="opera"?"OPERA":"CLDB");var pay=InternalPayment(s,u,v,amount,"room");pay["reference"]=reference;pay["room"]=number;
             result=Add(s,"pmspost",J.O("room",number,"guest",room.S("guest"),"amount",amount,"visitId",v.S("id"),"paymentId",pay.S("id"),"system",system,"reference",reference,"status","posted","actor",u.S("id"),"at",J.Now()));
             Log(s,u,"pms","charge","posted","Cargo a habitación "+number+" · "+Pesos(amount),reference);break;}
-        case "geo.lookup":{Role(u,"mesero","manager");var text=Text(p,"text",500);result=Geocode(s,text);Log(s,u,"maps","geocode","ok","Dirección ubicada a "+result["distanceKm"]+" km");break;}
+        case "geo.lookup":{Role(u,"mesero","manager");Need(!IsLive(s,"maps"),"Con Google Maps real la ubicación se calcula al guardar la dirección del cliente");var text=Text(p,"text",500);result=Geocode(s,text);Log(s,u,"maps","geocode","ok","Dirección ubicada a "+result["distanceKm"]+" km");break;}
         case "callerid.simulate":{
             Role(u,"mesero","manager");Simulator(s,"callerid","identificador de llamadas");var number=Digits(Text(p,"number",40));Need(number.Length is >=7 and <=15,"Número telefónico inválido");var tail=number[^Math.Min(10,number.Length)..];
             var customer=s.List("customer").FirstOrDefault(x=>Digits(x.S("phone")).EndsWith(tail,StringComparison.Ordinal)&&Digits(x.S("phone")).Length>=7);
             result=Add(s,"call",J.O("number",number,"name",Sanitize(p.S("name"),150),"customerId",customer?.S("id"),"at",J.Now(),"source","simulated-callerid","attended",false));Log(s,u,"callerid","call","ringing","Llamada de "+number+(customer is null?" · número nuevo":" · "+customer.S("name")));break;}
         case "call.attend":{Role(u,"mesero","manager");var call=s.Get("call",id);call["attended"]=true;call["attendedBy"]=u.S("id");call["attendedAt"]=J.Now();result=call;break;}
         case "message.test":{
-            Role(u,"manager");var config=Simulator(s,"messaging","mensajería");var channel=Choice(p,"channel","whatsapp","email");Need(config.B(channel),(channel=="whatsapp"?"WhatsApp":"El correo")+" está apagado en la mensajería");var to=Text(p,"to",150);
-            Need(channel=="email"?Regex.IsMatch(to,@"^[^@\s]+@[^@\s]+\.[^@\s]+$"):Digits(to).Length is >=10 and <=15,"Destinatario inválido");result=Message(s,channel,to,"test",J.Id(),"Mensaje de prueba de "+s.Meta.S("name")+". Simulado: no se envió a nadie.")!;break;}
+            Role(u,"manager");var config=Enabled(s,"messaging","la mensajería");var channel=Choice(p,"channel","whatsapp","email");Need(config.B(channel,true),(channel=="whatsapp"?"WhatsApp":"El correo")+" está apagado en la mensajería");var to=Text(p,"to",150);
+            Need(channel=="email"?Regex.IsMatch(to,@"^[^@\s]+@[^@\s]+\.[^@\s]+$"):Digits(to).Length is >=10 and <=15,"Destinatario inválido");result=Message(s,channel,to,"test",J.Id(),"Mensaje de prueba de "+s.Meta.S("name")+"."+(IsLive(s,"messaging")?"":" Simulado: no se envió a nadie."),s.Meta.S("name"))!;break;}
         case "aggregator.simulate":{
             Role(u,"manager");var config=Simulator(s,"aggregators","plataformas de reparto");var platform=Choice(p,"platform",config.A("platforms").Strings());
             var menu=s.List("product").Where(x=>x.B("visible")&&x.B("available")&&!x.A("modifiers").Objects().Any(g=>g.B("required"))&&!(x.B("supportsCooking")&&x.B("cookingRequired"))).OrderBy(x=>x.S("id"),StringComparer.Ordinal).ToArray();Need(menu.Length>0,"Publica al menos un producto disponible sin opciones obligatorias");
@@ -171,14 +192,14 @@ public sealed partial class Restaurant
             Log(s,u,"aggregators","order.received","pending",order.S("platformName")+" "+order.S("externalId")+" · "+Pesos(subtotal),order.S("externalId"));if(config.B("autoAccept"))AcceptAggregator(s,u,order);result=order;break;}
         case "aggregator.decide":{
             Role(u,"manager");var order=s.Get("aggregatororder",id);if(p.B("accept")){AcceptAggregator(s,u,order);result=order;break;}
-            Need(order.S("status")=="pending","Pedido de plataforma ya resuelto");order["status"]="rejected";order["reason"]=Text(p,"reason",200);order["decidedBy"]=u.S("id");Log(s,u,"aggregators","order.reject","rejected",order.S("platformName")+" "+order.S("externalId")+" · "+order.S("reason"),order.S("externalId"));result=order;break;}
+            Need(order.S("status")=="pending","Pedido de plataforma ya resuelto");order["status"]="rejected";order["reason"]=Text(p,"reason",200);order["decidedBy"]=u.S("id");if(order.B("live"))PlatformSync(s,order,110,order.S("reason"));Log(s,u,"aggregators","order.reject","rejected",order.S("platformName")+" "+order.S("externalId")+" · "+order.S("reason"),order.S("externalId"));result=order;break;}
         case "aggregator.handoff":{
             Role(u,"mesero","manager");var order=s.Get("aggregatororder",id);Need(order.S("status")=="accepted","El pedido no está listo para entregar");var vid=order.S("visitId");
             Need(!s.Related("unit","visitId",vid).Any(x=>!Final.Append("ready").Contains(x.S("status"))),"Termina la preparación antes de entregar al repartidor");Act(s,u,"visit.deliverAll",J.O("id",vid));
-            var couriers=new[]{"Jorge","Ana","Luis","Paola","Raúl"};order["status"]="handed-off";order["courier"]=couriers[RandomNumberGenerator.GetInt32(couriers.Length)];order["handedOffAt"]=J.Now();order["handedOffBy"]=u.S("id");
+            var couriers=new[]{"Jorge","Ana","Luis","Paola","Raúl"};order["status"]="handed-off";order["courier"]=order.B("live")?"repartidor de "+order.S("platformName"):couriers[RandomNumberGenerator.GetInt32(couriers.Length)];if(order.B("live"))PlatformSync(s,order,90,"");order["handedOffAt"]=J.Now();order["handedOffBy"]=u.S("id");
             Log(s,u,"aggregators","order.handoff","handed-off",order.S("platformName")+" "+order.S("externalId")+" entregado a "+order.S("courier"),order.S("externalId"));result=order;break;}
         case "aggregator.sync":{
-            Role(u,"manager");var config=Simulator(s,"aggregators","plataformas de reparto");var products=s.List("product").Where(x=>x.B("visible")).ToArray();var published=products.Count(x=>x.B("available")&&!x.A("modifiers").Objects().Any(g=>g.B("required"))&&!(x.B("supportsCooking")&&x.B("cookingRequired")));
+            Role(u,"manager");if(IsLive(s,"aggregators")){result=QueueMenuSync(s,u);break;}var config=Simulator(s,"aggregators","plataformas de reparto");var products=s.List("product").Where(x=>x.B("visible")).ToArray();var published=products.Count(x=>x.B("available")&&!x.A("modifiers").Objects().Any(g=>g.B("required"))&&!(x.B("supportsCooking")&&x.B("cookingRequired")));
             var row=s.Get("integration","aggregators");row["lastSync"]=J.O("at",J.Now(),"published",published,"excluded",products.Length-published,"platforms",config["platforms"]?.DeepClone());
             Log(s,u,"aggregators","menu.sync","ok","Menú publicado en "+config.A("platforms").Count+" plataformas · "+published+" productos"+(products.Length>published?" · "+(products.Length-published)+" con opciones obligatorias o agotados quedaron fuera":""));result=row.Obj("lastSync");break;}
         default:return false;
@@ -187,16 +208,32 @@ public sealed partial class Restaurant
     // Runs after every action, including nested ones; each step is idempotent.
     void IntegrationAfterAction(BranchState s,JsonObject u,string type,JsonObject p,JsonObject result)
     {
+        // Live maps already measured the route when they located the address.
+        if(type=="delivery.create"&&IsLive(s,"maps")){var d=s.Get("delivery",result.S("id"));var a=d.Obj("addressSnapshot");if(d.S("mode")=="delivery"&&a.ContainsKey("routeKm")){d["distanceKm"]=a["routeKm"]!.DeepClone();d["etaMinutes"]=a.L("routeMinutes");}}
         if(type=="delivery.create"&&Simulated(s,"maps") is {} maps){var d=s.Get("delivery",result.S("id"));var a=d.Obj("addressSnapshot");if(d.S("mode")=="delivery"&&a.ContainsKey("lat")){var config=maps.Obj("settings");var km=Distance((double)Coordinate(config,"centerLat",90),(double)Coordinate(config,"centerLon",180),(double)Coordinate(a,"lat",90),(double)Coordinate(a,"lon",180));d["distanceKm"]=Math.Round((decimal)km,1);d["etaMinutes"]=Eta(km);}}
-        if(type=="delivery.dispatch"){var d=s.Get("delivery",p.S("id"));var c=s.Related("customer","id",d.S("customerId")).FirstOrDefault();var courier=s.Related("courier","id",d.S("courierId")).FirstOrDefault();if(c is not null)Message(s,"whatsapp",c.S("phone"),"dispatch",d.S("id"),"Hola "+c.S("name")+", tu pedido de "+s.Meta.S("name")+" ya va en camino"+(courier is null?"":" con "+courier.S("name"))+(d.L("etaMinutes")>0?". Llega en unos "+d.L("etaMinutes")+" minutos":"")+".");}
+        if(type=="delivery.dispatch"){var d=s.Get("delivery",p.S("id"));var c=s.Related("customer","id",d.S("customerId")).FirstOrDefault();var courier=s.Related("courier","id",d.S("courierId")).FirstOrDefault();if(c is not null)Message(s,"whatsapp",c.S("phone"),"dispatch",d.S("id"),"Hola "+c.S("name")+", tu pedido de "+s.Meta.S("name")+" ya va en camino"+(courier is null?"":" con "+courier.S("name"))+(d.L("etaMinutes")>0?". Llega en unos "+d.L("etaMinutes")+" minutos":"")+".",c.S("name"),s.Meta.S("name"),courier?.S("name")??"nuestro repartidor",d.L("etaMinutes")>0?d.L("etaMinutes")+" minutos":"poco tiempo");}
         if(type=="unit.state"&&p.S("status")=="ready"){
             var vid=s.Get("unit",p.S("id")).S("visitId");var d=s.Related("delivery","visitId",vid).FirstOrDefault(x=>x.S("mode")=="pickup");
-            if(d is not null&&!s.Related("unit","visitId",vid).Any(x=>!Final.Append("ready").Contains(x.S("status")))&&s.Related("customer","id",d.S("customerId")).FirstOrDefault() is {} c)Message(s,"whatsapp",c.S("phone"),"pickup-ready",d.S("id"),"Hola "+c.S("name")+", tu pedido de "+s.Meta.S("name")+" está listo para recoger.");
+            // A platform order whose kitchen finished is ready for its courier.
+            if(s.Get("visit",vid).S("aggregatorOrderId") is {Length:>0} aid&&s.Related("aggregatororder","id",aid).FirstOrDefault() is {} platformOrder&&platformOrder.B("live")&&!s.Related("unit","visitId",vid).Any(x=>!Final.Append("ready").Contains(x.S("status"))))PlatformSync(s,platformOrder,70,"");
+            if(d is not null&&!s.Related("unit","visitId",vid).Any(x=>!Final.Append("ready").Contains(x.S("status")))&&s.Related("customer","id",d.S("customerId")).FirstOrDefault() is {} c)Message(s,"whatsapp",c.S("phone"),"pickup-ready",d.S("id"),"Hola "+c.S("name")+", tu pedido de "+s.Meta.S("name")+" está listo para recoger.",c.S("name"),s.Meta.S("name"));
         }
         if(type=="fiscal.request"&&Simulated(s,"pac")?.Obj("settings").B("autoStamp")==true)StampSimulated(s,u,s.Get("fiscal",result.S("id")));
-        var owner=Simulated(s,"messaging")?.Obj("settings").S("ownerEmail")??"";
+        var settings=Active(s,"messaging")?.Obj("settings");var owner=settings?.S("ownerEmail")??"";var ownerPhone=settings?.S("ownerPhone")??"";
         if(owner!="")foreach(var n in s.Related("ownernotice","messageId","").Take(5).ToArray())if(Message(s,"email",owner,"owner-notice",n.S("id"),OwnerText(s,n)) is {} sent)n["messageId"]=sent.S("id");
+        // Only the last day's notices: giving the owner's number later does not send the branch's whole history.
+        if(ownerPhone!="")foreach(var n in s.Related("ownernotice","whatsappId","").Where(x=>DateTimeOffset.TryParse(x.S("at"),out var at)&&at>DateTimeOffset.UtcNow.AddDays(-1)).Take(5).ToArray())if(Message(s,"whatsapp",ownerPhone,"owner-notice",n.S("id"),OwnerText(s,n),s.Meta.S("name"),OwnerText(s,n)) is {} sent)n["whatsappId"]=sent.S("id");
         if(Simulated(s,"printer") is not null)foreach(var job in s.Related("printjob","status","pending").Take(20).ToArray()){job["status"]="simulated";job["attemptId"]=J.Id();job["driver"]="simulated-escpos";job["evidence"]=job.S("type")=="drawer"?"Pulso RJ11 simulado · el cajón físico no se abrió":"Impresión simulada · no salió papel";job["resolvedAt"]=J.Now();}
+    }
+    static readonly Dictionary<string,string> ProviderOfKind=new(){["message"]="messaging",["terminaltxn"]="terminal",["paylink"]="onlinepay",["pmspost"]="pms",["aggregatororder"]="aggregators",["address"]="maps"};
+    // What a live provider answered for one of its records, stored in the same commit as its effects. Money moves only here,
+    // with the same rules the simulators follow; the record's actor is who asked for it.
+    public void IntegrationResult(BranchState s,string kind,string id,string status,JsonObject fields,string summary="",string reference="")
+    {
+        var row=s.Get(kind,id);foreach(var (key,value) in fields)row[key]=value?.DeepClone();if(status!="")row["status"]=status;row["updatedAt"]=J.Now();
+        var actor=s.Related("user","id",row.S("actor")).FirstOrDefault()??J.O("id","integration-service","role","manager");
+        LiveEffects(s,actor,kind,row);
+        if(summary!="")Log(s,actor,ProviderOfKind.GetValueOrDefault(kind,kind),kind,row.S("status"),summary,reference,simulated:false);
     }
     void FilterIntegrationSnapshot(BranchState s,JsonObject u,StateParts output)
     {

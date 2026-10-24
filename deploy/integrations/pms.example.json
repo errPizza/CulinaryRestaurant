@@ -1,0 +1,18 @@
+{
+  "system": "cloudbeds",
+  "creditLimit": 5000,
+  "itemName": "Consumo en restaurante",
+  "cloudbeds": { "apiKey": "cbat_LLAVE_DE_API", "propertyId": "123456" },
+  "opera": {
+    "gatewayUrl": "https://GATEWAY_OHIP_DEL_HOTEL",
+    "tokenUrl": "https://GATEWAY_OHIP_DEL_HOTEL/oauth/v1/tokens",
+    "grantType": "client_credentials",
+    "clientId": "CLIENT_ID",
+    "clientSecret": "CLIENT_SECRET",
+    "scope": "",
+    "appKey": "APP_KEY_DE_OHIP",
+    "hotelId": "HOTEL1",
+    "transactionCode": "2000",
+    "cashierId": 1
+  }
+}

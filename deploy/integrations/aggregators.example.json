@@ -1,0 +1,8 @@
+{
+  "provider": "deliverect",
+  "baseUrl": "https://api.staging.deliverect.com",
+  "clientId": "CLIENT_ID_DE_DELIVERECT",
+  "clientSecret": "CLIENT_SECRET_DE_DELIVERECT",
+  "accountId": "ACCOUNT_ID",
+  "locationId": "LOCATION_ID"
+}

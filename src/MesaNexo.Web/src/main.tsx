@@ -25,7 +25,7 @@ import {SplitDialog} from './split-dialog';
 import {publishDisplay} from './customer-display';
 import {PurchasesPage,ExpensesPage,PinDialog,type Dialog} from './backoffice';
 import {PriceListsPanel,CustomersPage,StaffPanel,tableQr,QrOrders,customerOptions,walletBalance} from './loyalty';
-import {IntegrationsPage,AccountPayments,paymentDetail} from './integrations';
+import {IntegrationsPage,AccountPayments,paymentDetail,latest} from './integrations';
 import {OverviewPage} from './overview-page';
 import {SupportPage} from './support-page';
 import {SetupWizard} from './setup-wizard';
@@ -46,6 +46,8 @@ function App(){
  useEffect(()=>{if(!s)return;window.scrollTo({top:0,behavior:'instant'});document.querySelector<HTMLElement>('main h1')?.focus({preventScroll:true});},[page,branch,!!s]);
 
  const [profileLoading,setProfileLoading]=useState(true),[enrollment,setEnrollment]=useState(''),[profile,setProfile]=useState<any>(null),[operation,setOperation]=useState<any>({pending:false}),[reduced,setReduced]=useState(false),[theme,setTheme]=useState<'light'|'dark'|'system'>('system'),[systemDark,setSystemDark]=useState(()=>window.matchMedia('(prefers-color-scheme: dark)').matches),[toolsEl,setToolsEl]=useState<HTMLElement|null>(null),[noticeFilter,setNoticeFilter]=useState('pending'),[catFilter,setCatFilter]=useState('all'),[productSearch,setProductSearch]=useState(''),[resView,setResView]=useState('today'),[reviewRange,setReviewRange]=useState('week'),[setup,setSetup]=useState<any>(null);
+ // Dialogs keep the state they were opened with; the ones that follow a provider read the latest one from here.
+ latest.state=s;
  const busyRef=useRef(false),draftsRef=useRef(drafts),draftWrites=useRef<Promise<any>>(Promise.resolve());draftsRef.current=drafts;
  const tokenRef=useRef(token);tokenRef.current=token;
  useEffect(()=>{const cleanup=installButtonMotion();const presentation=startKioskPresentation();(async()=>{await presentation.presented;const p=await native('profile.get');setProfile(p);setApi(p?.ServerUrl||'');const m=await native('motion.get');setReduced(m.reduced);document.documentElement.dataset.reducedMotion=String(m.reduced);try{const t=await native('theme.get');if(['light','dark','system'].includes(t?.theme))setTheme(t.theme);}catch{}const status=await native('status');setOperation(status);if(status.authenticated){tokenRef.current='native-session';setToken('native-session');await refresh();}else if(p?.ServerUrl){try{const first=await native('setup.status');if(first.needsSetup)setSetup(first);}catch{}}})().catch(e=>setError(e.message)).finally(()=>setProfileLoading(false));return()=>{cleanup();presentation.dispose();};},[]);
@@ -121,7 +123,7 @@ function App(){
    case 'cash':return openedCash?<>Caja abierta desde las {clock(openedCash.openedAt)}.{strong('Esperas '+money(expectedCash)+' en efectivo.')}</>:'La caja está cerrada. Ábrela antes de registrar pagos.';
    case 'inventory':return 'Se reserva al enviar a cocina y se consume al liquidar la cuenta.';
    case 'purchases':{const o=list('payables').filter((p:Row)=>p.status==='open'&&Date.parse(p.dueAt)<Date.now()).length;return <>Órdenes, entradas al almacén y cuentas por pagar.{o?strong(plural(o,'factura vencida','facturas vencidas')+'.'):''}</>;}
-   case 'integrations':return 'Proveedores externos en simulación, listos para activarse con contrato y credenciales.';
+   case 'integrations':return 'Proveedores externos: apagados, en simulación o conectados con sus credenciales.';
    case 'loyalty':{const l=s.restaurant?.loyalty;return l?.enabled?<>Cashback del {(l.cashbackBps/100).toLocaleString('es-MX')} % al cerrar cuentas de clientes registrados.</>:'Clientes frecuentes, su monedero y el programa de lealtad.';}
    case 'expenses':return 'Cada salida de dinero ligada a su cuenta de gasto, con su fondo de caja chica.';
    case 'delivery':return <>Pedidos para llevar y entregas locales.{navCounts.delivery?strong(plural(navCounts.delivery,'pedido espera','pedidos esperan')+' tu revisión.'):''}</>;
