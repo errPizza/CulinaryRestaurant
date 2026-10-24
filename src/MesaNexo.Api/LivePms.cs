@@ -5,7 +5,7 @@ using static MesaNexo.Core.Rules;
 namespace MesaNexo.Api;
 // pms.json (example in deploy/integrations/pms.example.json): "system": "cloudbeds" or "opera", with
 //   "cloudbeds": {apiKey, propertyId}
-//   "opera": {gatewayUrl, tokenUrl, grantType ("client_credentials" or "password"), clientId, clientSecret, scope, username,
+//   "opera": {gatewayUrl, tokenUrl, grantType ("client_credentials" or "password"), clientId, clientSecret, scope, enterpriseId, username,
 //             password, appKey, hotelId, transactionCode, cashierId}
 // plus "creditLimit" (MXN per room within a week, 0 = the hotel decides) and "itemName" (what the folio shows).
 public sealed class PmsService(IPmsAdapter pms,long creditLimit,string itemName)
@@ -18,7 +18,7 @@ public sealed class PmsService(IPmsAdapter pms,long creditLimit,string itemName)
         else{
             var c=o.Obj("opera");var gateway=new Uri(Text(c,"gatewayUrl",300));var tokenUrl=new Uri(Text(c,"tokenUrl",300));Need(gateway.Scheme=="https"&&tokenUrl.Scheme=="https","opera.gatewayUrl y opera.tokenUrl: direcciones HTTPS");
             var grant=Choice(c,"grantType","client_credentials","password");var appKey=Text(c,"appKey",100);
-            var token=new OAuthToken(http,tokenUrl.ToString(),Text(c,"clientId",200),Text(c,"clientSecret",300),grant,c.S("scope"),grant=="password"?Text(c,"username",100):"",grant=="password"?Text(c,"password",200):"",appKey);
+            var token=new OAuthToken(http,tokenUrl.ToString(),Text(c,"clientId",200),Text(c,"clientSecret",300),grant,c.S("scope"),grant=="password"?Text(c,"username",100):"",grant=="password"?Text(c,"password",200):"",appKey,c.S("enterpriseId"));
             adapter=new OperaPms(http,token,gateway.ToString(),appKey,Text(c,"hotelId",40),Text(c,"transactionCode",20),c.ContainsKey("cashierId")?c.L("cashierId"):null);
         }
         var limit=o.L("creditLimit");Need(limit>=0,"creditLimit no puede ser negativo");var item=o.S("itemName");

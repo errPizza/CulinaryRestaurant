@@ -85,8 +85,9 @@ public sealed class OperaPms(HttpClient http,OAuthToken token,string gatewayUrl,
     }
 }
 // An OAuth 2.0 access token kept until a minute before it expires: client credentials, or the password grant with an
-// integration user, as the OHIP environment is set up.
-public sealed class OAuthToken(HttpClient http,string tokenUrl,string clientId,string clientSecret,string grantType,string scope="",string username="",string password="",string appKey="")
+// integration user, as the OHIP environment is set up. Environments on Oracle Cloud Identity Management also take the
+// Enterprise ID in an enterpriseId header.
+public sealed class OAuthToken(HttpClient http,string tokenUrl,string clientId,string clientSecret,string grantType,string scope="",string username="",string password="",string appKey="",string enterpriseId="")
 {
     string value="";DateTimeOffset until;readonly SemaphoreSlim gate=new(1,1);
     public void Reset()=>until=DateTimeOffset.MinValue;
@@ -95,7 +96,7 @@ public sealed class OAuthToken(HttpClient http,string tokenUrl,string clientId,s
         await gate.WaitAsync(ct);try{
             if(value!=""&&DateTimeOffset.UtcNow<until)return value;
             var form=new Dictionary<string,string>{["grant_type"]=grantType};if(scope!="")form["scope"]=scope;if(grantType=="password"){form["username"]=username;form["password"]=password;}
-            using var request=new HttpRequestMessage(HttpMethod.Post,tokenUrl){Content=new FormUrlEncodedContent(form)};request.Headers.Authorization=new AuthenticationHeaderValue("Basic",Convert.ToBase64String(Encoding.UTF8.GetBytes(clientId+":"+clientSecret)));if(appKey!="")request.Headers.Add("x-app-key",appKey);
+            using var request=new HttpRequestMessage(HttpMethod.Post,tokenUrl){Content=new FormUrlEncodedContent(form)};request.Headers.Authorization=new AuthenticationHeaderValue("Basic",Convert.ToBase64String(Encoding.UTF8.GetBytes(clientId+":"+clientSecret)));if(appKey!="")request.Headers.Add("x-app-key",appKey);if(enterpriseId!="")request.Headers.Add("enterpriseId",enterpriseId);
             using var response=await http.SendAsync(request,ct);var data=JsonNode.Parse(await response.Content.ReadAsStringAsync(ct));
             Need(response.IsSuccessStatusCode&&data.S("access_token")!="","El servidor OAuth rechazó las credenciales de OHIP");
             value=data.S("access_token");until=DateTimeOffset.UtcNow.AddSeconds(Math.Max(60,data.L("expires_in",3600))-60);return value;
