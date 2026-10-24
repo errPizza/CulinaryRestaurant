@@ -20,7 +20,7 @@ public sealed class MapsService(GoogleMaps google)
         if(point is null)return JobResult.Of("failed","Google no encontró «"+address.S("text")+"»","",("message","Google no encontró la dirección"));
         var (lat,lon,formatted)=point.Value;var fields=new List<(string,object?)>{("lat",Math.Round(lat,6)),("lon",Math.Round(lon,6)),("formatted",formatted),("message","")};
         var settings=s.Related("integration","id","maps").FirstOrDefault()?.Obj("settings")??new JsonObject();
-        if(decimal.TryParse(settings.S("centerLat"),System.Globalization.CultureInfo.InvariantCulture,out var fromLat)&&decimal.TryParse(settings.S("centerLon"),System.Globalization.CultureInfo.InvariantCulture,out var fromLon)&&await google.Route(fromLat,fromLon,lat,lon,ct) is {} route){
+        if(settings.ContainsKey("centerLat")&&settings.ContainsKey("centerLon")&&await google.Route(Restaurant.Coordinate(settings,"centerLat",90),Restaurant.Coordinate(settings,"centerLon",180),lat,lon,ct) is {} route){
             // Five more minutes to hand the order over, as the simulator estimates.
             fields.Add(("routeKm",route.Km));fields.Add(("routeMinutes",route.Minutes+5));
         }

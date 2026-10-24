@@ -206,7 +206,7 @@ export function AccountPayments({state:s,visit:v,action,run,form,dialog,canPay}:
   </div>}
  </>;
 }
-export function paymentDetail(p:Row){return p.terminal?[p.terminal.brand,p.terminal.last4&&'•••• '+p.terminal.last4,p.terminal.authCode&&'aut. '+p.terminal.authCode].filter(Boolean).join(' · ')||'Terminal':p.method==='room'?'Habitación '+p.room+' · '+p.reference:p.method==='online'?(p.provider==='mercadopago'?'Mercado Pago':'Stripe')+' · '+p.reference:p.method==='platform'?(PLATFORMS[p.platform]?.name||'Plataforma')+' · '+p.reference:'';}
+export function paymentDetail(p:Row){return p.terminal?[[p.terminal.brand,p.terminal.last4&&'•••• '+p.terminal.last4].filter(Boolean).join(' '),p.terminal.authCode&&'aut. '+p.terminal.authCode].filter(Boolean).join(' · ')||'Terminal':p.method==='room'?'Habitación '+p.room+' · '+p.reference:p.method==='online'?(p.provider==='mercadopago'?'Mercado Pago':'Stripe')+' · '+p.reference:p.method==='platform'?(PLATFORMS[p.platform]?.name||'Plataforma')+' · '+p.reference:'';}
 
 // ---------- delivery page: platform orders and incoming calls ----------
 export function platformCards(s:any,{action,run,form,openVisit,manager}:{action:Act;run:any;form:any;openVisit:(id:string)=>void;manager:boolean}){

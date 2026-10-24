@@ -38,10 +38,12 @@ using(var setup=new NativeSession(profile,new DesktopVault(Path.Combine(director
 var clients=new Dictionary<string,BridgeHost>();
 async Task<BridgeHost> Client(string id){if(!clients.TryGetValue(id,out var bridge)){await service.RotateEnrollment(code);bridge=new BridgeHost(new DesktopVault(Path.Combine(directory,"vault-"+J.Hash(id))));await bridge.Call("profile.save",(JsonObject)profileNode.DeepClone());clients[id]=bridge;}return bridge;}
 // The fiscal service against a Facturama sandbox without network: "fiscal.sandbox" processes every waiting request once.
+// "integration.ready" gives the server credentials for a provider, as its file in /etc/culinaryos/integrations would.
 var facturama=new FixtureFacturama();using var pac=new FacturamaAdapter("fixture","fixture",true,facturama);
 var issuer=J.O("expeditionPlace","06600","product",J.O("productCode","90101501","unitCode","E48","taxObject","02"));
 async Task<JsonNode?> Fixture(string command,JsonObject a)
 {
+ if(command=="integration.ready"){service.Integrations.Ready(a.S("key"));service.UseIntegrations(service.Integrations,(JsonArray)service.Domain.LiveCatalog.A("terminals").DeepClone());return J.O("ready",a.S("key"));}
  if(command!="fiscal.sandbox")throw new InvalidOperationException("Orden de prueba desconocida");
  facturama.Mode=a.S("mode");var processed=0;while(await service.ProcessFiscal(pac,issuer,allRequests:true))processed++;
  return J.O("processed",processed,"stamps",new JsonArray(facturama.Stamps.Select(x=>(JsonNode)x.DeepClone()).ToArray()));

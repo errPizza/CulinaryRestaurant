@@ -73,7 +73,11 @@ public sealed partial class BranchService
         try{await Commit(s,J.Id(),actor,J.Hash(rid+attempt),J.O("id",rid,"attemptId",attempt),kind+".claim",ct);}catch(StoreException e)when(e.Code=="COS-DATA-CONFLICT"){return false;}
         JobResult result;try{result=await send(view,snapshot,ct);}
         catch(BusinessException e){result=JobResult.Of("failed",e.Message);}
-        catch(Exception)when(!ct.IsCancellationRequested){result=JobResult.Of("uncertain","Sin respuesta del proveedor; se consulta antes de repetir");}
+        catch(Exception)when(!ct.IsCancellationRequested){
+            // The call may have reached the provider: ask it (recover) before anything else; without an answer it stays uncertain.
+            JobResult? found=null;try{if(recover is not null)found=await recover(view,snapshot,ct);}catch(Exception)when(!ct.IsCancellationRequested){}
+            result=found??JobResult.Of("uncertain","Sin respuesta del proveedor; revisa en su portal antes de repetir",snapshot.S("reference"));
+        }
         return await Record(kind,rid,attempt,actor,result,ct);
     }
     readonly ConcurrentDictionary<string,DateTimeOffset> polled=new();

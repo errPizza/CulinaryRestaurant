@@ -143,3 +143,5 @@ Revisión: 23 de octubre de 2026. El usuario pidió que las integraciones simula
 | Ligas de pago | Implementado: Stripe Checkout con consulta periódica, reembolso y expiración | Api/LivePayments.cs; Integrations/PaymentAdapters.cs |
 | Hotel | Implementado: Cloudbeds y OPERA (OHIP) con validación del huésped y crédito | Api/LivePms.cs; Integrations/PmsAdapters.cs |
 | Deliverect | Implementado: webhook HMAC en el portal público, propuesta `aggregator` a la sucursal, estados y menú de vuelta | Public/Program.cs; Central/CommerceService.cs; Api/LiveAggregators.cs |
+
+Verificación: 52 comprobaciones nuevas contra APIs de proveedor simuladas sin red (`LiveIntegrationTests`, más el webhook de Deliverect en `TenantTests`), suite de integración completa 598/598, runtime 27/27, instalador 44/44 y 20/20 pruebas web con Edge contra el backend real. No se probó con credenciales ni cuentas reales de ningún proveedor; esa prueba queda para el final con los archivos de `deploy/integrations`.

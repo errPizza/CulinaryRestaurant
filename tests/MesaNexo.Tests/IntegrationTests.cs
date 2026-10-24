@@ -25,9 +25,9 @@ static class IntegrationTests
         var t1=await Act("table.save",J.O("name","Mesa 1","zone","Salón","capacity",4));var t2=await Act("table.save",J.O("name","Mesa 2","zone","Salón","capacity",4));await Act("cash.open",J.O("initial",50000));
         async Task<JsonObject> Account(JsonObject table,params JsonObject[] products){var v=await Act("visit.open",J.O("tableId",table.S("id"),"people",2,"waiterId",ana.S("id")));await Act("command.send",J.O("visitId",v.S("id"),"items",products.Select(x=>J.O("productId",x.S("id"),"quantity",1)).ToArray()));return v;}
 
-        // Activation: simulation only; live mode stays locked.
+        // Activation: live mode needs the provider's credentials on the server.
         await Deny(()=>Act("terminal.charge",J.O("visitId",J.Id(),"amount",100)),"simulators refuse to run until activated",400);
-        await Deny(()=>Act("integration.configure",J.O("provider","pac","mode","live")),"live mode stays locked without contract and server credentials",403);
+        await Deny(()=>Act("integration.configure",J.O("provider","pac","mode","live")),"live mode is refused without the provider's credentials on the server",400);
         await Deny(()=>Waiter("integration.configure",J.O("provider","terminal","mode","simulated")),"only a manager turns integrations on",403);
         foreach(var key in Restaurant.IntegrationKeys.Where(k=>k!="printer"))await Act("integration.configure",J.O("provider",key,"mode","simulated"));
         var state=await service.Load();Check(state.List("integration").Count()==8&&state.Get("integration","terminal").Obj("settings").S("terminalId")=="SIM-01"&&state.Get("integration","maps").Obj("settings").L("radiusKm")==5,"activating a simulator stores default settings");

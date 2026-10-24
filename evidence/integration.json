@@ -1548,7 +1548,7 @@
     "result": "passed"
   },
   {
-    "test": "live mode stays locked without contract and server credentials",
+    "test": "live mode is refused without the provider\u0027s credentials on the server",
     "result": "passed"
   },
   {
@@ -1880,6 +1880,14 @@
     "result": "passed"
   },
   {
+    "test": "a signed Deliverect order is queued once for the branch as an aggregator proposal",
+    "result": "passed"
+  },
+  {
+    "test": "a Deliverect webhook with a forged signature is rejected before the domain",
+    "result": "passed"
+  },
+  {
     "test": "public order personal data is encrypted at rest",
     "result": "passed"
   },
@@ -2099,7 +2107,7 @@
     "printer": "simulated ESC/POS over TCP; no hardware"
   },
   {
-    "test": "production stamping stays refused until there is a CSD and a reviewed contract",
+    "test": "a production configuration stamps on Facturama\u0027s production API",
     "result": "passed",
     "pac": "simulated Facturama API Web; no network"
   },
@@ -2252,5 +2260,255 @@
     "test": "fiscal service status reaches /api/state",
     "result": "passed",
     "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "live mode is refused for a provider without credentials on the server (El servidor no tiene credenciales v\u00E1lidas para esta integraci\u00F3n: van en /etc/culinaryos/integrations/callerid.json)",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "/api/state reports which providers have credentials and the branch\u0027s terminals",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a live terminal charge is queued; the action itself contacts nobody",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a second charge waits while one is on its way (Hay un cobro con terminal en curso en esta cuenta; espera su resultado o cons\u00FAltalo antes de cobrar otra vez)",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "the terminal service sends the charge and waits for the customer",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "Mercado Pago receives the amount in pesos, the terminal and the charge id as idempotency key",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "waiting at the terminal adds nothing to the store",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "an approved order is recorded",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "the approved charge becomes a card payment with the brand the terminal reported",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a lost creation is recovered by asking again with the same key; no second order",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "cancelling from the POS cancels the order on the terminal",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "the cancellation is allowed while at the terminal and records no payment",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a charge over a covered account is refunded through Mercado Pago",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "the covered account keeps a single payment",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "Clip receives the reader\u0027s serial, amount and tip with Basic api key and secret",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "an approved Clip payment records the brand and last four digits",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a Clip charge without an answer and without its id stays uncertain",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "an uncertain charge without the provider\u0027s id needs the terminal\u0027s report (outcome: valor inv\u00E1lido)",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "the terminal\u0027s report settles an uncertain charge",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a voucher needs a real authorization code (Autorizaci\u00F3n del voucher: de 4 a 8 letras o n\u00FAmeros)",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a BBVA charge is recorded from its voucher",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a live payment link is queued until Stripe creates it",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "Stripe creates the Checkout session in MXN keyed by the link id",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "the link goes to the customer\u0027s WhatsApp once it exists, with the template values in order",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a paid Checkout session becomes an online payment",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "cancelling a link expires its Stripe session",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a message that did not go out is tried again later",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "WhatsApp receives the approved template with its four values and the number with country code",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a message without its template or channel is refused with the reason, never sent",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "with live maps an address is queued to be located",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a delivery waits until its address is located (La direcci\u00F3n todav\u00EDa se est\u00E1 ubicando en el mapa; intenta en unos segundos)",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "the simulated lookup is not offered with live maps (Con Google Maps real la ubicaci\u00F3n se calcula al guardar la direcci\u00F3n del cliente)",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "Google locates the address and Routes measures 4.2 km and 15 \u002B 5 minutes from the restaurant",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "the delivery takes distance and time from the located address",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "an address Google cannot find is marked so",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a surname that does not match the guest is refused before posting",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "Cloudbeds posts the charge with the posting id as referenceID and the room payment is recorded",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "the guest is looked up among checked-in reservations with the API key",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "OPERA finds the in-house guest and posts the charge with the restaurant\u0027s transaction code",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "OHIP reuses its token, sends the hotel id and finds a posting by its reference",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a Deliverect webhook with the right HMAC is accepted",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a forged Deliverect webhook is refused",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a Deliverect order arrives through the cloud inbox, matched by PLU, with modifiers as notes",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "an order with products missing from the catalog cannot be accepted (Hay productos de la plataforma que no existen en el cat\u00E1logo (Gringa): corrige el PLU en Deliverect o rechaza el pedido)",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a cancellation from the platform voids a pending order",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "accepting queues status 20 for Deliverect and a finished kitchen queues 70",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "the statuses reach Deliverect\u0027s orderStatus with one client-credentials token",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "the menu is published with the product id as PLU and 16 % as 16000",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "the integration card shows the last menu publication",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "production Facturama e-mails the CFDI from api.facturama.mx",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
   }
 ]

@@ -205,7 +205,7 @@ test('integrations run in simulation: terminal, platform order, PAC stamp, outbo
  const exec=async(type:string,payload:any)=>{const r=await call('integrations','execute',{type,payload});if(r.ok)await call('integrations','ack',{operationId:r.data.operationId});return r;};
  const shot=async(name:string)=>{await page.waitForTimeout(650);await page.screenshot({path:path.join(evidence,'etapa4-'+name+'.png'),fullPage:true});};
  await nav(page,'Integraciones');await expect(page.getByText('Todo está en simulación.')).toBeVisible();
- for(const name of ['Terminal bancaria','Plataformas de reparto','Facturación CFDI 4.0','WhatsApp y correo','Pagos en línea']){await page.getByRole('switch',{name:'Activar '+name}).click();await expect(page.getByRole('switch',{name:'Apagar '+name})).toBeVisible();}
+ for(const name of ['Terminal bancaria','Plataformas de reparto','Facturación CFDI 4.0','WhatsApp y correo','Pagos en línea']){const modes=page.getByRole('radiogroup',{name:'Modo de '+name});await expect(modes.getByRole('radio',{name:'Real'})).toBeDisabled();await modes.getByRole('radio',{name:'Simulación'}).click();await expect(modes.getByRole('radio',{name:'Simulación'})).toHaveAttribute('aria-checked','true');}
  const live=await exec('integration.configure',{provider:'pac',mode:'live'});expect(live.ok).toBe(false);
  await page.locator('.integration-card',{hasText:'Plataformas de reparto'}).getByRole('button',{name:'Simular pedido'}).click();await dialog().getByLabel('Cliente').fill('Laura QA');await save();
  await shot('integraciones-1360');
@@ -241,8 +241,8 @@ test('integrations run in simulation: terminal, platform order, PAC stamp, outbo
 test('a PAC submission that lost its answer is retried by the manager with the same folio and date',async({page})=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await login(page,'fiscal');
  const exec=async(type:string,payload:any)=>{const r=await call('fiscal','execute',{type,payload});expect(r.ok,r.error).toBe(true);await call('fiscal','ack',{operationId:r.data.operationId});return r.data.result;};
- // The Facturama sandbox leaves the requests alone while the PAC simulator is on.
- await exec('integration.configure',{provider:'pac',mode:'off'});
+ // The PAC goes live once the server has its credentials; the Facturama sandbox leaves the requests alone otherwise.
+ await call('fixture','integration.ready',{key:'pac'});await exec('integration.configure',{provider:'pac',mode:'live'});
  let state=(await call('fiscal','state')).data;const burger=state.products.find((p:any)=>p.name==='Hamburguesa de la casa');
  const visitId=(await exec('visit.quick',{})).id;const units=(await exec('command.send',{visitId,items:[{productId:burger.id,quantity:1}]})).unitIds;
  for(const id of units)for(const status of ['preparing','ready','delivered'])await exec('unit.state',{id,status});

@@ -62,7 +62,7 @@ static class PrintTests
         async Task Deny(Func<Task> action,string contains,string name){try{await action();throw new Exception("Expected rejection: "+name);}catch(BusinessException e){Check(e.Message.Contains(contains),name);}}
         static int FreePort(){var l=new TcpListener(IPAddress.Loopback,0);l.Start();var p=((IPEndPoint)l.LocalEndpoint).Port;l.Stop();return p;}
         var folder=Path.Combine(root,".lab","print-"+J.Id());var password="Test-"+J.Id();var enrollment=J.Id();
-        using var runtime=new RuntimeStore(python,Path.Combine(root,"runtime","lab_host.py"),folder,"print-site");var service=new BranchService(runtime,"print-site",new Passwords());
+        using var runtime=new RuntimeStore(python,Path.Combine(root,"runtime","lab_host.py"),folder,"print-site");var service=new BranchService(runtime,"print-site",new Passwords());var live=new IntegrationConfig();live.Ready("printer");service.UseIntegrations(live);
         await service.Initialize(J.O("siteId","print-site","name","Café La Niña","mode","licencia","managerName","Gerencia","managerUsername","manager","managerPassword",password,"enrollmentCode",enrollment,"modules",Restaurant.Modules));
         var token=(await service.Login(J.O("siteId","print-site","deviceId",J.Id(),"deviceSecret",J.Id(),"deviceName","print test","username","manager","password",password,"enrollmentCode",enrollment))).S("token");
         async Task<JsonObject> Act(string type,JsonObject p)=>(await service.Action(token,J.O("operationId",J.Id(),"type",type,"payload",p))).Obj("result");

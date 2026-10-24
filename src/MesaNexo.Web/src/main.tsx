@@ -123,7 +123,7 @@ function App(){
    case 'cash':return openedCash?<>Caja abierta desde las {clock(openedCash.openedAt)}.{strong('Esperas '+money(expectedCash)+' en efectivo.')}</>:'La caja está cerrada. Ábrela antes de registrar pagos.';
    case 'inventory':return 'Se reserva al enviar a cocina y se consume al liquidar la cuenta.';
    case 'purchases':{const o=list('payables').filter((p:Row)=>p.status==='open'&&Date.parse(p.dueAt)<Date.now()).length;return <>Órdenes, entradas al almacén y cuentas por pagar.{o?strong(plural(o,'factura vencida','facturas vencidas')+'.'):''}</>;}
-   case 'integrations':return 'Proveedores externos en simulación, listos para activarse con contrato y credenciales.';
+   case 'integrations':return 'Proveedores externos: apagados, en simulación o conectados con sus credenciales.';
    case 'loyalty':{const l=s.restaurant?.loyalty;return l?.enabled?<>Cashback del {(l.cashbackBps/100).toLocaleString('es-MX')} % al cerrar cuentas de clientes registrados.</>:'Clientes frecuentes, su monedero y el programa de lealtad.';}
    case 'expenses':return 'Cada salida de dinero ligada a su cuenta de gasto, con su fondo de caja chica.';
    case 'delivery':return <>Pedidos para llevar y entregas locales.{navCounts.delivery?strong(plural(navCounts.delivery,'pedido espera','pedidos esperan')+' tu revisión.'):''}</>;
