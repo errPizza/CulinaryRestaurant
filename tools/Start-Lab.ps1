@@ -5,6 +5,8 @@
  [ValidateRange(1,65535)][int]$Port=8443,
  [ValidatePattern('^[a-z0-9-]{1,32}$')][string]$SiteId='manual-lab',
  [string]$LabDirectory='',
+ [string]$LicenseServer='',
+ [string]$RootPublicKey='',
  [switch]$PassThru
 )
 $ErrorActionPreference='Stop'
@@ -13,6 +15,8 @@ $env:DOTNET_CLI_HOME=Join-Path $projectRoot '.dotnet'
 $env:NUGET_PACKAGES=Join-Path $projectRoot '.packages'
 $env:PYTHONDONTWRITEBYTECODE='1'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT='1'
+if($RootPublicKey){& (Join-Path $PSScriptRoot 'Use-RootKey.ps1') -Path $RootPublicKey}
+if($LicenseServer -and $LicenseServer -notmatch '^https://'){throw 'CulinaryServer debe ser una dirección HTTPS.'}
 $lab=if($LabDirectory){[IO.Path]::GetFullPath($LabDirectory)}else{Join-Path $projectRoot '.lab/manual'}
 $probe=Join-Path $projectRoot 'runtime/lab_probe.py'
 $hostScript=Join-Path $projectRoot 'runtime/lab_host.py'
@@ -84,7 +88,13 @@ try{
   Write-Host "Reutilizando el servidor HTTPS de confianza en el puerto $Port."
   try{$backendPid=(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Stop | Select-Object -First 1).OwningProcess}catch{}
  }else{
+  if($LicenseServer){
+   # On CulinaryOS a root step writes these; in the lab this machine's own identifiers bind the license.
+   $hardware=@{board=(Get-CimInstance Win32_ComputerSystemProduct).UUID;disk=((Get-CimInstance Win32_DiskDrive | Sort-Object Index | Select-Object -First 1).SerialNumber);mac=((Get-CimInstance Win32_NetworkAdapter -Filter 'PhysicalAdapter=True' | Where-Object MACAddress | Sort-Object DeviceID | Select-Object -First 1).MACAddress)}
+   [IO.File]::WriteAllText((Join-Path $lab 'hardware.json'),($hardware|ConvertTo-Json),(New-Object System.Text.UTF8Encoding($false)))
+  }
   $arguments='"'+$api+'" --lab --site '+$SiteId+' --port '+$Port+' --python "'+$Python+'" --lab-script "'+$hostScript+'" --lab-directory "'+$lab+'"'
+  if($LicenseServer){$arguments+=' --license-server "'+$LicenseServer.TrimEnd('/')+'"'}
   $stdout=Join-Path $buildRoot 'backend.stdout.log';$stderr=Join-Path $buildRoot 'backend.stderr.log'
   $backend=Start-Process -FilePath $dotnet -ArgumentList $arguments -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
   $backendPid=$backend.Id
