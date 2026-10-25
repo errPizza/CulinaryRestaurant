@@ -16,6 +16,8 @@ public sealed partial class Restaurant {
         var name = table.S("name");
         if (kind == "order") {
 
+            // Ordering from the QR menu is the web ordering add-on; calling the waiter or asking for the bill is not.
+            if (!Licensed(s, "webOrdering")) { Settle(proposal, "rejected-local", "Los pedidos desde el QR no están incluidos en la licencia", ""); return; }
             if (visit is null) { Settle(proposal, "rejected-local", "La mesa no tiene una cuenta abierta", ""); return; }
             proposal["tableId"] = table.S("id");
             proposal["visitId"] = visit.S("id");

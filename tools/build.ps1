@@ -1,5 +1,6 @@
-param([string]$NsisCompiler,[switch]$Android)
+param([Parameter(Mandatory)][string]$RootPublicKey,[string]$NsisCompiler,[switch]$Android)
 $ErrorActionPreference='Stop'
+& (Join-Path $PSScriptRoot 'Use-RootKey.ps1') -Path $RootPublicKey
 $projectRoot=Split-Path $PSScriptRoot -Parent
 $env:DOTNET_CLI_HOME=Join-Path $projectRoot '.dotnet'
 $env:NUGET_PACKAGES=Join-Path $projectRoot '.packages'

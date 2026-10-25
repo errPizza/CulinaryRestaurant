@@ -54,6 +54,8 @@ public sealed partial class NativeSession: IDisposable {
         p["username"] = username;
         p["password"] = password;
         p["deviceName"] = deviceName;
+        // Phones and tablets are mobile order takers; desktop installs count as fixed terminals.
+        p["deviceKind"] = OperatingSystem.IsAndroid() || OperatingSystem.IsIOS() ? "mobile" : "terminal";
         p["enrollmentCode"] = enrollment;
         p["siteId"] = profile.SiteId;
         if (profile.TenantId != "") { p["tenantId"] = profile.TenantId; p["branchId"] = profile.BranchId; }
@@ -166,36 +168,6 @@ public sealed partial class NativeSession: IDisposable {
             return data;
 
         } catch (HttpRequestException e) { Connection = e.InnerException is AuthenticationException ? ConnectionState.TlsRejected : System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable() ? ConnectionState.LocalServerUnreachable : ConnectionState.InternalNetworkDisconnected; throw new IOException(Connection == ConnectionState.TlsRejected ? "Servidor no confiable: comprueba CA, nombre y vigencia" : Connection == ConnectionState.InternalNetworkDisconnected ? "Red interna desconectada" : "Servidor local inaccesible. Internet y central sin comprobar.", e); }
-
-    }
-    public async Task ExportBackup(string id, Stream output, string expectedSha256, CancellationToken ct = default) {
-
-        using var request = new HttpRequestMessage(HttpMethod.Get, "api/backups/" + Uri.EscapeDataString(id));
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
-        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-        if (!response.IsSuccessStatusCode) throw new ApiFailure((int)response.StatusCode, "Exportación no autorizada");
-        await using var input = await response.Content.ReadAsStreamAsync(ct);
-        using var hash = System.Security.Cryptography.IncrementalHash.CreateHash(System.Security.Cryptography.HashAlgorithmName.SHA256);
-        var buffer = new byte[65536];
-        int n;
-        long length = 0;
-        while ((n = await input.ReadAsync(buffer, ct)) > 0) { hash.AppendData(buffer, 0, n); await output.WriteAsync(buffer.AsMemory(0, n), ct); length += n; }
-        Rules.Need(Convert.ToHexStringLower(hash.GetHashAndReset()) == expectedSha256, "La integridad del respaldo exportado no coincide");
-        output.SetLength(length);
-        await output.FlushAsync(ct);
-
-    }
-    public async Task<JsonObject> UploadPackage(string filename, Stream file, CancellationToken ct = default) {
-
-        using var request = new HttpRequestMessage(HttpMethod.Put, "api/packages/" + Uri.EscapeDataString(filename));
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
-        request.Content = new StreamContent(file);
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromMinutes(10));
-        using var response = await http.SendAsync(request, timeout.Token);
-        var result = JsonNode.Parse(await response.Content.ReadAsStringAsync(timeout.Token))!.AsObject();
-        if (!response.IsSuccessStatusCode) throw new ApiFailure((int)response.StatusCode, result.S("error"));
-        return result;
 
     }
     public void Dispose() { _ = StopLive(); http.Dispose(); sending.Dispose(); }

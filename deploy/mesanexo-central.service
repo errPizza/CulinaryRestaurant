@@ -1,5 +1,5 @@
 [Unit]
-Description=Culinary Restaurant proveedor central (no servidor de sucursal)
+Description=Culinary Restaurant central multiempresa (no servidor de sucursal)
 After=network.target
 [Service]
 Type=simple
@@ -8,11 +8,11 @@ Group=mesanexo-central
 StateDirectory=mesanexo-central
 StateDirectoryMode=0700
 UMask=0077
-ExecStart=/opt/mesanexo-central/MesaNexo.Central --provider-id IDENTIDAD-PROVEEDOR
+ExecStart=/opt/mesanexo-central/MesaNexo.Central --central-id IDENTIDAD-CENTRAL
 LoadCredential=central-data-key:/etc/mesanexo-central/secrets/data.key
 LoadCredential=tls-key:/etc/mesanexo-central/secrets/tls.key
 LoadCredential=tls-cert:/etc/mesanexo-central/secrets/tls.crt
-LoadCredential=release-signing-key:/etc/mesanexo-central/secrets/release-signing.pem
+LoadCredential=cloud-signing-key:/etc/mesanexo-central/secrets/cloud-signing.pem
 ProtectSystem=strict
 ProtectHome=yes
 NoNewPrivileges=yes

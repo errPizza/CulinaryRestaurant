@@ -129,17 +129,26 @@ public sealed class BridgeHost(ISecureVault vault): IDisposable {
                     return J.O("ok", true);
 
                 }
-            case "package.upload": {
+            // Before sign-in: the lock screen asks the branch for its license, and a locked branch takes a new activation.
+            case "license.status": {
 
-                    await using var input = File.OpenRead(a.S("path"));
-                    return await Session.UploadPackage(Path.GetFileName(a.S("path")), input);
+                    var p = await Profile() ?? throw new InvalidOperationException("Configura la conexión HTTPS y su CA");
+                    using var http = TrustedConnection.Create(p);
+                    using var response = await http.GetAsync("api/license");
+                    var data = JsonNode.Parse(await response.Content.ReadAsStringAsync()) as JsonObject ?? new();
+                    if (!response.IsSuccessStatusCode) throw new ApiFailure((int)response.StatusCode, data.S("error", "No se pudo consultar la licencia"));
+                    return data;
 
                 }
-            case "backup.export": {
+            case "license.activate": {
 
-                    var destination = Path.GetFullPath(a.S("path"));
-                    var temporary = destination + "." + J.Id() + ".partial";
-                    try { await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None)) { await Session.ExportBackup(a.S("id"), output, a.S("sha256")); output.Flush(true); } File.Move(temporary, destination, true); return J.O("saved", true); } finally { if (File.Exists(temporary)) File.Delete(temporary); }
+                    var p = await Profile() ?? throw new InvalidOperationException("Configura la conexión HTTPS y su CA");
+                    if (session is not null) throw new InvalidOperationException("Cierra la sesión antes de activar");
+                    using var http = TrustedConnection.Create(p);
+                    using var response = await http.PostAsJsonAsync("api/license/activate", J.O("licenseId", a.S("licenseId"), "activationCode", a.S("activationCode")));
+                    var data = JsonNode.Parse(await response.Content.ReadAsStringAsync()) as JsonObject ?? new();
+                    if (!response.IsSuccessStatusCode) throw new ApiFailure((int)response.StatusCode, data.S("error", "No se pudo activar la licencia"));
+                    return data;
 
                 }
             case "state":
@@ -192,21 +201,17 @@ public sealed class BridgeHost(ISecureVault vault): IDisposable {
             case "theme.set": { var theme = a.S("theme"); Rules.Need(theme is "light" or "dark" or "system", "Tema no válido"); await vault.Write("ui.theme", theme); return J.O("saved", true); }
             case "updates.prepare": {
 
-                    if (session is not null) throw new InvalidOperationException("Cierra la sesión antes de preparar una actualización");
+                    if (session is not null) throw new InvalidOperationException("Cierra la sesión antes de buscar una actualización");
                     if (!OperatingSystem.IsWindows()) throw new InvalidOperationException("La instalación asistida de esta etapa requiere Windows");
                     var p = await Profile() ?? throw new InvalidOperationException("Configura la conexión");
-                    var manifest = await Updates.Verify(a.S("bundle"), a.S("package"), a.S("publicKey"), a.S("keySha256"), p.SiteId, "win-x64");
-                    await CheckInstallPermission(p);
                     preparedPackage = null;
                     preparedManifest = null;
                     var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MesaNexo", "updates", "tauri", J.Id());
-                    Directory.CreateDirectory(directory);
-                    var target = Path.Combine(directory, Path.GetFileName(a.S("package")));
-                    await using (var input = File.OpenRead(a.S("package"))) await using (var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, FileOptions.WriteThrough)) { await input.CopyToAsync(output); output.Flush(true); }
-                    await using (var input = File.OpenRead(target)) Rules.Need(Convert.ToHexStringLower(await SHA512.HashDataAsync(input)) == manifest.S("sha512"), "El paquete cambió al prepararlo");
-                    preparedPackage = target;
-                    preparedManifest = manifest;
-                    return manifest;
+                    var update = await Updates.Fetch(p, await Device(p), "win-x64", directory);
+                    if (update is null) return J.O("update", null);
+                    preparedPackage = Path.Combine(directory, update.S("filename"));
+                    preparedManifest = update;
+                    return J.O("update", true, "version", update.S("version"), "notes", update.S("notes"), "bytes", update.L("bytes"));
 
                 }
             case "updates.install": {
@@ -214,18 +219,12 @@ public sealed class BridgeHost(ISecureVault vault): IDisposable {
                     if (session is not null || preparedPackage is null || preparedManifest is null) throw new InvalidOperationException("Primero valida el paquete con la sesión cerrada");
                     var p = await Profile() ?? throw new InvalidOperationException("Configura la conexión");
                     await CheckInstallPermission(p);
-                    await using (var input = File.OpenRead(preparedPackage)) Rules.Need(Convert.ToHexStringLower(await SHA512.HashDataAsync(input)) == preparedManifest.S("sha512"), "El paquete preparado cambió");
+                    Updates.Signed(preparedManifest.S("update"), p.SiteId, "win-x64");
+                    await Updates.Verify(preparedManifest, preparedPackage, "win-x64");
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(preparedPackage) { UseShellExecute = true });
                     preparedPackage = null;
                     preparedManifest = null;
                     return J.O("started", true);
-
-                }
-            case "updates.verify": {
-
-                    if (session is not null) throw new InvalidOperationException("Cierra la sesión antes de verificar una actualización");
-                    var p = await Profile() ?? throw new InvalidOperationException("Configura la conexión");
-                    return await Updates.Verify(a.S("bundle"), a.S("package"), a.S("publicKey"), a.S("keySha256"), p.SiteId, OperatingSystem.IsWindows() ? "win-x64" : "linux-x64");
 
                 }
             default:
@@ -233,15 +232,15 @@ public sealed class BridgeHost(ISecureVault vault): IDisposable {
         }
 
     }
+    async Task<JsonObject> Device(ConnectionProfile p) => JsonNode.Parse(await vault.Read("device_" + p.SiteId) ?? throw new InvalidOperationException("Este dispositivo todavía no fue autorizado"))!.AsObject();
     async Task CheckInstallPermission(ConnectionProfile p) {
 
-        var raw = await vault.Read("device_" + p.SiteId) ?? throw new InvalidOperationException("Este dispositivo todavía no fue autorizado");
-        var device = JsonNode.Parse(raw)!.AsObject();
+        var device = await Device(p);
         device["siteId"] = p.SiteId;
         using var http = TrustedConnection.Create(p);
         using var response = await http.PostAsJsonAsync("api/device/can-install", device);
         var permission = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
-        Rules.Need(response.IsSuccessStatusCode && permission.B("allowed"), "Cierra sesión y todas las cuentas; verifica cobertura y autorización del dispositivo");
+        Rules.Need(response.IsSuccessStatusCode && permission.B("allowed"), "Cierra sesión y todas las cuentas; verifica la licencia y la autorización del dispositivo");
 
     }
     public void Dispose() { session?.Dispose(); gate.Dispose(); }

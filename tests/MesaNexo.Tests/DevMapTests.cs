@@ -14,11 +14,11 @@ static class DevMapTests {
         string token = "";
         RuntimeStore? runtime = null;
         BranchService service = null!;
-        void Start() { runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), folder, "devmap-site"); service = new(runtime, "devmap-site", new Passwords()); var live = new IntegrationConfig(); live.Ready("printer"); live.Ready("pac"); service.UseIntegrations(live); }
+        void Start() { runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), folder, "devmap-site"); service = new(runtime, "devmap-site", new Passwords()); var live = new IntegrationConfig(); live.Ready("printer"); live.Ready("pac"); service.UseIntegrations(live); TestLicense.Attach(service); }
         Start();
         try {
 
-            await service.Initialize(J.O("siteId", "devmap-site", "name", "DEVMap isolated", "mode", "licencia", "managerName", "Manager", "managerUsername", "manager", "managerPassword", password, "enrollmentCode", enrollment, "modules", Restaurant.Modules));
+            await TestLicense.Initialize(service, J.O("siteId", "devmap-site", "name", "DEVMap isolated", "mode", "licencia", "managerName", "Manager", "managerUsername", "manager", "managerPassword", password, "enrollmentCode", enrollment, "modules", Restaurant.Modules));
             var device = J.O("siteId", "devmap-site", "deviceId", J.Id(), "deviceSecret", J.Id(), "deviceName", "isolated", "username", "manager", "password", password, "enrollmentCode", enrollment);
             token = (await service.Login(device)).S("token");
             async Task<JsonObject> Act(string type, JsonObject p, string? operation = null, string? auth = null) => (await service.Action(auth ?? token, J.O("operationId", operation ?? J.Id(), "type", type, "payload", p))).Obj("result");

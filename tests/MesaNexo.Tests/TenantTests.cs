@@ -17,7 +17,6 @@ static class TenantTests {
         var key = RandomNumberGenerator.GetBytes(32);
         using var store = new CentralStore(db, (byte[])key.Clone());
         store.Initialize();
-        store.Transaction(s => { s["providerId"] = "isolated-provider"; s["restaurants"] = new JsonArray(); s["tickets"] = new JsonArray(); s["supportOutbox"] = new JsonArray(); return true; });
         var password = "Tenant-" + J.Id();
         JsonObject Provision(string t, string b, string site, string fp) => J.O("tenantId", t, "branchId", b, "slug", t + "-" + b, "siteId", site, "certificateSha256", fp, "tenantName", t, "branchName", b, "ownerName", "Owner", "ownerUsername", "owner", "ownerPassword", password, "ownerEnrollmentCode", new string('e', 32));
         store.ProvisionTenant(Provision("alpha", "a", "site-a", new string('a', 64)), new Passwords());

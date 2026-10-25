@@ -117,11 +117,8 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
         Need(state.Count == 0, "La sucursal ya está inicializada; no se sobrescribe", 409);
         Need(config.S("siteId") == siteId && System.Text.RegularExpressions.Regex.IsMatch(siteId, "^[a-z0-9-]{1,32}$"), "Identidad no coincide con el runtime");
         Need(!config.S("managerPassword").StartsWith("REEMPLAZAR", StringComparison.OrdinalIgnoreCase) && config.S("enrollmentCode").Length >= 20 && !config.S("enrollmentCode").StartsWith("REEMPLAZAR", StringComparison.OrdinalIgnoreCase), "Reemplaza los marcadores de ejemplo por credenciales propias");
-        var mode = Choice(config, "mode", "renta", "licencia", "codigo");
-        var modules = config.A("modules").Strings();
-        Need(modules.All(Restaurant.Modules.Contains), "Módulos desconocidos");
-        var activation = DateTimeOffset.UtcNow;
-        state.Add("meta", J.O("id", "site", "siteId", siteId, "name", Text(config, "name", 150), "status", "active", "mode", mode, "usageUntil", mode == "renta" ? config.S("usageUntil") : null, "supportUntil", mode == "licencia" ? activation.AddYears(1).ToString("O") : config.S("supportUntil"), "hostingUntil", mode == "licencia" ? activation.AddMonths(2).ToString("O") : config.S("hostingUntil"), "modules", modules, "maxUsers", config.L("maxUsers", 15), "maxTables", config.L("maxTables", 30), "color", "#F7BB32", "stations", new[] { "Cocina", "Barra", "Parrilla", "Postres" }, "discountLimit", 30, "delayMinutes", 15, "enrollmentHash", J.Hash(Text(config, "enrollmentCode", 200)), "updates", mode != "codigo", "updatesUntil", mode == "licencia" ? activation.AddYears(1).ToString("O") : null, "revision", 0, "schemaVersion", 2));
+        // Plan, features and limits are not configured here: they come only from the license activated afterwards.
+        state.Add("meta", J.O("id", "site", "siteId", siteId, "name", Text(config, "name", 150), "status", "active", "color", "#F7BB32", "stations", new[] { "Cocina", "Barra", "Parrilla", "Postres" }, "discountLimit", 30, "delayMinutes", 15, "enrollmentHash", J.Hash(Text(config, "enrollmentCode", 200)), "revision", 0, "schemaVersion", 2));
         state.Add("user", J.O("id", J.Id(), "siteId", siteId, "name", Text(config, "managerName", 100), "username", Text(config, "managerUsername", 100), "role", "manager", "active", true, "permissions", J.O("payments", true, "shiftReports", true), "password", passwords.Hash(config.S("managerPassword"))));
         return await Commit(state, J.Id(), "bootstrap", J.Hash(J.Canonical(config)), J.O("initialized", true, "siteId", siteId), "branch.initialize", ct);
 
@@ -137,6 +134,8 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
             if (Volatile.Read(ref committed) is not { } current || current.Version != s.Committed.Version) throw new StoreException("COS-DATA-CONFLICT");
             AppendAudit(s, eventId, actor, fingerprint, type);
             s.Meta["revision"] = revision = s.Meta.L("revision") + 1;
+            // The newest time this branch has committed: a clock set back later reads as tampering (see Clock).
+            if (!DateTimeOffset.TryParse(s.Meta.S("clock"), out var clock) || clock < DateTimeOffset.UtcNow) s.Meta["clock"] = J.Now();
             var receipt = J.O("actor", actor, "fingerprint", fingerprint, "operation", type, "result", result, "at", J.Now());
             var changes = s.Changes().ToArray();
             JsonNode response;
@@ -170,8 +169,12 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
         var token = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
         var deviceId = Operation(p.S("deviceId"));
         Need(p.S("deviceSecret").Length is >= 32 and <= 200, "Credencial de dispositivo requerida");
+        // A locked branch answers every sign-in with its lock screen, whoever tries and before any password work.
+        var current = await View(ct);
+        var license = License(current);
+        Need(license.Usable, license.Message, 423);
         // Argon2 runs before taking the writer so a slow verification never holds back other terminals.
-        var candidate = (await View(ct)).List("user").FirstOrDefault(x => x.S("username") == p.S("username") && x.B("active"));
+        var candidate = current.List("user").FirstOrDefault(x => x.S("username") == p.S("username") && x.B("active"));
         Need(candidate is not null && passwords.Verify(candidate.S("password"), p.S("password")), "Usuario o contraseña incorrectos", 401);
         return await Exclusive(async () => {
 
@@ -182,8 +185,10 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
                 Need(user.B("active") && user.S("username") == candidate.S("username") && user.S("password") == candidate.S("password"), "Usuario o contraseña incorrectos", 401);
                 Domain.Usage(s, user);
                 var device = s.List("device").FirstOrDefault(x => x.S("id") == deviceId);
-                if (device is null) { Need(p.S("enrollmentCode") != "" && J.Hash(p.S("enrollmentCode")) == s.Meta.S("enrollmentHash"), "El dispositivo requiere un código de alta del administrador", 403); device = s.Add("device", J.O("id", deviceId, "siteId", siteId, "name", Text(p, "deviceName", 100), "secretHash", J.Hash(p.S("deviceSecret")), "authorized", true, "at", J.Now())); s.Meta["enrollmentHash"] = ""; }
+                if (device is null) { Need(p.S("enrollmentCode") != "" && J.Hash(p.S("enrollmentCode")) == s.Meta.S("enrollmentHash"), "El dispositivo requiere un código de alta del administrador", 403); var kind = p.S("deviceKind") == "mobile" ? "mobile" : "terminal"; Domain.DeviceAllowed(s, kind, deviceId); device = s.Add("device", J.O("id", deviceId, "siteId", siteId, "name", Text(p, "deviceName", 100), "kind", kind, "secretHash", J.Hash(p.S("deviceSecret")), "authorized", true, "at", J.Now())); s.Meta["enrollmentHash"] = ""; }
                 Need(device.S("secretHash") == J.Hash(p.S("deviceSecret")) && device.B("authorized"), "Dispositivo no autorizado", 403);
+                // A phone already enrolled stops signing in when the add-on is removed from the license.
+                if (device.S("kind") == "mobile") Domain.DeviceAllowed(s, "mobile", deviceId);
                 var session = s.Add("session", J.O("siteId", siteId, "userId", user.S("id"), "deviceId", deviceId, "tokenHash", J.Hash(token), "at", J.Now(), "expires", DateTimeOffset.UtcNow.AddHours(12).ToString("O"), "revoked", false));
                 // A conflict here only follows another process writing the store; the state was reloaded.
                 try { await Commit(s, J.Id(), user.S("id"), J.Hash("login"), J.O("sessionId", session.S("id")), "session.login", ct); return J.O("token", token, "sessionId", session.S("id"), "user", Domain.SafeUser(user), "siteId", siteId); } catch (StoreException e) when (e.Code == "COS-DATA-CONFLICT" && attempt < 2) { }
@@ -299,19 +304,6 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
         return J.O("internalPreview", true, "key", v.S("trackingKey"), "link", "mesanexo://seguimiento/" + v.S("trackingKey"), "expires", v["trackingExpires"], "units", s.Related("unit", "visitId", visitId).Select(x => J.O("name", x.S("name"), "status", x.S("status"), "notes", x.S("notes"))).ToArray());
 
     }
-    public async Task<JsonObject> SupportPreview(string token, CancellationToken ct = default) {
-
-        var s = await Load(ct);
-        var grant = s.Related("grant", "tokenHash", J.Hash(token)).FirstOrDefault(x => !x.B("revoked") && DateTimeOffset.Parse(x.S("expires")) > DateTimeOffset.UtcNow);
-        Need(grant is not null, "Consentimiento vencido, revocado o inválido", 403);
-        Need(DateTimeOffset.TryParse(s.Meta.S("supportUntil"), out var until) && until > DateTimeOffset.UtcNow, "Cobertura de soporte vencida", 403);
-        var manager = s.Get("user", grant!.S("authorizedBy"));
-        Need(manager.B("active") && manager.S("role") == "manager", "Gerente autorizante inactivo", 403);
-        var snapshot = Domain.Snapshot(s, manager, "support-readonly");
-        await Commit(s, J.Id(), "authorized-support", J.Hash(grant.S("id")), J.O("audited", true), "support.preview", ct);
-        return J.O("simulation", true, "scope", "read-only-business-preview", "data", snapshot);
-
-    }
     public async Task<JsonObject> CanInstall(JsonObject device, CancellationToken ct = default) {
 
         var s = await View(ct);
@@ -320,8 +312,7 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
         Need(d.B("authorized") && d.S("secretHash") == J.Hash(device.S("deviceSecret")), "Dispositivo no autorizado", 403);
         var sessions = s.Related("session", "deviceId", d.S("id")).Any(x => !x.B("revoked") && DateTimeOffset.Parse(x.S("expires")) > DateTimeOffset.UtcNow);
         var accounts = s.Related("visit", "status", "open").Any();
-        var covered = s.Meta.B("updates") && (!DateTimeOffset.TryParse(s.Meta.S("updatesUntil"), out var until) || until > DateTimeOffset.UtcNow);
-        return J.O("allowed", !sessions && !accounts && covered, "policy", "Cerrar sesión y todas las cuentas; requiere cobertura local de actualizaciones");
+        return J.O("allowed", !sessions && !accounts && License(s).Usable, "policy", "Cerrar sesión y todas las cuentas; requiere una licencia vigente");
 
     }
     public async Task RotateEnrollment(string code, CancellationToken ct = default) { Need(code.Length >= 20, "Código mínimo de 20 caracteres"); await Exclusive(async () => { var s = await Load(ct); s.Meta["enrollmentHash"] = J.Hash(code); return await Commit(s, J.Id(), "local-admin", J.Hash("enrollment"), J.O("ok", true), "device.enrollment.rotate", ct); }, ct); }

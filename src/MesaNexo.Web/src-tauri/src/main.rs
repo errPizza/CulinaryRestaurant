@@ -2,7 +2,6 @@
 use std::{io::{BufRead, BufReader, Write}, process::{Child, ChildStdin, Command, Stdio}, sync::{Arc, Mutex, mpsc}, time::Duration};
 use serde_json::{json, Value};
 use tauri::Manager;
-use tauri_plugin_dialog::DialogExt;
 struct Bridge { child: Child, input: ChildStdin, replies: mpsc::Receiver<String>, sequence: u64 }
 impl Bridge {
     fn start() -> Result<Self,String> {
@@ -41,16 +40,6 @@ async fn native_call(window: tauri::WebviewWindow, state: tauri::State<'_,State>
     if command=="window.ready" {return kiosk::ready(&window);}
     let bridge=state.0.clone();let app=window.app_handle().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let mut args=args;let mut command=command;
-        if command=="file.uploadPackage" {
-            let picked=app.dialog().file().set_title("Paquete de Culinary Restaurant").add_filter("Paquete", &["exe","deb","apk"]).blocking_pick_file();
-            let Some(picked)=picked else{return Ok(json!({"ok":true,"data":{"cancelled":true}}));};
-            let path=picked.into_path().map_err(|_|"Archivo local requerido")?;args=json!({"path":path});command="package.upload".into();
-        } else if command=="file.exportBackup" {
-            let picked=app.dialog().file().set_title("Exportar respaldo cifrado central").set_file_name("culinary-central.sqlite").add_filter("Respaldo cifrado", &["sqlite"]).blocking_save_file();
-            let Some(picked)=picked else{return Ok(json!({"ok":true,"data":{"cancelled":true}}));};
-            let path=picked.into_path().map_err(|_|"Archivo local requerido")?;args["path"]=json!(path);command="backup.export".into();
-        } else if command=="package.upload" || command=="backup.export" {return Err("Usa el selector de archivos de la aplicación".into());}
         let installing=command=="updates.install";
         let response=bridge.lock().map_err(|_|"Transporte ocupado")?.call(command,args)?;
         if installing && response["ok"]==true && response["data"]["started"]==true {app.exit(0);}

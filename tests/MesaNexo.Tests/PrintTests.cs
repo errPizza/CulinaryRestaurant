@@ -80,7 +80,7 @@ static class PrintTests {
         var live = new IntegrationConfig();
         live.Ready("printer");
         service.UseIntegrations(live);
-        await service.Initialize(J.O("siteId", "print-site", "name", "Café La Niña", "mode", "licencia", "managerName", "Gerencia", "managerUsername", "manager", "managerPassword", password, "enrollmentCode", enrollment, "modules", Restaurant.Modules));
+        await TestLicense.Initialize(service, J.O("siteId", "print-site", "name", "Café La Niña", "mode", "licencia", "managerName", "Gerencia", "managerUsername", "manager", "managerPassword", password, "enrollmentCode", enrollment, "modules", Restaurant.Modules));
         var token = (await service.Login(J.O("siteId", "print-site", "deviceId", J.Id(), "deviceSecret", J.Id(), "deviceName", "print test", "username", "manager", "password", password, "enrollmentCode", enrollment))).S("token");
         async Task<JsonObject> Act(string type, JsonObject p) => (await service.Action(token, J.O("operationId", J.Id(), "type", type, "payload", p))).Obj("result");
         var waiter = await Act("user.save", J.O("name", "Mesero Ñuño", "username", "waiter", "role", "mesero", "password", password));

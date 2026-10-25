@@ -20,7 +20,6 @@ public static class Program {
             using var store = lab ? new RuntimeStore(options.LabPython ?? throw new Exception(), options.LabScript ?? throw new Exception(), options.LabDirectory ?? throw new Exception(), site) : new RuntimeStore(options.Socket);
             var service = new BranchService(store, site, new Passwords());
             if (args.Contains("--upgrade-schema")) { Console.WriteLine((await service.UpgradeSchema()).ToJsonString()); return 0; }
-            if (Arg("entitlement") is string entitlement) { await service.ApplyEntitlement(entitlement, Arg("provider-public-key") ?? throw new Exception()); Console.WriteLine("Contratación firmada aplicada localmente."); return 0; }
             if (Arg("import-plan") is string plan) { var result = await service.ImportPlan(plan, Arg("plan-sha256") ?? throw new Exception()); Console.WriteLine(result.ToJsonString()); return 0; }
             if (Arg("initialize") is string initial) { var config = JsonNode.Parse(await File.ReadAllTextAsync(initial))!.AsObject(); await service.Initialize(config); Console.WriteLine("Sucursal inicializada. Retira el archivo de aprovisionamiento que contiene credenciales."); return 0; }
             if (Arg("enrollment-file") is string enrollment) { await service.RotateEnrollment((await File.ReadAllTextAsync(enrollment)).Trim()); Console.WriteLine("Código de alta actualizado."); return 0; }
@@ -32,7 +31,9 @@ public static class Program {
                 .Adopt("pac", Arg("fiscal-config") ?? (lab ? null : "/etc/culinaryos/fiscal.json"), Arg("fiscal-config") is not null);
             var printer = integrations.Use<IPrintDriver>("printer", o => new EscPosPrintDriver(PrinterOptions.From(o)));
             var fiscal = integrations.Use("pac", FiscalOptions.From);
-            using (certificate) { var policy = Arg("policy-url") is string policyUrl ? new PolicyOptions(policyUrl, options.Credentials ?? throw new Exception(), Arg("provider-public-key") ?? throw new Exception()) : null; await using var app = ApiHost.Build(options, store, certificate, policy, Arg("cloud-url") is string cloudUrl ? new CloudOptions(cloudUrl, options.Credentials ?? throw new Exception(), Arg("provider-public-key") ?? throw new Exception()) : null, printer, fiscal, integrations); await app.RunAsync(); }
+            // The license key lives in the backend's own state directory, outside the synchronized store.
+            var licensing = new LicenseOptions(lab ? Path.Combine(options.LabDirectory!, "license") : "/var/lib/culinaryos-app/license", Arg("license-server"), Arg("hardware-file") ?? (lab ? Path.Combine(options.LabDirectory!, "hardware.json") : HardwareIdentity.DefaultFile), UseTpm: !lab, CentralCertificate: options.Credentials is null ? null : Path.Combine(options.Credentials, "central-cert"));
+            using (certificate) { await using var app = ApiHost.Build(options, store, certificate, licensing, Arg("cloud-url") is string cloudUrl ? new CloudOptions(cloudUrl, options.Credentials ?? throw new Exception(), Arg("central-public-key") ?? throw new Exception()) : null, printer, fiscal, integrations); await app.RunAsync(); }
             return 0;
 
         } catch (BusinessException e) { Console.Error.WriteLine(e.Message); return 1; } catch (Exception) { Console.Error.WriteLine("No se pudo iniciar Culinary Restaurant. Comprueba identidad, configuración, credenciales y runtime."); return 1; }

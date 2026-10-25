@@ -25,7 +25,7 @@ public sealed partial class MainView: UserControl {
         Grid.SetRow(status, 2);
         shell.Children.Add(content);
         shell.Children.Add(status);
-        SizeChanged += (_, e) => { var width = e.NewSize.Width; var bucket = width < 381 ? 0 : width < 651 ? 1 : width < 901 ? 2 : width < 1201 ? 3 : width < 1300 ? 4 : width < 1360 ? 5 : width < 1551 ? 6 : 7; if (bucket != layoutBucket) { layoutBucket = bucket; narrow = width <= 650; if (state is not null) Render(); else ShowLogin(); } };
+        SizeChanged += (_, e) => { var width = e.NewSize.Width; var bucket = width < 381 ? 0 : width < 651 ? 1 : width < 901 ? 2 : width < 1201 ? 3 : width < 1300 ? 4 : width < 1360 ? 5 : width < 1551 ? 6 : 7; if (bucket != layoutBucket) { layoutBucket = bucket; narrow = width <= 650; if (state is not null) Render(); else if (lockedLicense is not null) RenderLicenseLock(lockedLicense); else ShowLogin(); } };
         timer.Tick += async (_, _) => { if (session is null || busy || polling || modal is not null) return; foreach (var refresh in clockRefresh.ToArray()) refresh(); polling = true; try { var next = await session.State(); if (state is null || next.Obj("restaurant").L("revision") != state.Obj("restaurant").L("revision")) { state = next; Render(); } Status(); } catch (Exception e) { status.Text = e.Message; status.Foreground = Brushes.DarkRed; } finally { polling = false; } };
         DetachedFromVisualTree += (_, _) => timer.Stop();
         _ = RestoreMotion();
@@ -33,7 +33,7 @@ public sealed partial class MainView: UserControl {
 
     }
     async Task RestoreMotion() { try { PrototypeMotion.ReduceMotion = await vault.Read("motion.reduced") == "true"; } catch { } }
-    async Task RefreshLive() { if (session is null || busy || polling || modal is not null) return; polling = true; try { state = await session.State(); Render(); Status(); } finally { polling = false; } }
+    async Task RefreshLive() { if (session is null || busy || polling || modal is not null) return; polling = true; try { state = await session.State(); Render(); Status(); } catch (ApiFailure e) when (e.Status == 423) { await ShowLicenseLock(); } finally { polling = false; } }
     static TextBlock Text(string text, double size = 14, IBrush? color = null, bool bold = false) => new() { Text = text, FontFamily = Brand.InterfaceFont, FontSize = size, Foreground = color ?? Graphite, FontWeight = bold ? (size >= 24 ? FontWeight.Bold : FontWeight.SemiBold) : FontWeight.Normal, TextWrapping = TextWrapping.Wrap };
     static StackPanel Stack(params Control[] children) { var s = new StackPanel { Spacing = 12 }; foreach (var c in children) s.Children.Add(c); return s; }
     static WrapPanel Wrap(params Control[] children) { var w = new WrapPanel { Orientation = Orientation.Horizontal }; foreach (var c in children) { c.Margin = new Thickness(0, 0, 8, 8); w.Children.Add(c); } return w; }
@@ -44,7 +44,10 @@ public sealed partial class MainView: UserControl {
         if (busy) return;
         busy = true;
         status.Text = "Procesando en el servidor local…";
-        try { await action(); error = ""; } catch (Exception e) { error = e.Message; status.Text = (session is not null && await session.HasPending() ? session.OperationState + " · " : "") + error; status.Foreground = Brushes.DarkRed; } finally { busy = false; if (error == "") Status(); }
+        var locked = false;
+        try { await action(); error = ""; } catch (ApiFailure e) when (e.Status == 423) { error = ""; locked = true; } catch (Exception e) { error = e.Message; status.Text = (session is not null && await session.HasPending() ? session.OperationState + " · " : "") + error; status.Foreground = Brushes.DarkRed; } finally { busy = false; if (error == "") Status(); }
+        // A locked license replaces whatever was on screen with the lock screen.
+        if (locked) await ShowLicenseLock();
 
     }
     void Status() { status.Foreground = Graphite; if (session is null) { status.Text = error == "" ? "HTTPS · confianza local aprovisionada · sin navegador" : error; return; } var connection = state?.Obj("connection"); if (user?.S("role") == "dueno") { status.Text = "Central disponible · Espejo de sucursal · Origen " + DateLabel(state?.Obj("analytics").S("sourceAt") ?? "") + " · No es una conexión LAN operativa"; return; } status.Text = $"Servidor local disponible · {session.OperationState}   ·   {connection?.L("outboxPending") ?? 0} eventos pendientes   ·   Internet: sin comprobar · Central: {connection?.S("central", "unverified")}"; }

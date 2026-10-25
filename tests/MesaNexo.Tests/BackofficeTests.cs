@@ -15,7 +15,7 @@ static class BackofficeTests {
         var service = new BranchService(runtime, "back-site", new Passwords());
         try {
 
-            await service.Initialize(J.O("siteId", "back-site", "name", "Back office", "mode", "licencia", "managerName", "Manager", "managerUsername", "manager", "managerPassword", password, "enrollmentCode", enrollment, "modules", Restaurant.Modules));
+            await TestLicense.Initialize(service, J.O("siteId", "back-site", "name", "Back office", "mode", "licencia", "managerName", "Manager", "managerUsername", "manager", "managerPassword", password, "enrollmentCode", enrollment, "modules", Restaurant.Modules));
             var token = (await service.Login(J.O("siteId", "back-site", "deviceId", J.Id(), "deviceSecret", J.Id(), "deviceName", "office", "username", "manager", "password", password, "enrollmentCode", enrollment))).S("token");
             async Task<JsonObject> Act(string type, JsonObject p) => (await service.Action(token, J.O("operationId", J.Id(), "type", type, "payload", p))).Obj("result");
             var ana = await Act("user.save", J.O("name", "Ana", "username", "ana", "role", "mesero", "password", password));

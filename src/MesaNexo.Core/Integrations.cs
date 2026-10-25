@@ -187,6 +187,8 @@ public sealed partial class Restaurant {
 
         result = J.O("ok", true);
         var id = p.S("id");
+        // UberEats, Rappi and DiDi Food are the Delivery Hub add-on; switching the integration off stays allowed.
+        if (type.StartsWith("aggregator.") || (type == "integration.configure" && p.S("provider") == "aggregators" && p.S("mode") != "off")) Module(s, "deliveryHub");
         switch (type) {
             case "integration.configure": {
 

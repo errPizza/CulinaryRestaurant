@@ -53,7 +53,7 @@ static class FiscalTests {
         var credentials = new IntegrationConfig();
         credentials.Ready("pac");
         service.UseIntegrations(credentials);
-        await service.Initialize(J.O("siteId", "fiscal-site", "name", "Taquería Fiscal", "mode", "licencia", "managerName", "Gerencia", "managerUsername", "manager", "managerPassword", password, "enrollmentCode", enrollment, "modules", Restaurant.Modules));
+        await TestLicense.Initialize(service, J.O("siteId", "fiscal-site", "name", "Taquería Fiscal", "mode", "licencia", "managerName", "Gerencia", "managerUsername", "manager", "managerPassword", password, "enrollmentCode", enrollment, "modules", Restaurant.Modules));
         var token = (await service.Login(J.O("siteId", "fiscal-site", "deviceId", J.Id(), "deviceSecret", J.Id(), "deviceName", "fiscal test", "username", "manager", "password", password, "enrollmentCode", enrollment))).S("token");
         async Task<JsonObject> Act(string type, JsonObject p) => (await service.Action(token, J.O("operationId", J.Id(), "type", type, "payload", p))).Obj("result");
         await Act("catalog.category", J.O("name", "Comida"));

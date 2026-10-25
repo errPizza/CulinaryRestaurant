@@ -6,6 +6,7 @@ if(-not(Get-Command node -ErrorAction SilentlyContinue)){
  $nodeFolder=Get-ChildItem (Join-Path (Split-Path $repositoryRoot -Parent) 'SoftwarePrototipo/.tools') -Directory -Filter 'node-*-win-x64' -ErrorAction SilentlyContinue | Select-Object -First 1
  if($nodeFolder){$env:PATH="$($nodeFolder.FullName);$env:PATH"}
 }
+& (Join-Path $PSScriptRoot 'Use-RootKey.ps1') -Test
 Push-Location $repositoryRoot
 try{
  & dotnet run --project tests/MesaNexo.Hybrid.Tests -c Release -- $repositoryRoot $Python

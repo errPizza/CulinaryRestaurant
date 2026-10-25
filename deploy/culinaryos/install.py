@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """First installation on CulinaryOS. Preserve OS login policy, data keys and existing accounts."""
-import argparse, datetime, getpass, hashlib, ipaddress, json, os, re, secrets, shutil, ssl, struct, subprocess, sys, tempfile
+import argparse, datetime, getpass, grp, hashlib, ipaddress, json, os, re, secrets, shutil, ssl, struct, subprocess, sys, tempfile, urllib.parse
 from pathlib import Path
 try:
     import pwd
@@ -275,7 +275,27 @@ def find_compiled_client(bundle, build_root=Path('/var/tmp'), owner=None):
         return binary
     raise ValueError('No se encontro una compilacion previa compatible. Se conserva la existente; no se recompila automaticamente.')
 
-def install(bundle, client):
+def license_server(url):
+    # CulinaryServer: the branch activates and renews its license there over HTTPS with its own key.
+    parsed = urllib.parse.urlsplit(url or '')
+    if parsed.scheme != 'https' or not parsed.hostname or parsed.query or parsed.fragment or parsed.username:
+        raise ValueError('--license-server debe ser la direccion HTTPS de CulinaryServer')
+    return url.rstrip('/')
+
+def backend_dropin():
+    # Root step that reads the machine identifiers, and the TPM 2.0 when the machine has one and tpm2-tools.
+    lines = ['[Service]', 'Environment=DOTNET_BUNDLE_EXTRACT_BASE_DIR=/var/lib/culinaryos-app/dotnet-bundle', 'ExecStartPre=+/usr/bin/python3 ' + str(APP / 'hardware-identity.py')]
+    try:
+        grp.getgrnam('tss')
+        tpm = Path('/dev/tpmrm0').exists() and Path('/usr/bin/tpm2_sign').exists()
+    except KeyError:
+        tpm = False
+    if tpm:
+        lines += ['BindPaths=/dev/tpmrm0', 'DeviceAllow=/dev/tpmrm0 rw', 'SupplementaryGroups=tss']
+    return ('\n'.join(lines) + '\n').encode()
+
+def install(bundle, client, server):
+    server = license_server(server)
     site = preflight(bundle)
     binary = check_elf(client)
     check_elf(bundle / 'payload/backend/MesaNexo.Api')
@@ -285,6 +305,7 @@ def install(bundle, client):
     print('Copia de configuracion: ' + str(backup))
     APP.mkdir(mode=0o755, exist_ok=True)
     write_new(APP / 'culinary-restaurant-installing.json', b'{"version":"0.3.0"}\n')
+    write_new(APP / 'hardware-identity.py', (bundle / 'deploy/culinaryos/hardware-identity.py').read_bytes(), 0o755)
     copy_files(bundle / 'payload/backend', APP / 'backend')
     copy_files(bundle / 'payload/bridge', APP / 'client')
     write_new(APP / 'client/culinary-restaurant', binary, 0o755)
@@ -303,10 +324,10 @@ def install(bundle, client):
     ca, cert, key = certificates(site)
     write_new(CONFIG / 'restaurant-connection.json', (json.dumps(connection(site, ca), indent=2) + '\n').encode())
     integrations_directory()
-    manifest = {'version': 1, 'mode': 'server', 'ui_argv': [ENTRY], 'backend_argv': [str(APP / 'backend/MesaNexo.Api'), '--site', site['site_id'], '--port', '8443'], 'port': 8443, 'readiness_socket': '/run/culinaryos-app/ready.sock', 'tls_ca_file': str(ca), 'credentials': {'tls-key': str(key), 'tls-cert': str(cert)}}
+    manifest = {'version': 1, 'mode': 'server', 'ui_argv': [ENTRY], 'backend_argv': [str(APP / 'backend/MesaNexo.Api'), '--site', site['site_id'], '--port', '8443', '--license-server', server], 'port': 8443, 'readiness_socket': '/run/culinaryos-app/ready.sock', 'tls_ca_file': str(ca), 'credentials': {'tls-key': str(key), 'tls-cert': str(cert)}}
     file = APP / 'application.json'
     write_new(file, (json.dumps(manifest, indent=2) + '\n').encode())
-    write_new(Path('/etc/systemd/system/culinaryos-backend.service.d/restaurant.conf'), b'[Service]\nEnvironment=DOTNET_BUNDLE_EXTRACT_BASE_DIR=/var/lib/culinaryos-app/dotnet-bundle\n')
+    write_new(Path('/etc/systemd/system/culinaryos-backend.service.d/restaurant.conf'), backend_dropin())
     run('culinaryos-runtime', 'register-app', file)
     # Reuse the existing autostart ID. OS authentication policy remains unchanged.
     autostart = Path('/etc/xdg/autostart/culinaryos.desktop')
@@ -331,16 +352,17 @@ def main():
     parser.add_argument('command', choices=('preflight', 'install', 'resume'))
     parser.add_argument('--bundle', type=Path, required=True)
     parser.add_argument('--client', type=Path)
+    parser.add_argument('--license-server', help='Direccion HTTPS de CulinaryServer')
     args = parser.parse_args()
     try:
         if args.command == 'preflight':
             preflight(args.bundle.resolve())
         elif args.command == 'resume':
-            install(args.bundle.resolve(), find_compiled_client(args.bundle.resolve()))
+            install(args.bundle.resolve(), find_compiled_client(args.bundle.resolve()), args.license_server)
         else:
             if args.client is None:
                 parser.error('--client requerido')
-            install(args.bundle.resolve(), args.client.absolute())
+            install(args.bundle.resolve(), args.client.absolute(), args.license_server)
     except Exception as error:
         print('No se completo la instalacion: ' + str(error), file=sys.stderr)
         print('No recrees la sucursal ni sus claves. Conserva cualquier cuenta ya creada y revisa el error.', file=sys.stderr)

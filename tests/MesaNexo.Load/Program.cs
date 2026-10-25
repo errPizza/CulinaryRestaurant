@@ -11,6 +11,7 @@ using System.Threading.Channels;
 using MesaNexo.Api;
 using MesaNexo.Client;
 using MesaNexo.Core;
+using MesaNexo.Tests;
 using Microsoft.Extensions.DependencyInjection;
 namespace MesaNexo.Load;
 
@@ -144,7 +145,7 @@ static class Program {
         var metrics = new Metrics();
         var password = "Carga-" + J.Id() + "!";
         var none = CancellationToken.None;
-        await service.Initialize(J.O("siteId", Site, "name", "Prueba de carga", "mode", "licencia", "managerName", "Gerencia", "managerUsername", "gerencia", "managerPassword", password, "enrollmentCode", J.Id(), "modules", Restaurant.Modules));
+        await TestLicense.Initialize(service, J.O("siteId", Site, "name", "Prueba de carga", "mode", "licencia", "managerName", "Gerencia", "managerUsername", "gerencia", "managerPassword", password, "enrollmentCode", J.Id(), "modules", Restaurant.Modules));
         async Task<Terminal> Open(string name, string username) { var code = J.Id(); await service.RotateEnrollment(code); var t = new Terminal(name, TrustedConnection.Create(profile), metrics, deltaState); await t.Login(Site, username, password, code); return t; }
         Console.WriteLine($"Preparando sucursal: {waiters} meseros, 2 cocina, 1 gerencia, {tableCount} mesas, sondeo cada {pollMs} ms.");
         var manager = await Open("Gerencia", "gerencia");

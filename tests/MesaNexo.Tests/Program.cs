@@ -40,6 +40,7 @@ static class Program {
         app = ApiHost.Build(new("integration-site", port, "127.0.0.1", ReadySocket: null), faults, cert);
         await app.StartAsync();
         service = app.Services.GetRequiredService<BranchService>();
+        TestLicense.Attach(service);
 
     }
     static async Task Stop() { await app.StopAsync(); await app.DisposeAsync(); runtime.Dispose(); }
@@ -67,7 +68,9 @@ static class Program {
         if (args.Contains("--front-only")) { try { await FrontofficeTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "frontoffice.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--devmap-only")) { try { await DevMapTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "devmap.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--buttons-only")) { await ButtonFeedbackTests.Run(root, evidence); await File.WriteAllTextAsync(Path.Combine(root, "evidence", "button-feedback.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString(new JsonSerializerOptions { WriteIndented = true })); Console.WriteLine($"{evidence.Count} button checks passed."); return; }
-        if (args.Contains("--ui-only")) { var snapshot = JsonNode.Parse(File.ReadAllText(Path.Combine(root, ".lab", "ui-state.json")))!.AsObject(); await UiTests.Run(root, snapshot, null!, new MemoryVault(), evidence); if (File.Exists(Path.Combine(root, ".lab", "ui-provider.json"))) await UiTests.RunProvider(root, JsonNode.Parse(File.ReadAllText(Path.Combine(root, ".lab", "ui-provider.json")))!.AsObject(), evidence); await ButtonFeedbackTests.Run(root, evidence); Console.WriteLine($"{evidence.Count} UI checks passed."); await File.WriteAllTextAsync(Path.Combine(root, "evidence", "ui-style-review.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString(new JsonSerializerOptions { WriteIndented = true })); return; }
+        if (args.Contains("--culinary-server")) { var i = Array.IndexOf(args, "--culinary-server"); await ServerSmoke.Run(root, python, args[i + 1], args[i + 2], args[i + 3], args[i + 4]); return; }
+        if (args.Contains("--lock-only")) { await UiTests.RunLicenseLock(root, evidence); return; }
+        if (args.Contains("--ui-only")) { var snapshot = JsonNode.Parse(File.ReadAllText(Path.Combine(root, ".lab", "ui-state.json")))!.AsObject(); await UiTests.Run(root, snapshot, null!, new MemoryVault(), evidence); await UiTests.RunLicenseLock(root, evidence); await ButtonFeedbackTests.Run(root, evidence); Console.WriteLine($"{evidence.Count} UI checks passed."); await File.WriteAllTextAsync(Path.Combine(root, "evidence", "ui-style-review.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString(new JsonSerializerOptions { WriteIndented = true })); return; }
         if (args.Contains("--central-only")) { await CentralTests.Run(root, python, evidence); await File.WriteAllTextAsync(Path.Combine(root, "evidence", "central.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); return; }
         if (args.Contains("--business-only")) { await BusinessTests.Run(root, python, evidence); await File.WriteAllTextAsync(Path.Combine(root, "evidence", "business.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); return; }
         if (args.Contains("--setup-only")) { try { await SetupTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "setup.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
@@ -83,7 +86,7 @@ static class Program {
             Check(!await service.Ready(), "readiness rejects uninitialized store");
             var password = "Test-" + J.Id() + "!";
             var code = J.Id();
-            await service.Initialize(J.O("siteId", "integration-site", "name", "Integración aislada", "mode", "licencia", "managerName", "Gerencia", "managerUsername", "gerencia", "managerPassword", password, "enrollmentCode", code, "modules", Restaurant.Modules));
+            await TestLicense.Initialize(service, J.O("siteId", "integration-site", "name", "Integración aislada", "mode", "licencia", "managerName", "Gerencia", "managerUsername", "gerencia", "managerPassword", password, "enrollmentCode", code, "modules", Restaurant.Modules));
             Check(await service.Ready(), "readiness checks real store and site identity");
             var mv = new MemoryVault();
             using var manager = await Login("gerencia", password, mv);
@@ -196,6 +199,8 @@ static class Program {
             await Reject(() => manager.State(), "local server inaccessible produces no success");
 
             await CentralTests.Run(root, python, evidence);
+            await LicenseTests.Run(root, python, evidence);
+            await UiTests.RunLicenseLock(root, evidence);
             await MigrationTests.Run(root, python, evidence);
             await BusinessTests.Run(root, python, evidence);
             await DevMapTests.Run(root, python, evidence);

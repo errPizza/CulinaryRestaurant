@@ -98,7 +98,7 @@ export function IntegrationsPage({ state: s, form, action, run }: { state: any; 
             <MetricCard label="Bandeja de salida" value={messages.filter(m => isToday(m.at)).length} note={plural(messages.filter(m => m.channel === 'whatsapp').length, 'WhatsApp', 'WhatsApp') + ' · ' + plural(messages.filter(m => m.channel === 'email').length, 'correo', 'correos')} icon="message" tone="green" />
             <MetricCard label="Plataformas hoy" value={money(orders.filter(o => isToday(o.receivedAt) && o.net != null).reduce((t, o) => t + o.net, 0))} note={plural(orders.filter(o => isToday(o.receivedAt)).length, 'pedido', 'pedidos') + ' · neto de comisión'} icon="truck" tone="purple" />
         </Kpis>
-        <section className="integration-grid stagger" aria-label="Integraciones">{PROVIDERS.map(p => {
+        <section className="integration-grid stagger" aria-label="Integraciones">{PROVIDERS.filter(p => p.key !== 'aggregators' || s.restaurant?.modules?.includes('deliveryHub')).map(p => {
 
             const mode = modeOf(s, p.key), on = mode !== 'off', sim = mode === 'simulated', server = serverState(s, p.key), ready = server === 'lista' || mode === 'live';
             return <article className={'card integration-card' + (on ? ' on' : '') + (mode === 'live' ? ' live' : '')} key={p.key}>
