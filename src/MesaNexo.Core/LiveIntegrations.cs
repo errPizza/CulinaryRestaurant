@@ -164,6 +164,7 @@ public sealed partial class Restaurant {
     public void ImportAggregatorOrder(BranchState s, JsonObject proposal) {
 
         var p = proposal.Obj("command").Obj("payload");
+        if (!Licensed(s, "deliveryHub")) { Settle(proposal, "rejected-local", "Delivery Hub no está incluido en la licencia de la sucursal", ""); return; }
         if (!IsLive(s, "aggregators")) { Settle(proposal, "rejected-local", "Las plataformas de reparto no están en modo real en la sucursal", ""); return; }
         var deliverectId = p.S("deliverectId");
         var existing = s.Related("aggregatororder", "deliverectId", deliverectId).FirstOrDefault();

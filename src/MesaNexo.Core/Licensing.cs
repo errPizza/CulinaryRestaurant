@@ -50,6 +50,13 @@ public sealed record LicenseView(string State, JsonObject? Payload) {
     public static readonly LicenseView Missing = new("missing", null);
     public bool Usable => State == "active";
     public string[] Features => Payload?.A("features").Strings() ?? [];
+    // Commercial level (lite/pro) and paid add-ons (mobileOrdering, deliveryHub, webOrdering) of the 2026 proposal.
+    public string Tier => Payload?.S("tier") is "pro" ? "pro" : "lite";
+    public string[] Addons => Payload?.A("addons").Strings() ?? [];
+    // Everything the branch may switch on: the contracted features, what Pro includes and the add-ons.
+    public string[] Modules => [.. Features.Concat(Tier == "pro" ? ["reservations"] : []).Concat(Addons).Distinct().Order()];
+    // Fixed terminals; mobile order takers do not count. Older licenses without the field follow the tier.
+    public long MaxTerminals => Payload.Obj("limits")["maxTerminals"] is JsonValue ? Payload.Obj("limits").L("maxTerminals") : Tier == "pro" ? 10 : 2;
     public long MaxUsers => Payload.Obj("limits").L("maxUsers");
     public long MaxTables => Payload.Obj("limits").L("maxTables");
     public string Message => State switch {

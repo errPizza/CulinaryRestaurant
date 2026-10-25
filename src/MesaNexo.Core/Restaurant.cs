@@ -26,8 +26,18 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
         Need(license.Usable, license.Message, 423);
 
     }
-    bool Licensed(BranchState s, string module) => License(s).Features.Contains(module);
-    void Module(BranchState s, string module) => Need(Licensed(s, module), "Módulo no contratado: " + module, 403);
+    bool Licensed(BranchState s, string module) => License(s).Modules.Contains(module);
+    // Fixed terminals count against the license; mobile order takers need the add-on but are unlimited.
+    public void DeviceAllowed(BranchState s, string kind, string deviceId) {
+
+        if (kind == "mobile") { Module(s, "mobileOrdering"); return; }
+        var max = License(s).MaxTerminals;
+        var used = s.List("device").Count(d => d.B("authorized") && d.S("kind") != "mobile" && d.S("id") != deviceId);
+        Need(used < max, $"La licencia permite {max} terminales fijas y ya están dadas de alta {used}; desautoriza una en Equipo y dispositivos", 403);
+
+    }
+    static readonly Dictionary<string, string> ModuleNames = new() { ["reservations"] = "Reservaciones (plan Pro)", ["mobileOrdering"] = "Comanderos móviles", ["deliveryHub"] = "Delivery Hub", ["webOrdering"] = "Web propia de pedidos" };
+    void Module(BranchState s, string module) => Need(Licensed(s, module), "Módulo no contratado: " + ModuleNames.GetValueOrDefault(module, module), 403);
     JsonObject Own(BranchState s, JsonObject u, string id) { var v = s.Get("visit", id); Need(v.S("status") == "open", "La cuenta está cerrada"); Need(u.S("role") == "manager" || v.S("waiterId") == u.S("id"), "La cuenta pertenece a otro mesero", 403); return v; }
     JsonObject Add(BranchState s, string kind, JsonObject value) { value["siteId"] = s.Meta.S("siteId"); return s.Add(kind, value); }
     JsonObject Notice(BranchState s, JsonObject v, string message, string kind, string? unitId = null) => Add(s, "notification", J.O("visitId", v.S("id"), "waiterId", v.S("waiterId"), "message", message, "type", kind, "unitId", unitId, "at", J.Now(), "attended", false));
@@ -86,7 +96,9 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
         var meta = (JsonObject)s.Meta.DeepClone();
         meta.Remove("enrollmentHash");
         var license = License(s);
-        meta["modules"] = J.N(license.Features);
+        meta["modules"] = J.N(license.Modules);
+        meta["tier"] = license.Tier;
+        meta["maxTerminals"] = license.MaxTerminals;
         meta["maxUsers"] = license.MaxUsers;
         meta["maxTables"] = license.MaxTables;
         meta["license"] = license.Summary();
@@ -531,7 +543,7 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
             case "session.revoke":
                 s.Get("session", id)["revoked"] = true;
                 break;
-            case "installation.authorize": { var d = s.Get("device", id); d["authorized"] = p.B("authorized"); if (!d.B("authorized")) foreach (var sess in s.Related("session", "deviceId", id)) sess["revoked"] = true; break; }
+            case "installation.authorize": { var d = s.Get("device", id); if (p.B("authorized") && !d.B("authorized")) DeviceAllowed(s, d.S("kind") == "mobile" ? "mobile" : "terminal", id); d["authorized"] = p.B("authorized"); if (!d.B("authorized")) foreach (var sess in s.Related("session", "deviceId", id)) sess["revoked"] = true; break; }
             case "reservation.save": {
 
                     Module(s, "reservations");

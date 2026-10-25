@@ -256,6 +256,22 @@ static class LicenseTests {
         await service.Renew();
         var back = (await SignIn()).S("token");
         Check((await service.State(back)).A("tables").Count == 1, "after renewal the branch unlocks with its data intact");
+        // Plans of the 2026 proposal: Lite with 2 fixed terminals and no add-ons, then Pro with the add-ons.
+        await service.InstallLicense(TestLicense.Sign(Jws.License, TestLicense.Payload(service, [], maxTables: 1, revision: 8, tier: "lite", addons: [], maxTerminals: 2)), true);
+        var lite = (await service.State(back)).Obj("restaurant");
+        Check(lite.S("tier") == "lite" && lite.L("maxTerminals") == 2 && lite.A("modules").Count == 0, "a Lite license without add-ons exposes no extra modules and two terminals");
+        await Deny(() => service.Action(back, J.O("operationId", J.Id(), "type", "reservation.save", "payload", J.O("name", "Reserva", "contact", "local", "start", DateTimeOffset.UtcNow.AddDays(2).ToString("O"), "people", 2, "tableId", table.S("id"), "status", "confirmed", "accepted", true))), "reservations need Pro", 403);
+        await Deny(() => service.Action(back, J.O("operationId", J.Id(), "type", "integration.configure", "payload", J.O("provider", "aggregators", "mode", "simulated"))), "the delivery platforms need the Delivery Hub add-on", 403);
+        Task<JsonObject> Enroll(string kind) { var code = J.Id() + J.Id(); return service.RotateEnrollment(code).ContinueWith(_ => service.Login(J.O("username", "gerencia", "password", password, "deviceId", J.Id(), "deviceSecret", J.Id(), "deviceName", "Equipo " + kind, "deviceKind", kind, "enrollmentCode", code))).Unwrap(); }
+        await Enroll("terminal");
+        await Deny(() => Enroll("terminal"), "a third fixed terminal exceeds the Lite allowance", 403);
+        await Deny(() => Enroll("mobile"), "a phone needs the mobile order takers add-on", 403);
+        await service.InstallLicense(TestLicense.Sign(Jws.License, TestLicense.Payload(service, [], maxTables: 1, revision: 9, tier: "pro", addons: ["mobileOrdering", "deliveryHub"])), true);
+        var pro = (await service.State(back)).Obj("restaurant");
+        Check(pro.A("modules").Strings().SequenceEqual(["deliveryHub", "mobileOrdering", "reservations"]), "Pro includes reservations and adds the contracted add-ons");
+        await Enroll("terminal");
+        for (var i = 0; i < 3; i++) await Enroll("mobile");
+        Check(true, "with the add-on, mobile order takers are unlimited and do not use terminal slots");
 
     }
 }

@@ -185,8 +185,10 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
                 Need(user.B("active") && user.S("username") == candidate.S("username") && user.S("password") == candidate.S("password"), "Usuario o contraseña incorrectos", 401);
                 Domain.Usage(s, user);
                 var device = s.List("device").FirstOrDefault(x => x.S("id") == deviceId);
-                if (device is null) { Need(p.S("enrollmentCode") != "" && J.Hash(p.S("enrollmentCode")) == s.Meta.S("enrollmentHash"), "El dispositivo requiere un código de alta del administrador", 403); device = s.Add("device", J.O("id", deviceId, "siteId", siteId, "name", Text(p, "deviceName", 100), "secretHash", J.Hash(p.S("deviceSecret")), "authorized", true, "at", J.Now())); s.Meta["enrollmentHash"] = ""; }
+                if (device is null) { Need(p.S("enrollmentCode") != "" && J.Hash(p.S("enrollmentCode")) == s.Meta.S("enrollmentHash"), "El dispositivo requiere un código de alta del administrador", 403); var kind = p.S("deviceKind") == "mobile" ? "mobile" : "terminal"; Domain.DeviceAllowed(s, kind, deviceId); device = s.Add("device", J.O("id", deviceId, "siteId", siteId, "name", Text(p, "deviceName", 100), "kind", kind, "secretHash", J.Hash(p.S("deviceSecret")), "authorized", true, "at", J.Now())); s.Meta["enrollmentHash"] = ""; }
                 Need(device.S("secretHash") == J.Hash(p.S("deviceSecret")) && device.B("authorized"), "Dispositivo no autorizado", 403);
+                // A phone already enrolled stops signing in when the add-on is removed from the license.
+                if (device.S("kind") == "mobile") Domain.DeviceAllowed(s, "mobile", deviceId);
                 var session = s.Add("session", J.O("siteId", siteId, "userId", user.S("id"), "deviceId", deviceId, "tokenHash", J.Hash(token), "at", J.Now(), "expires", DateTimeOffset.UtcNow.AddHours(12).ToString("O"), "revoked", false));
                 // A conflict here only follows another process writing the store; the state was reloaded.
                 try { await Commit(s, J.Id(), user.S("id"), J.Hash("login"), J.O("sessionId", session.S("id")), "session.login", ct); return J.O("token", token, "sessionId", session.S("id"), "user", Domain.SafeUser(user), "siteId", siteId); } catch (StoreException e) when (e.Code == "COS-DATA-CONFLICT" && attempt < 2) { }

@@ -54,6 +54,8 @@ public sealed partial class NativeSession: IDisposable {
         p["username"] = username;
         p["password"] = password;
         p["deviceName"] = deviceName;
+        // Phones and tablets are mobile order takers; desktop installs count as fixed terminals.
+        p["deviceKind"] = OperatingSystem.IsAndroid() || OperatingSystem.IsIOS() ? "mobile" : "terminal";
         p["enrollmentCode"] = enrollment;
         p["siteId"] = profile.SiteId;
         if (profile.TenantId != "") { p["tenantId"] = profile.TenantId; p["branchId"] = profile.BranchId; }

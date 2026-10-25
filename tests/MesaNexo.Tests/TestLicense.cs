@@ -47,11 +47,11 @@ static class TestLicense {
 
     }
     public static void Attach(BranchService branch, CulinaryServer? server = null) => branch.UseLicensing(new LicenseOptions(Folder(branch.SiteId), HardwareFile: HardwareFile(branch.SiteId), UseTpm: false), server);
-    public static JsonObject Payload(BranchService branch, string[] features, long maxUsers = 15, long maxTables = 30, string plan = "annual", DateTimeOffset? expires = null, DateTimeOffset? validated = null, long revision = 1, string? site = null, string? spki = null) {
+    public static JsonObject Payload(BranchService branch, string[] features, long maxUsers = 15, long maxTables = 30, string plan = "annual", DateTimeOffset? expires = null, DateTimeOffset? validated = null, long revision = 1, string? site = null, string? spki = null, string tier = "pro", string[]? addons = null, long maxTerminals = 100) {
 
         var now = validated ?? DateTimeOffset.UtcNow;
         string Iso(DateTimeOffset t) => t.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'");
-        return J.O("v", 1, "licenseId", LicenseId(branch.SiteId), "revision", revision, "tenantId", "tenant-" + branch.SiteId, "siteId", site ?? branch.SiteId, "customer", "Restaurante de prueba", "branchName", "Centro", "plan", plan, "status", "active", "features", features, "limits", J.O("maxUsers", maxUsers, "maxTables", maxTables), "activatedAt", Iso(now.AddDays(-1)), "expiresAt", plan == "permanent" ? null : Iso(expires ?? now.AddYears(1)), "validatedAt", Iso(now), "offlineUntil", Iso(now.AddDays(3)), "key", J.O("alg", "ES256", "spki", spki ?? branch.LicenseKey().S("spki")), "binding", "fingerprint", "iat", Iso(now));
+        return J.O("v", 1, "licenseId", LicenseId(branch.SiteId), "revision", revision, "tenantId", "tenant-" + branch.SiteId, "siteId", site ?? branch.SiteId, "customer", "Restaurante de prueba", "branchName", "Centro", "plan", plan, "tier", tier, "addons", addons ?? ["mobileOrdering", "deliveryHub", "webOrdering"], "status", "active", "features", features, "limits", J.O("maxUsers", maxUsers, "maxTables", maxTables, "maxTerminals", maxTerminals), "activatedAt", Iso(now.AddDays(-1)), "expiresAt", plan == "permanent" ? null : Iso(expires ?? now.AddYears(1)), "validatedAt", Iso(now), "offlineUntil", Iso(now.AddDays(3)), "key", J.O("alg", "ES256", "spki", spki ?? branch.LicenseKey().S("spki")), "binding", "fingerprint", "iat", Iso(now));
 
     }
     // The license a test branch was configured with before licenses existed: its modules and plan limits.

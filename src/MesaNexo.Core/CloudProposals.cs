@@ -17,6 +17,7 @@ public sealed partial class Restaurant {
         string visitId = "";
         if (p.B("accept")) {
 
+            if (command.S("type") == "order") Module(s, "webOrdering");
             if (command.S("type") == "invoice") { var receiver = (JsonObject)payload.Obj("receiver").DeepClone(); receiver["visitId"] = payload.S("visitId"); var fiscal = Act(s, u, "fiscal.request", receiver); visitId = fiscal.S("visitId"); } else {
 
                 Need(payload.S("paymentMethod") == "cash", "Pago en línea pendiente de verificación independiente; no se registra como cobrado");
