@@ -129,7 +129,7 @@ public sealed partial class BranchService {
         Need(Guid.TryParse(p.S("licenseId").Trim(), out var id), "Escribe el identificador de licencia que te dio tu proveedor");
         var code = Text(p, "activationCode", 40);
         var key = Key;
-        var body = J.O("activationCode", code, "key", J.O("alg", key.Alg, "spki", key.Spki), "binding", Binding());
+        var body = J.O("activationCode", code, "siteId", siteId, "key", J.O("alg", key.Alg, "spki", key.Spki), "binding", Binding());
         JsonObject reply;
         try { reply = await Server.Signed(HttpMethod.Post, "/branch/v1/activate", id.ToString("D"), key, body, ct); } catch (ServerRejection e) { throw new BusinessException(e.Status is 400 or 401 or 403 or 409 ? 403 : 502, e.Code == "activation_rejected" ? "Código de activación inválido, ya usado o de una licencia cancelada" : e.Message); }
         return (await InstallLicense(reply.S("license"), true, ct)).Summary();

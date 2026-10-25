@@ -31,8 +31,11 @@ sealed class FakeCulinaryServer: IAsyncDisposable {
     public byte[] Package = [];
     readonly HashSet<string> issued = [], used = [];
     public int Renewals;
+    // The siteId the license was issued for; activation from a branch with another one is refused.
+    public string Site;
     public FakeCulinaryServer(string site) {
 
+        Site = site;
         var port = Free();
         Url = "http://127.0.0.1:" + port;
         var builder = WebApplication.CreateBuilder();
@@ -73,6 +76,7 @@ sealed class FakeCulinaryServer: IAsyncDisposable {
 
             if (await Signed(c) is not { } r) return Error(401, "unauthorized", "Firma inválida");
             if (r.Body.S("activationCode") != Code || Spki is not null) return Error(403, "activation_rejected", "Código inválido");
+            if (r.Body.S("siteId") != Site) return Error(409, "site_mismatch", "La licencia es de la sucursal " + Site + ", no de " + r.Body.S("siteId"));
             Spki = r.Body.Obj("key").S("spki");
             Fingerprint = r.Body.Obj("binding").Obj("fingerprint");
             return Results.Json(J.O("license", License(DateTimeOffset.UtcNow)));
@@ -131,6 +135,10 @@ static class LicenseTests {
         Check((await service.LicenseStatus()).S("state") == "missing", "a new branch has no license until it is activated");
         await Deny(() => SignIn(enrollment), "sign-in shows the lock screen before any license is activated", 423);
         await Deny(() => service.Activate(J.O("licenseId", TestLicense.LicenseId(site), "activationCode", "WRONG-CODE-WRONG-CODE-1")), "wrong activation code is refused by CulinaryServer", 403);
+        fake.Site = "otra-sucursal";
+        await Deny(() => service.Activate(J.O("licenseId", TestLicense.LicenseId(site), "activationCode", fake.Code)), "a license for another siteId is refused before the code is spent", 403);
+        Check(fake.Spki is null, "the refused activation leaves the license unbound");
+        fake.Site = site;
         var activated = await service.Activate(J.O("licenseId", TestLicense.LicenseId(site), "activationCode", fake.Code));
         Check(activated.S("state") == "active" && activated.S("plan") == "monthly" && fake.Spki == service.LicenseKey().S("spki") && fake.Fingerprint!.S("board").Length == 64, "activation binds the branch key and hardware fingerprint to the license");
         await Deny(() => service.Activate(J.O("licenseId", TestLicense.LicenseId(site), "activationCode", fake.Code)), "a branch with a valid license refuses a second activation", 409);
