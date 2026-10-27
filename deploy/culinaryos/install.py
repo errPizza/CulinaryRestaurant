@@ -1,11 +1,11 @@
 #!/usr/bin/python3
 """First installation on CulinaryOS. Preserve OS login policy, data keys and existing accounts."""
-import argparse, datetime, getpass, grp, hashlib, ipaddress, json, os, re, secrets, shutil, ssl, struct, subprocess, sys, tempfile, urllib.parse
+import argparse, datetime, getpass, hashlib, ipaddress, json, os, re, secrets, shutil, ssl, struct, subprocess, sys, tempfile, urllib.parse
 from pathlib import Path
 try:
-    import pwd
+    import grp, pwd
 except ImportError:
-    pwd = None
+    grp = pwd = None
 RUNTIME = Path('/usr/local/lib/culinaryos')
 CONFIG = Path('/etc/culinaryos')
 APP = Path('/opt/culinaryos-app')
@@ -26,6 +26,12 @@ def validate_site(site):
         raise ValueError('Servidor fuera de la red de sucursal')
     return site
 
+# The branch data lives in the distribution's PostgreSQL: a database owned by the service account, reached over the
+# local Unix socket with peer authentication. Rows are sealed with the branch keyring before they reach it.
+DATABASE = 'culinaryos'
+DATA_ROLE = 'culinaryos-app'
+KEYRING = CONFIG / 'secrets/branch.keys.json'
+SQLITE_STORE = Path('/var/lib/culinaryos-data/store.sqlite')
 def known_extensions(bundle):
     # Earlier MesaNexo extensions this package may replace. Without the list nothing is replaced.
     path = bundle / 'deploy/culinaryos/extension-history.json'
@@ -65,7 +71,7 @@ def preflight(bundle):
         raise PermissionError('Solo root dentro de CulinaryOS')
     os.umask(0o077)
     sys.path.insert(0, str(RUNTIME))
-    from dataio import persistent_root, Client
+    from dataio import persistent_root
     persistent_root()
     if not (CONFIG / 'profile').is_file() or not Path('/etc/lightdm').is_dir():
         raise ValueError('Se requiere el escritorio CulinaryOS instalado')
@@ -76,11 +82,11 @@ def preflight(bundle):
     site = validate_site(json.loads((CONFIG / 'site.json').read_text()))
     if json.loads((CONFIG / 'branch.json').read_text()).get('site_id') != site['site_id']:
         raise ValueError('Identidad de almacen diferente; no se cambia')
-    if validate_runtime(bundle) == 'upgrade':
-        print('La extension instalada es una version anterior conocida: se reemplazara tras un snapshot y una copia del codigo.')
-    status = Client().call('health')
-    if status.get('ready') is not True or status.get('site_id') != site['site_id']:
-        raise ValueError('Almacen CulinaryOS no disponible')
+    validate_runtime(bundle)
+    if not Path('/usr/bin/pg_dump').is_file() or subprocess.run(['pg_isready', '-q'], check=False).returncode != 0:
+        raise ValueError('PostgreSQL no esta disponible; instala la version de CulinaryOS con PostgreSQL')
+    if not KEYRING.is_file():
+        raise ValueError('Falta el anillo de claves de la sucursal')
     pwd.getpwnam('operador')
     pwd.getpwnam('culinaryos-app')
     rules = Path('/etc/nftables.conf').read_text()
@@ -193,9 +199,51 @@ def certificates(site, temporary_root="/run"):
     run('openssl', 'x509', '-in', cert, '-noout', '-checkend', '604800', stdout=subprocess.DEVNULL)
     return ca, cert, key
 
+def app_command(*args, stdin=None):
+    # The backend as the service account, with the keyring the way systemd hands it over to the service.
+    account = pwd.getpwnam(DATA_ROLE)
+    with tempfile.TemporaryDirectory(prefix='culinary-credentials-', dir='/run') as tmp:
+        tmp = Path(tmp)
+        os.chown(tmp, account.pw_uid, account.pw_gid)
+        keyring = tmp / 'keyring'
+        keyring.write_bytes(KEYRING.read_bytes())
+        keyring.chmod(0o400)
+        os.chown(keyring, account.pw_uid, account.pw_gid)
+        return subprocess.run(['runuser', '-u', DATA_ROLE, '--', 'env', 'CREDENTIALS_DIRECTORY=' + str(tmp), 'DOTNET_BUNDLE_EXTRACT_BASE_DIR=/var/lib/culinaryos-app/dotnet-bundle', str(APP / 'backend/MesaNexo.Api'), *[str(a) for a in args]], stdin=stdin, stdout=subprocess.PIPE, check=False)
+
+def postgres_database():
+    # Role and database for the branch, created once; an existing database is kept as it is.
+    def psql(sql):
+        return subprocess.run(['runuser', '-u', 'postgres', '--', 'psql', '-v', 'ON_ERROR_STOP=1', '-At', '-c', sql], stdout=subprocess.PIPE, check=True).stdout.decode().strip()
+    if psql("SELECT 1 FROM pg_roles WHERE rolname='" + DATA_ROLE + "'") != '1':
+        psql('CREATE ROLE "' + DATA_ROLE + '" LOGIN')
+    if psql("SELECT 1 FROM pg_database WHERE datname='" + DATABASE + "'") != '1':
+        psql('CREATE DATABASE ' + DATABASE + ' OWNER "' + DATA_ROLE + "\" ENCODING 'UTF8' TEMPLATE template0")
+
+def initialized(site):
+    reply = app_command('--site', site['site_id'], '--check-initialized')
+    if reply.returncode not in (0, 3):
+        raise ValueError('No se pudo leer la base de la sucursal')
+    return json.loads(reply.stdout or b'{}')
+
+def migrate_sqlite(site, bundle):
+    # A branch that already ran on the SQLite store moves into PostgreSQL once, through a pipe: the opened data never
+    # touches the disk, and the SQLite file stays as it was.
+    if not SQLITE_STORE.is_file() or initialized(site).get('meta'):
+        return
+    import sqlite3
+    with sqlite3.connect('file:' + str(SQLITE_STORE) + '?mode=ro', uri=True) as db:
+        if db.execute("SELECT 1 FROM records WHERE id='mn_meta_site'").fetchone() is None:
+            return
+    export = subprocess.Popen(['/usr/bin/python3', str(bundle / 'runtime/export_store.py'), '--lib', str(RUNTIME), '--database', str(SQLITE_STORE), '--keyring', str(KEYRING), '--site', site['site_id']], stdout=subprocess.PIPE)
+    result = app_command('--site', site['site_id'], '--migrate-from-export', stdin=export.stdout)
+    export.stdout.close()
+    if export.wait() != 0 or result.returncode != 0:
+        raise ValueError('No se pudo migrar el almacen SQLite a PostgreSQL; el archivo SQLite sigue intacto')
+    print('Datos de la sucursal migrados a PostgreSQL: ' + result.stdout.decode().strip())
+
 def initialize_branch(site):
-    from dataio import Client
-    meta = Client().call('get', record_id='mn_meta_site')
+    meta = initialized(site).get('meta')
     if meta:
         if meta.get('data', {}).get('siteId') != site['site_id']:
             raise ValueError('Datos de otra sucursal')
@@ -232,7 +280,8 @@ def initialize_branch(site):
         file.chmod(0o600)
         os.chown(file, account.pw_uid, account.pw_gid)
         try:
-            run('runuser', '-u', 'culinaryos-app', '--', 'env', 'DOTNET_BUNDLE_EXTRACT_BASE_DIR=/var/lib/culinaryos-app/dotnet-bundle', APP / 'backend/MesaNexo.Api', '--site', site['site_id'], '--initialize', file)
+            if app_command('--site', site['site_id'], '--initialize', file).returncode != 0:
+                raise ValueError('No se pudo inicializar la sucursal')
         finally:
             file.unlink(missing_ok=True)
     print('\nUsuario: ' + username + '\nCODIGO DE ALTA DEL DISPOSITIVO: ' + enrollment + '\nGuardalo ahora. No se escribe en logs ni se muestra otra vez.\n')
@@ -284,7 +333,7 @@ def license_server(url):
 
 def backend_dropin():
     # Root step that reads the machine identifiers, and the TPM 2.0 when the machine has one and tpm2-tools.
-    lines = ['[Service]', 'Environment=DOTNET_BUNDLE_EXTRACT_BASE_DIR=/var/lib/culinaryos-app/dotnet-bundle', 'ExecStartPre=+/usr/bin/python3 ' + str(APP / 'hardware-identity.py')]
+    lines = ['[Unit]', 'Requires=postgresql.service', 'After=postgresql.service', '[Service]', 'Environment=DOTNET_BUNDLE_EXTRACT_BASE_DIR=/var/lib/culinaryos-app/dotnet-bundle', 'LoadCredential=keyring:' + str(KEYRING), 'ExecStartPre=+/usr/bin/python3 ' + str(APP / 'hardware-identity.py')]
     try:
         grp.getgrnam('tss')
         tpm = Path('/dev/tpmrm0').exists() and Path('/usr/bin/tpm2_sign').exists()
@@ -312,14 +361,8 @@ def install(bundle, client, server):
     write_new(Path(ENTRY), (bundle / 'deploy/culinaryos/CulinaryRestaurant').read_bytes(), 0o755)
     set_application_permissions()
     verify_application_access()
-    extension = validate_runtime(bundle)
-    if extension == 'absent':
-        run('/usr/bin/python3', bundle / 'deploy/install-runtime-extension.py')
-    elif extension == 'upgrade':
-        run('/usr/bin/python3', bundle / 'deploy/install-runtime-extension.py', '--upgrade')
-    from dataio import Client
-    if 'transaction_v1' not in Client().call('capabilities_v1')['extensions']:
-        raise ValueError('Falta extension transaccional')
+    postgres_database()
+    migrate_sqlite(site, bundle)
     initialize_branch(site)
     ca, cert, key = certificates(site)
     write_new(CONFIG / 'restaurant-connection.json', (json.dumps(connection(site, ca), indent=2) + '\n').encode())

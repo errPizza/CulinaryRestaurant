@@ -22,6 +22,8 @@ public static class Program {
             using var store = lab
                 ? await LabPostgres.Branch(Arg("postgres-bin") ?? throw new Exception("Especifica --postgres-bin"), await LabPostgres.Cluster(Arg("postgres-bin")!, Path.Combine(options.LabDirectory ?? throw new Exception(), "postgres")), options.LabDirectory, site)
                 : await PostgresBranchStore.Open(new PostgresStoreOptions(Arg("database") ?? PostgresStoreOptions.CulinaryOs, site, "/var/lib/postgresql", "/etc/culinaryos/branch.json", PgDump: "/usr/bin/pg_dump"), Keyring.Load(Path.Combine(credentials ?? throw new Exception("CREDENTIALS_DIRECTORY requerido"), "keyring")));
+            // For the installer: whether this branch's database already holds a restaurant (exit 3 when it does not).
+            if (args.Contains("--check-initialized")) { var meta = await store.CallAsync(J.O("op", "get", "record_id", "mn_meta_site")); Console.WriteLine(J.O("initialized", meta is not null, "meta", meta?.DeepClone()).ToJsonString()); return meta is null ? 3 : 0; }
             // One-time move off SQLite: runtime/export_store.py pipes the old store in on stdin.
             if (args.Contains("--migrate-from-export")) { Console.WriteLine((await StoreMigration.Import(store, Console.In)).ToJsonString()); if (lab) File.WriteAllText(Path.Combine(options.LabDirectory!, "initialized"), site); return 0; }
             var service = new BranchService(store, site, new Passwords());
