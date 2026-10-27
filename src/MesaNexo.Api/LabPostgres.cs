@@ -30,7 +30,16 @@ public static class LabPostgres {
             if (File.Exists(portFile) && await Reachable(int.Parse(File.ReadAllText(portFile)))) return Connection(int.Parse(File.ReadAllText(portFile)), "postgres");
             var port = Free();
             File.WriteAllText(portFile, port.ToString());
-            await Run(Path.Combine(bin, "pg_ctl"), ["-D", data, "-o", "-p " + port, "-l", Path.Combine(directory, "server.log"), "-w", "-t", "60", "start"]);
+            // The server outlives this process. Started through the shell it inherits none of our handles, so a pipe
+            // reading this process's output still ends when the process does.
+            var start = new ProcessStartInfo(Path.Combine(bin, "pg_ctl")) { UseShellExecute = true, WindowStyle = ProcessWindowStyle.Hidden, CreateNoWindow = true };
+            foreach (var arg in new[] { "-D", data, "-o", "-p " + port, "-l", Path.Combine(directory, "server.log"), "-w", "-t", "60", "start" }) start.ArgumentList.Add(arg);
+            using (var process = Process.Start(start) ?? throw new InvalidOperationException("No se inició pg_ctl")) {
+
+                await process.WaitForExitAsync();
+                if (process.ExitCode != 0) throw new InvalidOperationException("PostgreSQL no arrancó; revisa " + Path.Combine(directory, "server.log"));
+
+            }
             return Connection(port, "postgres");
 
         } finally { gate.Release(); }

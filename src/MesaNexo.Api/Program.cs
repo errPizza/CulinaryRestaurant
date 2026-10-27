@@ -17,11 +17,17 @@ public static class Program {
             var setupFile = credentials is null ? null : Path.Combine(credentials, "setup-code");
             var setupCode = setupFile is not null && File.Exists(setupFile) ? (await File.ReadAllTextAsync(setupFile)).Trim() : null;
             var options = new ApiOptions(site, Port: int.Parse(Arg("port") ?? "8443"), Bind: lab ? "127.0.0.1" : Arg("bind") ?? "0.0.0.0", Socket: Arg("socket") ?? "/run/culinaryos-data/store.sock", Credentials: credentials, LabPython: Arg("python"), LabScript: Arg("lab-script"), LabDirectory: Arg("lab-directory"), ReadySocket: lab ? null : "/run/culinaryos-app/ready.sock", SetupCode: setupCode is { Length: >= 32 } ? setupCode : null);
-            using var store = lab ? new RuntimeStore(options.LabPython ?? throw new Exception(), options.LabScript ?? throw new Exception(), options.LabDirectory ?? throw new Exception(), site) : new RuntimeStore(options.Socket);
+            // The branch store is PostgreSQL: on CulinaryOS the local cluster over its Unix socket with peer authentication and the
+            // keyring from systemd; in the lab a private cluster inside the lab folder.
+            using var store = lab
+                ? await LabPostgres.Branch(Arg("postgres-bin") ?? throw new Exception("Especifica --postgres-bin"), await LabPostgres.Cluster(Arg("postgres-bin")!, Path.Combine(options.LabDirectory ?? throw new Exception(), "postgres")), options.LabDirectory, site)
+                : await PostgresBranchStore.Open(new PostgresStoreOptions(Arg("database") ?? PostgresStoreOptions.CulinaryOs, site, "/var/lib/postgresql", "/etc/culinaryos/branch.json", PgDump: "/usr/bin/pg_dump"), Keyring.Load(Path.Combine(credentials ?? throw new Exception("CREDENTIALS_DIRECTORY requerido"), "keyring")));
+            // One-time move off SQLite: runtime/export_store.py pipes the old store in on stdin.
+            if (args.Contains("--migrate-from-export")) { Console.WriteLine((await StoreMigration.Import(store, Console.In)).ToJsonString()); if (lab) File.WriteAllText(Path.Combine(options.LabDirectory!, "initialized"), site); return 0; }
             var service = new BranchService(store, site, new Passwords());
             if (args.Contains("--upgrade-schema")) { Console.WriteLine((await service.UpgradeSchema()).ToJsonString()); return 0; }
             if (Arg("import-plan") is string plan) { var result = await service.ImportPlan(plan, Arg("plan-sha256") ?? throw new Exception()); Console.WriteLine(result.ToJsonString()); return 0; }
-            if (Arg("initialize") is string initial) { var config = JsonNode.Parse(await File.ReadAllTextAsync(initial))!.AsObject(); await service.Initialize(config); Console.WriteLine("Sucursal inicializada. Retira el archivo de aprovisionamiento que contiene credenciales."); return 0; }
+            if (Arg("initialize") is string initial) { var config = JsonNode.Parse(await File.ReadAllTextAsync(initial))!.AsObject(); await service.Initialize(config); if (lab) File.WriteAllText(Path.Combine(options.LabDirectory!, "initialized"), site); Console.WriteLine("Sucursal inicializada. Retira el archivo de aprovisionamiento que contiene credenciales."); return 0; }
             if (Arg("enrollment-file") is string enrollment) { await service.RotateEnrollment((await File.ReadAllTextAsync(enrollment)).Trim()); Console.WriteLine("Código de alta actualizado."); return 0; }
             X509Certificate2 certificate = lab ? LabCertificate.Create(options.LabDirectory!) : X509Certificate2.CreateFromPemFile(Path.Combine(options.Credentials ?? throw new Exception("CREDENTIALS_DIRECTORY requerido"), "tls-cert"), Path.Combine(options.Credentials!, "tls-key"));
             // Live integrations are optional: their credentials directory, plus the printer and PAC files from before it existed.
@@ -36,7 +42,7 @@ public static class Program {
             using (certificate) { await using var app = ApiHost.Build(options, store, certificate, licensing, Arg("cloud-url") is string cloudUrl ? new CloudOptions(cloudUrl, options.Credentials ?? throw new Exception(), Arg("central-public-key") ?? throw new Exception()) : null, printer, fiscal, integrations); await app.RunAsync(); }
             return 0;
 
-        } catch (BusinessException e) { Console.Error.WriteLine(e.Message); return 1; } catch (Exception) { Console.Error.WriteLine("No se pudo iniciar Culinary Restaurant. Comprueba identidad, configuración, credenciales y runtime."); return 1; }
+        } catch (BusinessException e) { Console.Error.WriteLine(e.Message); return 1; } catch (Exception e) { Console.Error.WriteLine("No se pudo iniciar Culinary Restaurant. Comprueba identidad, configuración, credenciales y runtime."); if (args.Contains("--lab")) Console.Error.WriteLine(e); return 1; }
 
     }
 }

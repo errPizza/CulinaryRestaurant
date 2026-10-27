@@ -19,7 +19,9 @@ if($RootPublicKey){& (Join-Path $PSScriptRoot 'Use-RootKey.ps1') -Path $RootPubl
 if($LicenseServer -and $LicenseServer -notmatch '^https://'){throw 'CulinaryServer debe ser una dirección HTTPS.'}
 $lab=if($LabDirectory){[IO.Path]::GetFullPath($LabDirectory)}else{Join-Path $projectRoot '.lab/manual'}
 $probe=Join-Path $projectRoot 'runtime/lab_probe.py'
-$hostScript=Join-Path $projectRoot 'runtime/lab_host.py'
+# The lab branch keeps its data in a private PostgreSQL cluster inside the lab folder.
+$pgBin=Join-Path $projectRoot '.tools/postgres/pgsql/bin'
+if(-not(Test-Path -LiteralPath (Join-Path $pgBin 'postgres.exe'))){& (Join-Path $PSScriptRoot 'Get-Postgres.ps1')}
 $dotnet=(Get-Command dotnet -ErrorAction Stop).Source
 $buildRoot=$null
 $api=$null
@@ -46,8 +48,18 @@ try{
  $existing=Get-LabCheck 'server'
  if($existing.listening -and -not $existing.trusted){throw "El puerto $Port está ocupado. $($existing.error) No se ha iniciado otra instancia."}
  $reused=[bool]$existing.trusted
- if(-not $reused -or -not $database.initialized){
+ if(-not $reused -or -not $database.initialized -or $database.legacy){
   $api=Join-Path (Publish-LabProject 'src/MesaNexo.Api' 'api') 'MesaNexo.Api.dll'
+ }
+ if($database.legacy){
+  if($reused){throw "Hay un backend del laboratorio anterior en el puerto $Port; ciérralo antes de migrar el laboratorio a PostgreSQL."}
+  # Once per lab: the SQLite store goes into PostgreSQL through a pipe; the SQLite file stays as it was.
+  $OutputEncoding=New-Object System.Text.UTF8Encoding($false)
+  [Console]::OutputEncoding=$OutputEncoding
+  $env:PYTHONIOENCODING='utf-8'
+  & $Python -B (Join-Path $projectRoot 'runtime/export_store.py') --lib (Join-Path $projectRoot 'vendor/culinaryos') --database (Join-Path $lab 'store.sqlite') --keyring (Join-Path $lab 'test-only-keyring.json') --site $SiteId | & $dotnet $api --lab --site $SiteId --postgres-bin $pgBin --lab-directory $lab --migrate-from-export
+  if($LASTEXITCODE -ne 0){throw 'No se pudo migrar el laboratorio de SQLite a PostgreSQL; el archivo SQLite sigue intacto.'}
+  Write-Host 'Laboratorio migrado de SQLite a PostgreSQL.'
  }
  if(-not $NoClient){
   if($Avalonia){
@@ -76,7 +88,7 @@ try{
    $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($sid,'FullControl','Allow')))
    Set-Acl -LiteralPath $initial -AclObject $acl
    [IO.File]::WriteAllText($initial,($config|ConvertTo-Json -Depth 8),(New-Object System.Text.UTF8Encoding($false)))
-   & $dotnet $api --lab --site $SiteId --python $Python --lab-script $hostScript --lab-directory $lab --initialize $initial
+   & $dotnet $api --lab --site $SiteId --postgres-bin $pgBin --lab-directory $lab --initialize $initial
    if($LASTEXITCODE -ne 0){throw 'Inicialización rechazada; se conserva el laboratorio existente.'}
   }finally{
    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr);$password=$null;$config=$null
@@ -93,7 +105,7 @@ try{
    $hardware=@{board=(Get-CimInstance Win32_ComputerSystemProduct).UUID;disk=((Get-CimInstance Win32_DiskDrive | Sort-Object Index | Select-Object -First 1).SerialNumber);mac=((Get-CimInstance Win32_NetworkAdapter -Filter 'PhysicalAdapter=True' | Where-Object MACAddress | Sort-Object DeviceID | Select-Object -First 1).MACAddress)}
    [IO.File]::WriteAllText((Join-Path $lab 'hardware.json'),($hardware|ConvertTo-Json),(New-Object System.Text.UTF8Encoding($false)))
   }
-  $arguments='"'+$api+'" --lab --site '+$SiteId+' --port '+$Port+' --python "'+$Python+'" --lab-script "'+$hostScript+'" --lab-directory "'+$lab+'"'
+  $arguments='"'+$api+'" --lab --site '+$SiteId+' --port '+$Port+' --postgres-bin "'+$pgBin+'" --lab-directory "'+$lab+'"'
   if($LicenseServer){$arguments+=' --license-server "'+$LicenseServer.TrimEnd('/')+'"'}
   $stdout=Join-Path $buildRoot 'backend.stdout.log';$stderr=Join-Path $buildRoot 'backend.stderr.log'
   $backend=Start-Process -FilePath $dotnet -ArgumentList $arguments -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru

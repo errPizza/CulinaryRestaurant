@@ -6,6 +6,47 @@ namespace MesaNexo.Tests;
 
 // The PostgreSQL branch store against the contract the CulinaryOS SQLite store and mesanexo_ipc answered.
 static class StoreTests {
+    // A branch that ran on the SQLite store moves to PostgreSQL with the same state, receipts and outbox.
+    public static async Task Migration(string root, string python, List<JsonObject> evidence) {
+
+        void Check(bool ok, string name) { if (!ok) throw new Exception("FAIL: " + name); evidence.Add(J.O("test", name, "result", "passed")); Console.WriteLine("PASS " + name); }
+        var folder = Path.Combine(root, ".lab", "sqlite-move-" + J.Id());
+        var site = "move-site";
+        JsonObject before;
+        List<string> pendingBefore;
+        string acknowledged;
+        using (var sqlite = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), Path.Combine(folder, "sqlite"), site)) {
+
+            var branch = new BranchService(sqlite, site, new Passwords());
+            await TestLicense.Initialize(branch, J.O("siteId", site, "name", "Mudanza", "mode", "licencia", "managerName", "Gerencia", "managerUsername", "gerencia", "managerPassword", "Move-" + J.Id(), "enrollmentCode", J.Id(), "modules", new JsonArray()));
+            for (var i = 0; i < 5; i++) { var s = await branch.Load(); s.Add("customer", J.O("name", "Cliente ñ " + i, "phone", "55" + i)); s.Meta["revision"] = s.Meta.L("revision") + 1; await sqlite.CallAsync(J.O("op", "transaction_v1", "protocol", 1, "event_id", J.Id(), "receipt", J.O("actor", "move-test", "fingerprint", J.Id(), "result", J.O()), "changes", new JsonArray(s.Changes().Select(x => (JsonNode)x).ToArray()))); }
+            before = (JsonObject)(await sqlite.CallAsync(J.O("op", "scan_v1", "protocol", 1, "max_records", 4096, "max_bytes", 1024 * 1024)))!;
+
+        }
+        // Acknowledge one event in SQLite, as the old sync worker would have.
+        var acknowledge = new System.Diagnostics.ProcessStartInfo(python) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var arg in new[] { "-B", "-c", "import sqlite3,sys,time;db=sqlite3.connect(sys.argv[1]);r=db.execute('SELECT id FROM events ORDER BY rowid LIMIT 1').fetchone();db.execute('UPDATE events SET acked=? WHERE id=?',(time.time(),r[0]));db.commit();print(r[0]);print('\\n'.join(x[0] for x in db.execute('SELECT id FROM events WHERE acked IS NULL ORDER BY rowid')))", Path.Combine(folder, "sqlite", "store.sqlite") }) acknowledge.ArgumentList.Add(arg);
+        using (var p = System.Diagnostics.Process.Start(acknowledge)!) { var lines = (await p.StandardOutput.ReadToEndAsync()).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries); await p.WaitForExitAsync(); acknowledged = lines[0]; pendingBefore = [.. lines.Skip(1)]; }
+        var export = new System.Diagnostics.ProcessStartInfo(python) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = System.Text.Encoding.UTF8 };
+        foreach (var arg in new[] { "-B", Path.Combine(root, "runtime", "export_store.py"), "--lib", Path.Combine(root, "vendor", "culinaryos"), "--database", Path.Combine(folder, "sqlite", "store.sqlite"), "--keyring", Path.Combine(folder, "sqlite", "test-only-keyring.json"), "--site", site }) export.ArgumentList.Add(arg);
+        export.Environment["PYTHONIOENCODING"] = "utf-8";
+        using var target = LabPostgres.Test(root, Path.Combine(folder, "postgres"), site);
+        using (var p = System.Diagnostics.Process.Start(export)!) {
+
+            var result = await StoreMigration.Import(target, p.StandardOutput);
+            await p.WaitForExitAsync();
+            Check(p.ExitCode == 0 && result.B("migrated") && result.L("events") == pendingBefore.Count + 1, "the SQLite export moves into PostgreSQL in one pass");
+
+        }
+        var after = (JsonObject)(await target.CallAsync(J.O("op", "scan_v1", "protocol", 1, "max_records", 4096, "max_bytes", 1024 * 1024)))!;
+        Check(J.Canonical(after["records"]) == J.Canonical(before["records"]) && after.L("revision") == before.L("revision"), "every record keeps its version and content after the move");
+        Check(new BranchService(target, site, new Passwords()) is var moved && (await moved.Load()).List("customer").Any(c => c.S("name") == "Cliente ñ 4"), "the branch reads its state from PostgreSQL after the move");
+        var pending = await target.Pending(64);
+        Check(pending.Select(x => x.Wire.S("event_id")).SequenceEqual(pendingBefore), "pending events keep their order and digests after the move");
+        Check((await target.CallAsync(J.O("op", "event_status_v1", "event_id", acknowledged)))!.S("remote") == "acknowledged", "an event the old store had acknowledged stays acknowledged");
+        try { await StoreMigration.Import(target, new StringReader("")); Check(false, "a second migration over data"); } catch (BusinessException) { Check(true, "a migration never writes over a store that has data"); }
+
+    }
     public static async Task Run(string root, List<JsonObject> evidence) {
 
         void Check(bool ok, string name) { if (!ok) throw new Exception("FAIL: " + name); evidence.Add(J.O("test", name, "result", "passed")); Console.WriteLine("PASS " + name); }

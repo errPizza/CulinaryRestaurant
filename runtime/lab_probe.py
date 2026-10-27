@@ -10,20 +10,27 @@ import urllib.request
 
 
 def database_status(directory, site):
+    # The lab branch lives in its private PostgreSQL cluster; the backend leaves this marker once it is initialized.
+    marker = Path(directory).resolve() / 'initialized'
+    if marker.exists():
+        if marker.read_text(encoding='utf-8').strip() != site:
+            raise ValueError('La base existente pertenece a otro sitio; no se modifica.')
+        return {'ok': True, 'initialized': True, 'legacy': False}
+    # A lab from before PostgreSQL: its SQLite store is migrated once, then kept as it was.
     database = Path(directory).resolve() / 'store.sqlite'
     if not database.exists():
-        return {'ok': True, 'initialized': False}
+        return {'ok': True, 'initialized': False, 'legacy': False}
     with sqlite3.connect(database.as_uri() + '?mode=ro', uri=True, timeout=3) as db:
         tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         if not tables:
-            return {'ok': True, 'initialized': False}
+            return {'ok': True, 'initialized': False, 'legacy': False}
         if 'metadata' not in tables or 'records' not in tables:
             raise ValueError('El archivo existente no es un almacén de CulinaryOS; no se modifica.')
         identity = db.execute("SELECT value FROM metadata WHERE key='site_id'").fetchone()
         if identity is None or identity[0] != site:
             raise ValueError('La base existente pertenece a otro sitio; no se modifica.')
         initialized = db.execute("SELECT EXISTS(SELECT 1 FROM records WHERE id=?)", ('mn_meta_site',)).fetchone()[0]
-        return {'ok': True, 'initialized': bool(initialized)}
+        return {'ok': True, 'initialized': bool(initialized), 'legacy': bool(initialized)}
 
 
 def server_status(directory, site, port):

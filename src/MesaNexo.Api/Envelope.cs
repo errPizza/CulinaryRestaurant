@@ -27,9 +27,10 @@ public sealed class Keyring: IDisposable {
 
     }
     // Layout: 1 (format) | key id length | key id | 12-byte nonce | 16-byte tag | ciphertext.
-    public byte[] Seal(JsonNode? value, JsonObject context) {
+    public byte[] Seal(JsonNode? value, JsonObject context) => SealBytes(Encoding.UTF8.GetBytes(J.Canonical(value)), context);
+    public JsonNode? Open(byte[] sealedValue, JsonObject context) => JsonNode.Parse(OpenBytes(sealedValue, context));
+    public byte[] SealBytes(byte[] plain, JsonObject context) {
 
-        var plain = Encoding.UTF8.GetBytes(J.Canonical(value));
         var kid = Encoding.UTF8.GetBytes(Active);
         var sealedValue = new byte[2 + kid.Length + 28 + plain.Length];
         sealedValue[0] = 1;
@@ -42,7 +43,7 @@ public sealed class Keyring: IDisposable {
         return sealedValue;
 
     }
-    public JsonNode? Open(byte[] sealedValue, JsonObject context) {
+    public byte[] OpenBytes(byte[] sealedValue, JsonObject context) {
 
         if (sealedValue.Length < 30 || sealedValue[0] != 1 || sealedValue.Length < 2 + sealedValue[1] + 28) throw new StoreException("COS-DATA-INTEGRITY");
         var kid = Encoding.UTF8.GetString(sealedValue, 2, sealedValue[1]);
@@ -50,7 +51,7 @@ public sealed class Keyring: IDisposable {
         var offset = 2 + sealedValue[1];
         var plain = new byte[sealedValue.Length - offset - 28];
         try { using var aes = new AesGcm(key, 16); aes.Decrypt(sealedValue.AsSpan(offset, 12), sealedValue.AsSpan(offset + 28), sealedValue.AsSpan(offset + 12, 16), plain, Encoding.UTF8.GetBytes(J.Canonical(context))); } catch (CryptographicException) { throw new StoreException("COS-DATA-INTEGRITY"); }
-        return JsonNode.Parse(plain);
+        return plain;
 
     }
     public void Dispose() { foreach (var key in keys.Values) CryptographicOperations.ZeroMemory(key); }

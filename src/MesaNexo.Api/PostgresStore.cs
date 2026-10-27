@@ -7,7 +7,10 @@ using MesaNexo.Core;
 using Npgsql;
 namespace MesaNexo.Api;
 
-public sealed record PostgresStoreOptions(string ConnectionString, string Site, string DataDirectory, string BranchConfig, long MinFreeBytes = 128L * 1024 * 1024, string? PgDump = null);
+public sealed record PostgresStoreOptions(string ConnectionString, string Site, string DataDirectory, string BranchConfig, long MinFreeBytes = 128L * 1024 * 1024, string? PgDump = null) {
+    // CulinaryOS: the distribution's cluster on its Unix socket; peer authentication maps the service user to its role.
+    public const string CulinaryOs = "Host=/run/postgresql;Database=culinaryos;Username=culinaryos-app;Pooling=true;Maximum Pool Size=20;Timeout=10";
+}
 
 // The branch store on PostgreSQL, with the same operations and replies the CulinaryOS SQLite store and its
 // mesanexo_ipc extension answered, so BranchService does not change. Every record and event is sealed with the
@@ -18,7 +21,7 @@ public sealed partial class PostgresBranchStore: IBranchStore, IDisposable {
     static readonly TimeSpan AckedRetention = TimeSpan.FromDays(7);
     const int ArchiveBatch = 16, BaselineRecords = 512;
     // Every writer takes this transaction-scoped lock first, so commits are serial as they were on SQLite.
-    const long WriterLock = 0x4d4e5354;
+    internal const long WriterLock = 0x4d4e5354;
     readonly NpgsqlDataSource data;
     readonly Keyring keys;
     readonly PostgresStoreOptions options;
@@ -102,12 +105,15 @@ public sealed partial class PostgresBranchStore: IBranchStore, IDisposable {
     JsonObject Sealed(string purpose, string recordId, long version, string? eventId = null) { var value = Context(purpose, recordId, version, eventId); value["site_id"] = options.Site; return value; }
     byte[] SealRecord(JsonNode? data, string id, long version) => keys.Seal(data, Sealed("record", id, version));
     JsonNode? OpenRecord(byte[] envelope, string id, long version) => keys.Open(envelope, Sealed("record", id, version));
-    byte[] SealEvent(JsonObject wire, string recordId, string eventId) => keys.Seal(wire, Sealed("event", recordId, 1, eventId));
-    public JsonObject OpenEvent(byte[] envelope, string recordId, long version, string eventId) => (JsonObject)keys.Open(envelope, Sealed("event", recordId, version, eventId))!;
+    // An event keeps the exact bytes its digest covers: the sync worker sends them as they are, and events migrated from
+    // the SQLite store keep the digest Python computed over its own canonical JSON.
+    byte[] SealEvent(byte[] raw, string recordId, long version, string eventId) => keys.SealBytes(raw, Sealed("event", recordId, version, eventId));
+    byte[] OpenEvent(byte[] envelope, string recordId, long version, string eventId) => keys.OpenBytes(envelope, Sealed("event", recordId, version, eventId));
+    static byte[] Raw(JsonObject wire) => Encoding.UTF8.GetBytes(J.Canonical(wire));
     static double Epoch() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
     static string Identity(string value) => IdentityPattern().IsMatch(value) ? value : throw new StoreException("COS-DATA-INVALID");
     [GeneratedRegex("^[a-zA-Z0-9_-]{1,96}$")] private static partial Regex IdentityPattern();
-    static string Digest(JsonObject wire) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(J.Canonical(wire))));
+    static string Digest(byte[] raw) => Convert.ToHexStringLower(SHA256.HashData(raw));
     void EnsureSpace() {
 
         if (!Directory.Exists(options.DataDirectory)) return;
@@ -144,7 +150,8 @@ public sealed partial class PostgresBranchStore: IBranchStore, IDisposable {
         foreach (var change in changes) if (change!["expected_version"] is not JsonValue v || !v.TryGetValue<long>(out var expected) || expected < 0 || change["data"] is not JsonObject) throw new StoreException("COS-DATA-INVALID");
         var rid = "tx_" + eventId;
         var wire = J.O("protocol", "culinaryos-events-v1", "site_id", options.Site, "event_id", eventId, "record_id", rid, "version", 1, "data", J.O("contract", "mesa-nexo-transaction-v1", "changes", changes.DeepClone(), "receipt", receipt.DeepClone()));
-        if (Encoding.UTF8.GetByteCount(J.Canonical(wire)) > MaxTransaction) throw new StoreException("COS-DATA-INVALID");
+        var raw = Raw(wire);
+        if (raw.Length > MaxTransaction) throw new StoreException("COS-DATA-INVALID");
         await using var db = await data.OpenConnectionAsync(ct);
         await using var tx = await db.BeginTransactionAsync(ct);
         await Exec(db, tx, "SELECT pg_advisory_xact_lock(@l)", ct, ("l", WriterLock));
@@ -171,7 +178,7 @@ public sealed partial class PostgresBranchStore: IBranchStore, IDisposable {
 
         }
         await Exec(db, tx, "INSERT INTO records(id, version, envelope) VALUES(@i, 1, @e)", ct, ("i", rid), ("e", SealRecord(receipt, rid, 1)));
-        await Exec(db, tx, "INSERT INTO events(id, record_id, version, envelope, digest, created) VALUES(@i, @r, 1, @e, @d, @c)", ct, ("i", eventId), ("r", rid), ("e", SealEvent(wire, rid, eventId)), ("d", Digest(wire)), ("c", Epoch()));
+        await Exec(db, tx, "INSERT INTO events(id, record_id, version, envelope, digest, created) VALUES(@i, @r, 1, @e, @d, @c)", ct, ("i", eventId), ("r", rid), ("e", SealEvent(raw, rid, 1, eventId)), ("d", Digest(raw)), ("c", Epoch()));
         await Archive(db, tx, ct);
         await tx.CommitAsync(ct);
         return J.O("duplicate", false, "receipt", receipt.DeepClone(), "event_id", eventId);
@@ -353,7 +360,8 @@ public sealed partial class PostgresBranchStore: IBranchStore, IDisposable {
         var eventId = "bl" + J.Id();
         var rid = "bl_" + eventId;
         var wire = J.O("protocol", "culinaryos-events-v1", "site_id", options.Site, "event_id", eventId, "record_id", rid, "version", 1, "data", J.O("contract", "mesa-nexo-baseline-v1", "changes", changes, "receipt", J.O("actor", "outbox-baseline", "operation", "outbox.baseline", "part", part, "at", J.Now())));
-        await Exec(db, tx, "INSERT INTO events(id, record_id, version, envelope, digest, created) VALUES(@i, @r, 1, @e, @d, @c)", ct, ("i", eventId), ("r", rid), ("e", SealEvent(wire, rid, eventId)), ("d", Digest(wire)), ("c", Epoch()));
+        var raw = Raw(wire);
+        await Exec(db, tx, "INSERT INTO events(id, record_id, version, envelope, digest, created) VALUES(@i, @r, 1, @e, @d, @c)", ct, ("i", eventId), ("r", rid), ("e", SealEvent(raw, rid, 1, eventId)), ("d", Digest(raw)), ("c", Epoch()));
         return changes[^1]!.S("record_id");
 
     }
@@ -387,19 +395,19 @@ public sealed partial class PostgresBranchStore: IBranchStore, IDisposable {
 
     }
     // Pending events oldest first for the sync worker, and their acknowledgement; one sender keeps them in order.
-    public async Task<List<(JsonObject Wire, string Digest)>> Pending(int limit, CancellationToken ct = default) {
+    public async Task<List<(JsonObject Wire, byte[] Raw, string Digest)>> Pending(int limit, CancellationToken ct = default) {
 
         await using var db = await data.OpenConnectionAsync(ct);
         var now = Epoch();
-        var values = new List<(JsonObject, string)>();
+        var values = new List<(JsonObject, byte[], string)>();
         await using var cmd = Command(db, null, "SELECT id, record_id, version, envelope, digest, next_attempt FROM events WHERE acked IS NULL ORDER BY seq LIMIT @n", ("n", limit));
         await using var row = await cmd.ExecuteReaderAsync(ct);
         while (await row.ReadAsync(ct)) {
 
             if (row.GetDouble(5) > now) break;
-            var wire = OpenEvent((byte[])row[3], row.GetString(1), row.GetInt64(2), row.GetString(0));
-            if (Digest(wire) != row.GetString(4)) throw new StoreException("COS-DATA-INTEGRITY");
-            values.Add((wire, row.GetString(4)));
+            var raw = OpenEvent((byte[])row[3], row.GetString(1), row.GetInt64(2), row.GetString(0));
+            if (Digest(raw) != row.GetString(4)) throw new StoreException("COS-DATA-INTEGRITY");
+            values.Add(((JsonObject)JsonNode.Parse(raw)!, raw, row.GetString(4)));
 
         }
         return values;
@@ -415,6 +423,15 @@ public sealed partial class PostgresBranchStore: IBranchStore, IDisposable {
 
         await using var db = await data.OpenConnectionAsync(ct);
         await Exec(db, null, "UPDATE events SET attempts=attempts+1, next_attempt=@now + least(3600, 5 * power(2, least(attempts, 10))) WHERE id=@i AND acked IS NULL", ct, ("now", Epoch()), ("i", eventId));
+
+    }
+    // Migration from SQLite: rows as they were, sealed under this store's keyring.
+    internal async Task ImportRecord(NpgsqlConnection db, NpgsqlTransaction tx, string id, long version, JsonNode? value, CancellationToken ct) => await Exec(db, tx, "INSERT INTO records(id, version, envelope) VALUES(@i, @v, @e)", ct, ("i", Identity(id)), ("v", version), ("e", SealRecord(value, id, version)));
+    internal async Task ImportEvent(NpgsqlConnection db, NpgsqlTransaction tx, JsonObject item, byte[] raw, CancellationToken ct) {
+
+        var id = Identity(item.S("id"));
+        var acked = item["acked"] is JsonValue a ? a.GetValue<double>() : (double?)null;
+        await Exec(db, tx, "INSERT INTO events(id, record_id, version, envelope, digest, created, acked, attempts, next_attempt) VALUES(@i, @r, @v, @e, @d, @c, @a, @t, @n)", ct, ("i", id), ("r", item.S("record_id")), ("v", item.L("version")), ("e", SealEvent(raw, item.S("record_id"), item.L("version"), id)), ("d", item.S("digest")), ("c", item["created"]!.GetValue<double>()), ("a", acked), ("t", (int)item.L("attempts")), ("n", item["next_attempt"]!.GetValue<double>()));
 
     }
     public NpgsqlDataSource Data => data;
