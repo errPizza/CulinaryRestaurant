@@ -21,8 +21,8 @@ static class CentralTests {
         var folder = Path.Combine(root, ".lab", "central-" + J.Id());
         Directory.CreateDirectory(folder);
         var key = RandomNumberGenerator.GetBytes(32);
-        var database = Path.Combine(folder, "central.sqlite");
-        using var store = new CentralStore(database, (byte[])key.Clone());
+        var database = LabPostgres.TestDatabase(root, Path.Combine(folder, "central-db"));
+        using var store = new CentralStore(database, (byte[])key.Clone(), LabPostgres.Bin(root));
         store.Initialize();
         using var signer = RSA.Create(3072);
         var signing = Path.Combine(folder, "cloud-signing-test-only.pem");
@@ -42,7 +42,7 @@ static class CentralTests {
         // The registry CulinaryServer lists for the panel (GET /admin/v1/registry) is what the operator provisions here.
         store.ProvisionTenant(J.O("tenantId", "restaurant-alpha", "branchId", "main", "slug", "restaurant-alpha-main", "tenantName", "Alpha", "branchName", "Main", "siteId", "alpha-test", "certificateSha256", clientCert.GetCertHashString(HashAlgorithmName.SHA256), "ownerName", "Owner", "ownerUsername", "restaurant-owner", "ownerPassword", "Test-" + J.Id(), "ownerEnrollmentCode", J.Id()), new Passwords());
         central.Receive(data, digest, clientCert);
-        using (var reopened = new CentralStore(database, (byte[])key.Clone())) { reopened.Initialize(); var second = new CentralService(reopened, new Passwords(), "central-test", signing); var ack = second.Receive(data, digest, clientCert); Check(ack.S("status") == "committed" && ack.S("event_id") == "event-test", "receiver restart deduplicates persisted event and returns committed ACK"); }
+        using (var reopened = new CentralStore(database, (byte[])key.Clone(), LabPostgres.Bin(root))) { reopened.Initialize(); var second = new CentralService(reopened, new Passwords(), "central-test", signing); var ack = second.Receive(data, digest, clientCert); Check(ack.S("status") == "committed" && ack.S("event_id") == "event-test", "receiver restart deduplicates persisted event and returns committed ACK"); }
         var changed = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(data).Replace("true", "false"));
         await Deny(() => Task.Run(() => central.Receive(changed, Convert.ToHexStringLower(SHA256.HashData(changed)), clientCert)), "same event ID with changed body rejected");
         var wrong = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(data).Replace("alpha-test", "beta-test"));
@@ -94,14 +94,13 @@ static class CentralTests {
             Check(result.S("state") == "pending" && result.S("reason") == "network" && (await runtime.CallAsync(J.O("op", "outbox_status_v1")))!.L("pending") > 0, "a central that does not answer keeps the event pending for a retry");
 
         }
-        var snapshot = Path.Combine(folder, "central-backup.sqlite");
+        var snapshot = Path.Combine(folder, "central-backup.dump");
         var backupHash = store.Snapshot(snapshot);
         store.ProvisionTenant(J.O("tenantId", "restaurant-beta", "branchId", "main", "slug", "restaurant-beta-main", "tenantName", "Beta", "branchName", "Main", "siteId", "beta-test", "certificateSha256", new string('b', 64), "ownerName", "Owner", "ownerUsername", "beta-owner", "ownerPassword", "Test-" + J.Id(), "ownerEnrollmentCode", J.Id()), new Passwords());
         store.Restore(snapshot, backupHash);
         Check(store.CertificateSite(new string('b', 64)) is null && store.CertificateSite(clientCert.GetCertHashString(HashAlgorithmName.SHA256)) == "alpha-test", "central restore validates encrypted snapshot and returns to its content");
-        using (var foreign = new CentralStore(Path.Combine(folder, "foreign.sqlite"), RandomNumberGenerator.GetBytes(32))) { foreign.Initialize(); await Deny(() => Task.Run(() => foreign.Restore(snapshot, backupHash)), "central refuses a snapshot sealed under another central's key"); }
-        var encrypted = File.ReadAllBytes(database);
-        Check(!Encoding.UTF8.GetString(encrypted).Contains("restaurant-owner\""), "tenant owner record encrypted under the central key");
+        using (var foreign = new CentralStore(LabPostgres.TestDatabase(root, Path.Combine(folder, "foreign-db")), RandomNumberGenerator.GetBytes(32), LabPostgres.Bin(root))) { foreign.Initialize(); await Deny(() => Task.Run(() => foreign.Restore(snapshot, backupHash)), "central refuses a snapshot sealed under another central's key"); }
+        using (var db = new Npgsql.NpgsqlConnection(database)) { db.Open(); using var read = new Npgsql.NpgsqlCommand("SELECT string_agg(encode(value, 'escape'), '') FROM tenant_user", db); var stored = read.ExecuteScalar() as string ?? ""; Check(stored.Length > 0 && !stored.Contains("restaurant-owner"), "tenant owner record encrypted under the central key"); }
 
     }
 }

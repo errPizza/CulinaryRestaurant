@@ -83,7 +83,10 @@ public static class LabPostgres {
     // Tests: one throwaway cluster per process under .lab, stopped and removed when the process exits.
     static string? shared;
     static readonly object testGate = new();
-    public static PostgresBranchStore Test(string root, string folder, string site) {
+    public static PostgresBranchStore Test(string root, string folder, string site) => Branch(Bin(root), Shared(root), folder, site).GetAwaiter().GetResult();
+    // A database of its own in the test cluster, for the central's tests.
+    public static string TestDatabase(string root, string folder) => Database(Shared(root), folder).GetAwaiter().GetResult();
+    static string Shared(string root) {
 
         var bin = Bin(root);
         lock (testGate) {
@@ -97,7 +100,7 @@ public static class LabPostgres {
             }
 
         }
-        return Branch(bin, shared, folder, site).GetAwaiter().GetResult();
+        return shared;
 
     }
     // Loads a pg_dump of a branch into a new database named in `folder`, the way a recovery stages a backup.
@@ -111,10 +114,11 @@ public static class LabPostgres {
     public static async Task Stop(string bin, string directory) { if (File.Exists(Path.Combine(directory, "data", "postmaster.pid"))) await Run(Path.Combine(bin, "pg_ctl"), ["-D", Path.Combine(directory, "data"), "-m", "fast", "-w", "stop"]); }
     static async Task<bool> Reachable(int port) { try { using var client = new TcpClient(); await client.ConnectAsync(IPAddress.Loopback, port).WaitAsync(TimeSpan.FromSeconds(2)); return true; } catch (Exception) { return false; } }
     static int Free() { var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start(); var port = ((IPEndPoint)listener.LocalEndpoint).Port; listener.Stop(); return port; }
-    static async Task Run(string file, string[] args) {
+    public static async Task Run(string file, string[] args, string? password = null) {
 
         var start = new ProcessStartInfo(file) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
         foreach (var arg in args) start.ArgumentList.Add(arg);
+        if (password is not null) start.Environment["PGPASSWORD"] = password;
         using var process = Process.Start(start) ?? throw new InvalidOperationException("No se inició " + file);
         // pg_ctl start leaves the server running with these pipes inherited; read them without waiting for their end.
         var output = process.StandardOutput.ReadToEndAsync();
