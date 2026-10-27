@@ -137,7 +137,7 @@ static class Program {
         Directory.CreateDirectory(folder);
         using var cert = LabCertificate.Create(folder);
         var port = FreePort();
-        using var runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), folder, Site);
+        using var runtime = LabPostgres.Test(root, folder, Site);
         await using var app = ApiHost.Build(new(Site, port, "127.0.0.1", ReadySocket: null), runtime, cert);
         await app.StartAsync();
         var service = app.Services.GetRequiredService<BranchService>();

@@ -65,7 +65,7 @@ static class CentralTests {
         File.WriteAllText(Path.Combine(credentials, "central-ca"), serverCert.ExportCertificatePem());
         File.WriteAllText(Path.Combine(credentials, "central-cert"), clientCert.ExportCertificatePem());
         File.WriteAllText(Path.Combine(credentials, "central-key"), clientKey.ExportPkcs8PrivateKeyPem());
-        using var runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), Path.Combine(folder, "branch-store"), "alpha-test");
+        using var runtime = LabPostgres.Test(root, Path.Combine(folder, "branch-store"), "alpha-test");
         var branch = new BranchService(runtime, "alpha-test", new Passwords());
         var branchPassword = "Central-" + J.Id();
         var branchCode = J.Id();

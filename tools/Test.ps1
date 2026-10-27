@@ -7,6 +7,7 @@ $env:PYTHONDONTWRITEBYTECODE='1'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT='1'
 & (Join-Path $PSScriptRoot 'Use-RootKey.ps1') -Test
 Push-Location $projectRoot
+if(-not(Test-Path -LiteralPath (Join-Path $projectRoot ".tools/postgres/pgsql/bin/postgres.exe"))){& (Join-Path $PSScriptRoot "Get-Postgres.ps1")}
 try{
  & $Python -B tests/test_runtime_extension.py
  if($LASTEXITCODE -ne 0){throw 'Fallaron las pruebas del runtime.'}

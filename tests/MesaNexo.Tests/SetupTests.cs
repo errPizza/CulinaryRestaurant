@@ -18,10 +18,10 @@ static class SetupTests {
         Directory.CreateDirectory(folder);
         var cert = LabCertificate.Create(folder);
         var setupCode = Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
-        async Task<(WebApplication app, RuntimeStore store, ConnectionProfile profile)> Start(string site, string? code) {
+        async Task<(WebApplication app, PostgresBranchStore store, ConnectionProfile profile)> Start(string site, string? code) {
 
             var port = FreePort();
-            var store = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), Path.Combine(folder, site), site);
+            var store = LabPostgres.Test(root, Path.Combine(folder, site), site);
             var app = ApiHost.Build(new(site, port, "127.0.0.1", ReadySocket: null, SetupCode: code), store, cert);
             await app.StartAsync();
             return (app, store, new ConnectionProfile($"https://localhost:{port}", site, Path.Combine(folder, "lab-ca.crt"), cert.GetCertHashString(System.Security.Cryptography.HashAlgorithmName.SHA256)));

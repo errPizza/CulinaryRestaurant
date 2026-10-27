@@ -10,7 +10,7 @@ static class ServerSmoke {
 
         void Say(string text) => Console.WriteLine("SMOKE " + text);
         var folder = Path.Combine(root, ".lab", "smoke-" + J.Id());
-        using var runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), folder, site);
+        using var runtime = LabPostgres.Test(root, folder, site);
         var branch = new BranchService(runtime, site, new Passwords());
         var password = "Smoke-" + J.Id();
         var enrollment = J.Id();

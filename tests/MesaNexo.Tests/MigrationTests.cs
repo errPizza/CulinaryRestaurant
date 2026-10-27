@@ -67,7 +67,7 @@ static class MigrationTests {
         var planFile = Path.Combine(output, "import-plan.json");
         var raw = File.ReadAllText(planFile);
         Check(!raw.Contains("DO-NOT-IMPORT") && File.Exists(Path.Combine(output, "source-copy.json")), "migration excludes legacy passwords and retains source backup");
-        using var runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), Path.Combine(folder, "store"), "migrated-site");
+        using var runtime = LabPostgres.Test(root, Path.Combine(folder, "store"), "migrated-site");
         var branch = new BranchService(runtime, "migrated-site", new Passwords());
         await TestLicense.Initialize(branch, J.O("siteId", "migrated-site", "name", "Migración aislada", "mode", "licencia", "managerName", "Gerente nuevo", "managerUsername", "nuevo", "managerPassword", "Migration-" + J.Id(), "enrollmentCode", J.Id(), "modules", Array.Empty<string>()));
         var result = await branch.ImportPlan(planFile, J.Hash(raw));

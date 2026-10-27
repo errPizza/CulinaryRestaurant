@@ -11,7 +11,7 @@ static class FrontofficeTests {
         var folder = Path.Combine(root, ".lab", "front-" + J.Id());
         var password = "Test-" + J.Id();
         var enrollment = J.Id();
-        var runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), folder, "front-site");
+        var runtime = LabPostgres.Test(root, folder, "front-site");
         var service = new BranchService(runtime, "front-site", new Passwords());
         try {
 

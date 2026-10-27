@@ -30,7 +30,7 @@ static class LiveIntegrationTests {
         Directory.CreateDirectory(folder);
         var password = "Test-" + J.Id();
         var enrollment = J.Id();
-        using var runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), folder, "live-site");
+        using var runtime = LabPostgres.Test(root, folder, "live-site");
         var service = new BranchService(runtime, "live-site", new Passwords());
         var live = new IntegrationConfig();
         foreach (var key in new[] { "terminal", "onlinepay", "messaging", "maps", "pms", "aggregators" }) live.Ready(key);

@@ -26,7 +26,7 @@ listener.Start();
 var port = ((IPEndPoint)listener.LocalEndpoint).Port;
 listener.Stop();
 using var certificate = LabCertificate.Create(directory);
-using var store = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), directory, site);
+using var store = LabPostgres.Test(root, directory, site);
 var options = new ApiOptions(site, Port: port, Bind: "127.0.0.1", LabPython: python, LabScript: Path.Combine(root, "runtime", "lab_host.py"), LabDirectory: directory, ReadySocket: null);
 await using var app = ApiHost.Build(options, store, certificate);
 var service = app.Services.GetRequiredService<BranchService>();

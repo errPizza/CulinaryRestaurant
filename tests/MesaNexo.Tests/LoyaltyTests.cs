@@ -11,7 +11,7 @@ static class LoyaltyTests {
         var folder = Path.Combine(root, ".lab", "loyalty-" + J.Id());
         var password = "Test-" + J.Id();
         var enrollment = J.Id();
-        var runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), folder, "loyal-site");
+        var runtime = LabPostgres.Test(root, folder, "loyal-site");
         var service = new BranchService(runtime, "loyal-site", new Passwords());
         try {
 

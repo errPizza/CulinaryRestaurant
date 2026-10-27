@@ -120,7 +120,7 @@ static class LicenseTests {
         if (Directory.Exists(TestLicense.Folder(site))) Directory.Delete(TestLicense.Folder(site), true);
         await using var fake = new FakeCulinaryServer(site);
         await fake.App.StartAsync();
-        using var runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), folder, site);
+        using var runtime = LabPostgres.Test(root, folder, site);
         var service = new BranchService(runtime, site, new Passwords());
         var password = "License-" + J.Id();
         var enrollment = J.Id();
@@ -179,7 +179,7 @@ static class LicenseTests {
         await Raw("mn_license_current", r => { r["license"] = original; return r; });
         Check((await service.LicenseStatus()).S("state") == "active", "restoring the signed license unlocks the branch");
         // Copies: another site, or the same site on another machine (another key).
-        using (var otherRuntime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), Path.Combine(folder, "other"), "other-site")) {
+        using (var otherRuntime = LabPostgres.Test(root, Path.Combine(folder, "other"), "other-site")) {
 
             var other = new BranchService(otherRuntime, "other-site", new Passwords());
             other.UseLicensing(new LicenseOptions(Path.Combine(folder, "other-key"), HardwareFile: hardware, UseTpm: false));
