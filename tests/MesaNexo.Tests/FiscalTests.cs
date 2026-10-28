@@ -48,7 +48,7 @@ static class FiscalTests {
         Directory.CreateDirectory(folder);
         var password = "Test-" + J.Id();
         var enrollment = J.Id();
-        using var runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), folder, "fiscal-site");
+        using var runtime = LabPostgres.Test(root, folder, "fiscal-site");
         var service = new BranchService(runtime, "fiscal-site", new Passwords());
         var credentials = new IntegrationConfig();
         credentials.Ready("pac");

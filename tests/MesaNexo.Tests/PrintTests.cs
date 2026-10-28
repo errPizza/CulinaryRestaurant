@@ -75,7 +75,7 @@ static class PrintTests {
         var folder = Path.Combine(root, ".lab", "print-" + J.Id());
         var password = "Test-" + J.Id();
         var enrollment = J.Id();
-        using var runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), folder, "print-site");
+        using var runtime = LabPostgres.Test(root, folder, "print-site");
         var service = new BranchService(runtime, "print-site", new Passwords());
         var live = new IntegrationConfig();
         live.Ready("printer");

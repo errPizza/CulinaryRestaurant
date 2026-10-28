@@ -11,7 +11,7 @@ static class IntegrationTests {
         var folder = Path.Combine(root, ".lab", "integrations-" + J.Id());
         var password = "Test-" + J.Id();
         var enrollment = J.Id();
-        var runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), folder, "sim-site");
+        var runtime = LabPostgres.Test(root, folder, "sim-site");
         var service = new BranchService(runtime, "sim-site", new Passwords());
         try {
 

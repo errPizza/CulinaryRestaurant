@@ -8,7 +8,7 @@ Desde la raíz:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/Test.ps1 -Python C:\Ruta\python.exe
 ```
 
-El script ejecuta `python -B tests/test_runtime_extension.py` y `dotnet run --project tests/MesaNexo.Tests -c Debug -- <raiz> <python>`. Genera almacenamiento/certificados sintéticos privados en `.lab/` y evidencia pública en `evidence/`. No apunta al socket productivo ni importa datos del usuario. No empaquetar `.lab`. Los fixtures criptográficos en tests/vectors son públicos y exclusivos de pruebas.
+El script ejecuta `python -B tests/test_runtime_extension.py` y `dotnet run --project tests/MesaNexo.Tests -c Debug -- <raiz> <python>`. Las pruebas de .NET guardan los datos en PostgreSQL 17: `tools/Get-Postgres.ps1` deja los binarios oficiales para Windows en `.tools/postgres`, y cada ejecución levanta un clúster privado en `.lab/pg-run-…` que se borra al terminar. `--store-only` corre sólo las pruebas del almacén y de la migración desde SQLite. Genera almacenamiento/certificados sintéticos privados en `.lab/` y evidencia pública en `evidence/`. No apunta al socket productivo ni importa datos del usuario. No empaquetar `.lab`. Los fixtures criptográficos en tests/vectors son públicos y exclusivos de pruebas.
 
 Los procesos de integración escuchan solo loopback en puertos libres. Prueban API de sucursal, tres roles, conflictos, eventos durables, TLS, central mTLS, permisos, importación y recuperación; el renderizado headless usa estados sintéticos reales obtenidos de las pruebas. El doble FaultStore pierde la respuesta después del commit verdadero; MemoryVault es un doble explícito, mientras MigrationTests prueba DPAPI de Windows por separado. Los fallos de disco/permisos del runtime se inyectan.
 

@@ -48,8 +48,8 @@ public static class Program {
         string? Arg(string k) => args.SkipWhile(x => x != "--" + k).Skip(1).FirstOrDefault();
         try {
 
+            // The central's PostgreSQL connection string; the central must already be provisioned.
             var db = Arg("database") ?? throw new Exception();
-            Rules.Need(File.Exists(db), "Se requiere una central previamente aprovisionada");
             var key = await File.ReadAllBytesAsync(Arg("data-key") ?? throw new Exception());
             using var store = new CentralStore(db, key);
             store.Initialize();

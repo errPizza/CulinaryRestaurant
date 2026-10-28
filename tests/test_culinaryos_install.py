@@ -306,7 +306,7 @@ class CulinaryInstallation(unittest.TestCase):
                 for call in command.call_args_list[1:]:
                     self.assertEqual(call.args[2], 'operador')
             source = (ROOT / 'deploy/culinaryos/install.py').read_text()
-            install_source = source[source.index('def install(bundle, client):'):]
+            install_source = source[source.index('def install('):]
             self.assertLess(install_source.index('verify_application_access()'), install_source.index('initialize_branch(site)'))
     def upgradable(self, root):
         # A branch hooked to a delivered earlier extension, and a bundle with the current one and its history.

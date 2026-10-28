@@ -61,7 +61,10 @@ public static class Program {
             var directory = Arg("directory") ?? "/var/lib/mesanexo-central";
             var central = Arg("central-id") ?? throw new Exception();
             var keyFile = Arg("data-key") ?? Path.Combine(credentials ?? throw new Exception(), "central-data-key");
-            using var store = new CentralStore(Path.Combine(directory, "provider.sqlite"), await File.ReadAllBytesAsync(keyFile));
+            // PostgreSQL: --database, or the connection string in the credential `central-database`, or the local cluster by peer.
+            var databaseFile = credentials is null ? null : Path.Combine(credentials, "central-database");
+            var database = Arg("database") ?? (databaseFile is not null && File.Exists(databaseFile) ? (await File.ReadAllTextAsync(databaseFile)).Trim() : "Host=/run/postgresql;Database=culinary_central;Username=mesanexo-central");
+            using var store = new CentralStore(database, await File.ReadAllBytesAsync(keyFile), Arg("pg-bin") ?? "/usr/bin");
             store.Initialize();
             if (Arg("snapshot-to") is string output) { Console.WriteLine(store.Snapshot(output)); return 0; }
             Directory.CreateDirectory(directory);

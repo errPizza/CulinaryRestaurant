@@ -8,7 +8,7 @@ static class SchemaTests {
 
         void Check(bool ok, string name) { if (!ok) throw new Exception(name); evidence.Add(J.O("test", name, "result", "passed")); Console.WriteLine("PASS " + name); }
         var folder = Path.Combine(root, ".lab", "schema-" + J.Id());
-        using var runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), folder, "schema-site");
+        using var runtime = LabPostgres.Test(root, folder, "schema-site");
         var service = new BranchService(runtime, "schema-site", new Passwords());
         await TestLicense.Initialize(service, J.O("siteId", "schema-site", "name", "Schema fixture", "mode", "licencia", "managerName", "Manager", "managerUsername", "manager", "managerPassword", "Test-" + J.Id(), "enrollmentCode", J.Id(), "modules", Array.Empty<string>()));
         var old = await service.Load();
@@ -21,9 +21,9 @@ static class SchemaTests {
         var restored = Path.Combine(folder, "recovery");
         Directory.CreateDirectory(restored);
         var backup = Path.Combine(folder, "schema-backups", migrated.Obj("backup").S("backup"));
-        File.Copy(backup, Path.Combine(restored, "store.sqlite"));
         File.Copy(Path.Combine(folder, "test-only-keyring.json"), Path.Combine(restored, "test-only-keyring.json"));
-        using var recovered = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), restored, "schema-site");
+        await LabPostgres.RestoreTest(root, backup, restored);
+        using var recovered = LabPostgres.Test(root, restored, "schema-site");
         var recovery = new BranchService(recovered, "schema-site", new Passwords());
         var state = await recovery.Load();
         Check(state.Meta.L("schemaVersion") == 1 && state.List("user").Count() == 1, "encrypted backup restores prior schema and users into isolated staging");

@@ -56,7 +56,7 @@ static class CloudScenario {
             try { await branch.ReceiveCloudProposals(tampered, publicKey); throw new Exception("Tampered signature accepted"); } catch (BusinessException) { Check(true, "signed cloud envelope rejects tenant tampering before domain mutation"); }
             var decision = await Act("commerce.decide", J.O("id", order.S("id"), "accept", true, "reason", "Local stock and price checked"));
             var before = (await branch.Load()).List("unit").Count();
-            using (var copyRuntime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), Path.Combine(folder, "branch-store"), "alpha-test")) {
+            using (var copyRuntime = LabPostgres.Test(root, Path.Combine(folder, "branch-store"), "alpha-test")) {
 
                 var restarted = new BranchService(copyRuntime, "alpha-test", new Passwords());
                 TestLicense.Attach(restarted);

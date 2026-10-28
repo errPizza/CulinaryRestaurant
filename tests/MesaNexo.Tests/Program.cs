@@ -29,13 +29,13 @@ sealed class FaultStore(IBranchStore inner): IBranchStore {
     }
 }
 static class Program {
-    static readonly List<JsonObject> evidence = []; static string root = "", folder = "", python = ""; static int port; static X509Certificate2 cert = null!; static RuntimeStore runtime = null!; static FaultStore faults = null!; static WebApplication app = null!; static BranchService service = null!; static ConnectionProfile profile = null!;
+    static readonly List<JsonObject> evidence = []; static string root = "", folder = "", python = ""; static int port; static X509Certificate2 cert = null!; static PostgresBranchStore runtime = null!; static FaultStore faults = null!; static WebApplication app = null!; static BranchService service = null!; static ConnectionProfile profile = null!;
     static void Check(bool condition, string name) { if (!condition) throw new Exception("FAIL: " + name); evidence.Add(J.O("test", name, "result", "passed")); Console.WriteLine("PASS " + name); }
     static async Task Reject(Func<Task> action, string name, int? status = null) { try { await action(); throw new Exception("Expected rejection: " + name); } catch (ApiFailure e) { Check(status is null || e.Status == status, name); } catch (IOException) { Check(status is null, name); } }
     static int FreePort() { var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start(); var p = ((IPEndPoint)listener.LocalEndpoint).Port; listener.Stop(); return p; }
     static async Task Start() {
 
-        runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), folder, "integration-site");
+        runtime = LabPostgres.Test(root, folder, "integration-site");
         faults = new FaultStore(runtime);
         app = ApiHost.Build(new("integration-site", port, "127.0.0.1", ReadySocket: null), faults, cert);
         await app.StartAsync();
@@ -74,6 +74,7 @@ static class Program {
         if (args.Contains("--central-only")) { await CentralTests.Run(root, python, evidence); await File.WriteAllTextAsync(Path.Combine(root, "evidence", "central.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); return; }
         if (args.Contains("--business-only")) { await BusinessTests.Run(root, python, evidence); await File.WriteAllTextAsync(Path.Combine(root, "evidence", "business.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); return; }
         if (args.Contains("--setup-only")) { try { await SetupTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "setup.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
+        if (args.Contains("--store-only")) { await StoreTests.Run(root, evidence); await StoreTests.Migration(root, python, evidence); return; }
         if (args.Contains("--migration-only")) { await MigrationTests.Run(root, python, evidence); await File.WriteAllTextAsync(Path.Combine(root, "evidence", "migration.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); return; }
         folder = Path.Combine(root, ".lab", "integration-" + J.Id());
         Directory.CreateDirectory(folder);
@@ -211,6 +212,8 @@ static class Program {
             await TenantTests.Run(root, evidence);
             await AdapterTests.Run(evidence);
             await SchemaTests.Run(root, python, evidence);
+            await StoreTests.Run(root, evidence);
+            await StoreTests.Migration(root, python, evidence);
             await PrintTests.Run(root, python, evidence);
             await FiscalTests.Run(root, python, evidence);
             await LiveIntegrationTests.Run(root, python, evidence);

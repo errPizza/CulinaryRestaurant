@@ -12,9 +12,9 @@ static class DevMapTests {
         var password = "Test-" + J.Id();
         var enrollment = J.Id();
         string token = "";
-        RuntimeStore? runtime = null;
+        PostgresBranchStore? runtime = null;
         BranchService service = null!;
-        void Start() { runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), folder, "devmap-site"); service = new(runtime, "devmap-site", new Passwords()); var live = new IntegrationConfig(); live.Ready("printer"); live.Ready("pac"); service.UseIntegrations(live); TestLicense.Attach(service); }
+        void Start() { runtime = LabPostgres.Test(root, folder, "devmap-site"); service = new(runtime, "devmap-site", new Passwords()); var live = new IntegrationConfig(); live.Ready("printer"); live.Ready("pac"); service.UseIntegrations(live); TestLicense.Attach(service); }
         Start();
         try {
 

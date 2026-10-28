@@ -13,9 +13,9 @@ static class TenantTests {
         void Deny(Action action, string name) { try { action(); throw new Exception("Expected rejection " + name); } catch (BusinessException) { Check(true, name); } }
         var folder = Path.Combine(root, ".lab", "tenants-" + J.Id());
         Directory.CreateDirectory(folder);
-        var db = Path.Combine(folder, "tenants.sqlite");
+        var db = LabPostgres.TestDatabase(root, Path.Combine(folder, "tenants-db"));
         var key = RandomNumberGenerator.GetBytes(32);
-        using var store = new CentralStore(db, (byte[])key.Clone());
+        using var store = new CentralStore(db, (byte[])key.Clone(), LabPostgres.Bin(root));
         store.Initialize();
         var password = "Tenant-" + J.Id();
         JsonObject Provision(string t, string b, string site, string fp) => J.O("tenantId", t, "branchId", b, "slug", t + "-" + b, "siteId", site, "certificateSha256", fp, "tenantName", t, "branchName", b, "ownerName", "Owner", "ownerUsername", "owner", "ownerPassword", password, "ownerEnrollmentCode", new string('e', 32));
@@ -53,7 +53,7 @@ static class TenantTests {
         Check(online.S("status") == "requires-verified-payment" && store.PendingCommands(new("alpha", "a")).Length == 0, "online order cannot enter local queue without verified provider payment");
         Check(commerce.Analytics(token, "a").S("source") == "branch-event-mirror" && commerce.Analytics(token, "a").ContainsKey("lagSeconds"), "owner analytics names source and synchronization lag");
         Deny(() => commerce.Analytics(token, "b"), "analytics API service denies foreign tenant before reading projections");
-        using (var restarted = new CentralStore(db, (byte[])key.Clone())) { restarted.Initialize(); Check(new CommerceService(restarted).Status("alpha-a", order.S("id"), access).B("acceptedLocally"), "central restart preserves locally accepted order status"); }
+        using (var restarted = new CentralStore(db, (byte[])key.Clone(), LabPostgres.Bin(root))) { restarted.Initialize(); Check(new CommerceService(restarted).Status("alpha-a", order.S("id"), access).B("acceptedLocally"), "central restart preserves locally accepted order status"); }
         var invoiceToken = J.Id() + J.Id();
         Project("site-a", "invoicetoken", "invoice-token-fixture", J.O("tokenHash", J.Hash(invoiceToken), "visitId", "closed-ticket-fixture", "expires", DateTimeOffset.UtcNow.AddHours(1).ToString("O")));
         var invoice = commerce.Invoice(invoiceToken, J.O("rfc", "XAXX010101000", "name", "PUBLICO EN GENERAL", "postalCode", "01000", "regime", "616", "use", "S01"));
@@ -96,7 +96,7 @@ static class TenantTests {
         var dlOrder = commerce.Deliverect("alpha-a", dlRaw, dlSig, location);
         Check(dlOrder.S("status") == "pending-branch" && commerce.Deliverect("alpha-a", dlRaw, dlSig, location).B("duplicate"), "a signed Deliverect order is queued once for the branch as an aggregator proposal");
         Deny(() => commerce.Deliverect("alpha-a", dlRaw, new string('0', 64), location), "a Deliverect webhook with a forged signature is rejected before the domain");
-        Check(!Encoding.UTF8.GetString(File.ReadAllBytes(db)).Contains("Synthetic Customer"), "public order personal data is encrypted at rest");
+        using (var raw = new Npgsql.NpgsqlConnection(db)) { raw.Open(); using var read = new Npgsql.NpgsqlCommand("SELECT string_agg(encode(value, 'escape'), '') FROM cloud_order", raw); var stored = read.ExecuteScalar() as string ?? ""; Check(stored.Length > 0 && !stored.Contains("Synthetic Customer"), "public order personal data is encrypted at rest"); }
         store.TenantLogout(token);
         Deny(() => store.AuthorizeTenant(token, "a"), "tenant session revocation enforced by backend");
         return Task.CompletedTask;

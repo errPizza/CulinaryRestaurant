@@ -9,7 +9,7 @@ static class BusinessTests {
         void Check(bool ok, string name) { if (!ok) throw new Exception(name); evidence.Add(J.O("test", name, "result", "passed")); Console.WriteLine("PASS " + name); }
         async Task Deny(Func<Task> action, string name) { try { await action(); throw new Exception("Expected rejection: " + name); } catch (BusinessException) { Check(true, name); } }
         var folder = Path.Combine(root, ".lab", "rules-" + J.Id());
-        using var runtime = new RuntimeStore(python, Path.Combine(root, "runtime", "lab_host.py"), folder, "rules-site");
+        using var runtime = LabPostgres.Test(root, folder, "rules-site");
         var service = new BranchService(runtime, "rules-site", new Passwords());
         var password = "Rules-" + J.Id();
         var code = J.Id();
