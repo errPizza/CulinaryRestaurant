@@ -149,6 +149,14 @@ code,.mono{font:500 11.5px var(--mono);color:var(--faint);padding:2px 6px;border
 .profile-trigger b{display:block;font-size:13px;font-weight:600;line-height:17px;white-space:nowrap;text-align:left}
 .profile-trigger small{display:block;color:#9fadc2;font-size:11.5px;line-height:15px;text-align:left;white-space:nowrap}
 .profile-trigger .nav-chevron{color:#9fadc2}
+.power-menu{position:relative;flex:none}
+.power-trigger{display:grid;place-items:center;width:46px;height:46px;border-radius:12px;background:var(--graphite-raised);color:#f5f7fb;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 1px 2px rgba(0,0,0,.3);transition:background-color var(--fast),color var(--fast)}
+.power-trigger:hover,.power-trigger[aria-expanded=true]{background:#334055}
+.power-menu.corner{position:fixed;top:20px;right:20px;z-index:60}
+.power-menu.corner .power-trigger{background:var(--paper);color:var(--muted);box-shadow:0 0 0 1px var(--line),0 1px 2px rgba(0,0,0,.08)}
+.power-menu.corner .power-trigger:hover,.power-menu.corner .power-trigger[aria-expanded=true]{background:var(--paper-3);color:var(--ink)}
+.power-menu .menu-panel{min-width:290px}
+.power-error{margin:6px 10px 4px;color:var(--red);font-size:12px;line-height:16px}
 .profile-head{display:flex;gap:12px;align-items:center;padding:10px}
 .theme-switch{margin-left:auto;display:flex;padding:3px;border-radius:9px;background:var(--paper-3);box-shadow:inset 0 0 0 1px var(--line-soft)}
 .theme-switch button{display:flex;align-items:center;gap:5px;height:26px;padding:0 9px;border-radius:7px;font-size:12px;color:var(--muted)}

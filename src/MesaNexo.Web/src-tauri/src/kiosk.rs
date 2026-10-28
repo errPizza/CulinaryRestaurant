@@ -70,3 +70,28 @@ pub fn ready(window: &WebviewWindow) -> Result<Value, String> {
     }
     Ok(json!({"ok":true,"data":{"visible":true}}))
 }
+
+// Only the appliance kiosk powers the machine. Fixed verbs, never renderer-selected
+// commands; logind and the CulinaryOS polkit rule decide whether the operator may.
+pub fn power(args: &Value) -> Result<Value, String> {
+    if !enabled() {
+        return Err("Apagar el equipo sólo está disponible en CulinaryOS".into());
+    }
+    let verb = match args["action"].as_str() {
+        Some("poweroff") => "poweroff",
+        Some("reboot") => "reboot",
+        Some("suspend") => "suspend",
+        _ => return Err("Acción de energía no válida".into()),
+    };
+    let status = std::process::Command::new("/usr/bin/systemctl")
+        .args(["--no-ask-password", verb])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map_err(|_| "No se pudo contactar al sistema")?;
+    if !status.success() {
+        return Err("El sistema no permitió la acción. Puede haber una tarea en curso; inténtalo de nuevo o avisa al administrador.".into());
+    }
+    Ok(json!({"ok":true,"data":{"action":verb}}))
+}

@@ -101,3 +101,53 @@ test('kiosk login receives real pointer and keyboard input after empty-form vali
     await expect(password).toHaveValue('Solo-prueba-1234');
 
 });
+
+test('kiosk login offers suspend, restart and confirmed power-off', async ({ page }) => {
+
+    await page.addInitScript(() => {
+
+        const w = window as any;
+        w.powerCalls = [];
+        w.__TAURI_INTERNALS__ = {
+            invoke: async (_name: string, p: any) => {
+
+                if (p.command === 'window.present') return { ok: true, data: { enabled: true } };
+                if (p.command === 'window.ready') return { ok: true, data: { visible: true } };
+                if (p.command === 'power.status') return { ok: true, data: { available: true } };
+                if (p.command === 'power.request') { w.powerCalls.push(p.args.action); return { ok: true, data: { action: p.args.action } }; }
+                if (p.command === 'profile.get') return { ok: true, data: { ServerUrl: 'https://restaurant.invalid:8443' } };
+                return { ok: true, data: p.command === 'motion.get' ? { reduced: true } : { authenticated: false } };
+
+            }
+        };
+
+    });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Inicia sesión' })).toBeVisible();
+    const power = page.getByRole('button', { name: 'Energía del equipo' });
+    await power.click();
+    await expect(page.getByRole('menuitem', { name: /Suspender/ })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: /Reiniciar/ })).toBeVisible();
+    await page.screenshot({ path: '../../evidence/kiosk-power-login.png' });
+    await page.getByRole('menuitem', { name: /Apagar/ }).click();
+    await expect(page.getByRole('menuitem', { name: /Apagar ahora/ })).toBeVisible();
+    expect(await page.evaluate(() => (window as any).powerCalls)).toEqual([]);
+    await page.getByRole('menuitem', { name: /Apagar ahora/ }).click();
+    await expect.poll(() => page.evaluate(() => (window as any).powerCalls)).toEqual(['poweroff']);
+
+});
+
+test('power controls stay hidden outside the appliance', async ({ page }) => {
+
+    await page.addInitScript(() => {
+
+        (window as any).__TAURI_INTERNALS__ = {
+            invoke: async (_name: string, p: any) => ({ ok: true, data: p.command === 'window.present' ? { enabled: false } : p.command === 'power.status' ? { available: false } : p.command === 'profile.get' ? null : p.command === 'motion.get' ? { reduced: true } : { authenticated: false } })
+        };
+
+    });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Inicia sesión' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Energía del equipo' })).toHaveCount(0);
+
+});

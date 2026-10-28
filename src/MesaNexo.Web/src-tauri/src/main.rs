@@ -38,6 +38,8 @@ async fn native_call(window: tauri::WebviewWindow, state: tauri::State<'_,State>
     if window.label()!="main" {return Err("Ventana no autorizada".into());}
     if command=="window.present" {return kiosk::present(&window);}
     if command=="window.ready" {return kiosk::ready(&window);}
+    if command=="power.status" {return Ok(json!({"ok":true,"data":{"available":kiosk::enabled()}}));}
+    if command=="power.request" {return tauri::async_runtime::spawn_blocking(move || kiosk::power(&args)).await.map_err(|_|"No se pudo atender la solicitud".to_owned())?;}
     let bridge=state.0.clone();let app=window.app_handle().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let installing=command=="updates.install";
