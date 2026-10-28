@@ -95,3 +95,110 @@ pub fn power(args: &Value) -> Result<Value, String> {
     }
     Ok(json!({"ok":true,"data":{"action":verb}}))
 }
+
+// Wi-Fi of the appliance kiosk through NetworkManager. Fixed nmcli verbs only; the
+// renderer supplies an SSID and password as plain arguments, never a command line.
+fn nmcli(args: &[&str]) -> Result<String, String> {
+    if !enabled() {
+        return Err("La red sólo se administra desde CulinaryOS".into());
+    }
+    let output = std::process::Command::new("/usr/bin/nmcli")
+        .args(args)
+        .env("LC_ALL", "C")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .map_err(|_| "No se pudo contactar a NetworkManager")?;
+    if output.status.success() {
+        return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
+    }
+    let error = String::from_utf8_lossy(&output.stderr).to_lowercase();
+    Err(if error.contains("secrets were required") || error.contains("802-1x") || error.contains("psk") {
+        "La contraseña no es correcta.".into()
+    } else if error.contains("no network with ssid") {
+        "La red ya no está al alcance. Busca de nuevo.".into()
+    } else if error.contains("not authorized") {
+        "El sistema no permitió cambiar la red. Avisa al administrador.".into()
+    } else {
+        "No se pudo conectar a la red. Inténtalo de nuevo.".into()
+    })
+}
+
+// Terse nmcli output escapes ':' and '\' inside values.
+fn fields(line: &str) -> Vec<String> {
+    let (mut out, mut current, mut chars) = (Vec::new(), String::new(), line.chars());
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => { if let Some(next) = chars.next() { current.push(next); } }
+            ':' => out.push(std::mem::take(&mut current)),
+            _ => current.push(c),
+        }
+    }
+    out.push(current);
+    out
+}
+
+pub fn network_status() -> Result<Value, String> {
+    if !enabled() {
+        return Ok(json!({"ok":true,"data":{"available":false}}));
+    }
+    let devices = nmcli(&["-t", "-f", "TYPE,STATE,CONNECTION", "device", "status"])?;
+    let mut kind = "none";
+    let mut name = String::new();
+    let mut wifi = false;
+    for f in devices.lines().map(fields) {
+        if f.len() < 3 { continue; }
+        if f[0] == "wifi" { wifi = true; }
+        // Cable wins over Wi-Fi when both are up: NetworkManager routes through it first.
+        if f[1] == "connected" && (f[0] == "ethernet" || (f[0] == "wifi" && kind != "ethernet")) {
+            kind = if f[0] == "ethernet" { "ethernet" } else { "wifi" };
+            name = f[2].clone();
+        }
+    }
+    let mut signal = Value::Null;
+    if kind == "wifi" {
+        let list = nmcli(&["-t", "-f", "IN-USE,SIGNAL", "device", "wifi", "list", "--rescan", "no"])?;
+        if let Some(f) = list.lines().map(fields).find(|f| f.len() >= 2 && f[0] == "*") {
+            signal = f[1].parse::<u8>().map(Value::from).unwrap_or(Value::Null);
+        }
+    }
+    Ok(json!({"ok":true,"data":{"available":true,"kind":kind,"name":name,"signal":signal,"wifi":wifi}}))
+}
+
+pub fn network_scan() -> Result<Value, String> {
+    let list = nmcli(&["-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY", "device", "wifi", "list", "--rescan", "yes"])?;
+    let mut networks: Vec<Value> = Vec::new();
+    for f in list.lines().map(fields) {
+        if f.len() < 4 || f[1].is_empty() { continue; }
+        let signal = f[2].parse::<u8>().unwrap_or(0);
+        let secure = !f[3].trim().is_empty() && f[3].trim() != "--";
+        // One row per SSID: several access points of the same network show as one.
+        if let Some(seen) = networks.iter_mut().find(|n| n["ssid"] == f[1].as_str()) {
+            if seen["signal"].as_u64().unwrap_or(0) < signal as u64 { seen["signal"] = signal.into(); }
+            if f[0] == "*" { seen["active"] = true.into(); }
+            continue;
+        }
+        networks.push(json!({"ssid":f[1],"signal":signal,"secure":secure,"active":f[0] == "*"}));
+    }
+    networks.sort_by(|a, b| b["active"].as_bool().cmp(&a["active"].as_bool())
+        .then(b["signal"].as_u64().cmp(&a["signal"].as_u64())));
+    Ok(json!({"ok":true,"data":{"networks":networks}}))
+}
+
+pub fn network_connect(args: &Value) -> Result<Value, String> {
+    let ssid = args["ssid"].as_str().unwrap_or("");
+    if ssid.is_empty() || ssid.len() > 32 || ssid.chars().any(char::is_control) {
+        return Err("Nombre de red no válido".into());
+    }
+    let password = args["password"].as_str().unwrap_or("");
+    if !password.is_empty() && (password.len() < 8 || password.len() > 63 || password.chars().any(char::is_control)) {
+        return Err("La contraseña de una red Wi-Fi tiene de 8 a 63 caracteres.".into());
+    }
+    let mut command = vec!["--wait", "45", "device", "wifi", "connect", ssid];
+    if !password.is_empty() {
+        // A failed attempt leaves a profile with the wrong key; nmcli would reuse it.
+        let _ = nmcli(&["connection", "delete", "id", ssid]);
+        command.extend(["password", password]);
+    }
+    nmcli(&command)?;
+    Ok(json!({"ok":true,"data":{"ssid":ssid}}))
+}

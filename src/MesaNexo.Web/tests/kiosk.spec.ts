@@ -151,3 +151,73 @@ test('power controls stay hidden outside the appliance', async ({ page }) => {
     await expect(page.getByRole('button', { name: 'Energía del equipo' })).toHaveCount(0);
 
 });
+
+test('kiosk shows the wired link and joins open and protected Wi-Fi networks', async ({ page }) => {
+
+    await page.addInitScript(() => {
+
+        const w = window as any;
+        w.connects = [];
+        w.netState = { available: true, kind: 'ethernet', name: 'Cable de red', signal: null, wifi: true };
+        w.__TAURI_INTERNALS__ = {
+            invoke: async (_name: string, p: any) => {
+
+                if (p.command === 'window.present') return { ok: true, data: { enabled: true } };
+                if (p.command === 'window.ready') return { ok: true, data: { visible: true } };
+                if (p.command === 'power.status') return { ok: true, data: { available: true } };
+                if (p.command === 'network.status') return { ok: true, data: w.netState };
+                if (p.command === 'network.scan') return { ok: true, data: { networks: [
+                    { ssid: 'Terraza', signal: 82, secure: true, active: false },
+                    { ssid: 'Invitados', signal: 40, secure: false, active: false },
+                ] } };
+                if (p.command === 'network.connect') {
+
+                    w.connects.push(p.args);
+                    if (p.args.ssid === 'Terraza' && p.args.password !== 'clave-segura') return { ok: false, error: 'La contraseña no es correcta.' };
+                    w.netState = { available: true, kind: 'wifi', name: p.args.ssid, signal: 82, wifi: true };
+                    return { ok: true, data: { ssid: p.args.ssid } };
+
+                }
+                if (p.command === 'profile.get') return { ok: true, data: { ServerUrl: 'https://restaurant.invalid:8443' } };
+                return { ok: true, data: p.command === 'motion.get' ? { reduced: true } : { authenticated: false } };
+
+            }
+        };
+
+    });
+    await page.goto('/');
+    const trigger = page.getByRole('button', { name: /Red del equipo: Conectado por cable/ });
+    await expect(trigger).toBeVisible();
+    await trigger.click();
+    const panel = page.getByRole('dialog', { name: 'Red del equipo' });
+    await expect(panel.getByRole('button', { name: /Terraza/ })).toBeVisible();
+    await page.screenshot({ path: '../../evidence/kiosk-network-login.png', animations: 'disabled' });
+
+    await panel.getByRole('button', { name: /Invitados/ }).click();
+    await expect.poll(() => page.evaluate(() => (window as any).connects)).toEqual([{ ssid: 'Invitados', password: '' }]);
+    await expect(page.getByRole('button', { name: /Red del equipo: Wi‑Fi · Invitados/ })).toBeVisible();
+
+    await panel.getByRole('button', { name: /Terraza/ }).click();
+    await panel.getByLabel('Contraseña de Terraza').fill('incorrecta');
+    await panel.getByRole('button', { name: 'Conectar' }).click();
+    await expect(panel.getByRole('alert')).toHaveText('La contraseña no es correcta.');
+    await panel.getByLabel('Contraseña de Terraza').fill('clave-segura');
+    await panel.getByRole('button', { name: 'Conectar' }).click();
+    await expect(page.getByRole('button', { name: /Red del equipo: Wi‑Fi · Terraza/ })).toBeVisible();
+
+});
+
+test('network controls stay hidden outside the appliance', async ({ page }) => {
+
+    await page.addInitScript(() => {
+
+        (window as any).__TAURI_INTERNALS__ = {
+            invoke: async (_name: string, p: any) => ({ ok: true, data: p.command === 'window.present' ? { enabled: false } : p.command === 'network.status' ? { available: false } : p.command === 'profile.get' ? null : p.command === 'motion.get' ? { reduced: true } : { authenticated: false } })
+        };
+
+    });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Inicia sesión' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Red del equipo/ })).toHaveCount(0);
+
+});

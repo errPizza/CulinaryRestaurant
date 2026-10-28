@@ -47,6 +47,35 @@ public static class PrototypeMotion {
         void Attached(object? sender, VisualTreeAttachmentEventArgs e) { target.AttachedToVisualTree -= Attached; Schedule(); }
 
     }
+    static readonly Dictionary<string, double> counted = new();
+    static readonly System.Text.RegularExpressions.Regex figure = new(@"^(\D*?)(-?\d[\d,]*(?:\.\d+)?)(\D*)$");
+    // Figures count up the first time they appear and between values afterwards. The page is rebuilt
+    // on every poll, so the last shown value is kept per key and an unchanged figure stays still.
+    public static void CountUp(TextBlock target, string key) {
+
+        var text = target.Text ?? "";
+        var match = figure.Match(text);
+        if (!match.Success || !double.TryParse(match.Groups[2].Value.Replace(",", ""), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value)) return;
+        var from = counted.GetValueOrDefault(key);
+        counted[key] = value;
+        if (from == value || Reduced) return;
+        var digits = match.Groups[2].Value.Split('.').ElementAtOrDefault(1)?.Length ?? 0;
+        var pattern = (match.Groups[2].Value.Contains(',') ? "#,0" : "0") + (digits > 0 ? "." + new string('0', digits) : "");
+        var started = DateTime.UtcNow;
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        timer.Tick += (_, _) => {
+
+            var t = Math.Min(1, (DateTime.UtcNow - started).TotalMilliseconds / 1100);
+            var current = from + (value - from) * (1 - Math.Pow(1 - t, 4));
+            target.Text = t < 1 && !Reduced ? match.Groups[1].Value + current.ToString(pattern, System.Globalization.CultureInfo.InvariantCulture) + match.Groups[3].Value : text;
+            if (t >= 1 || Reduced) timer.Stop();
+
+        };
+        target.DetachedFromVisualTree += (_, _) => timer.Stop();
+        target.Text = match.Groups[1].Value + from.ToString(pattern, System.Globalization.CultureInfo.InvariantCulture) + match.Groups[3].Value;
+        timer.Start();
+
+    }
     public static void Button(Button button) {
 
         Border? surface = null;

@@ -57,6 +57,31 @@ test('original CSS, supplied logos, responsive layout and click pop', async ({ p
     expect(errors).toEqual([]);
 
 });
+test('figures count up to their value and the theme swap grows from its switch', async ({ page }) => {
+
+    await login(page, 'manager');
+    const figure = page.locator('.kpi .count-up').first();
+    await expect(figure).toBeVisible();
+    const samples: string[] = [];
+    for (let i = 0; i < 8; i++) { samples.push(await figure.innerText()); await page.waitForTimeout(60); }
+    await page.waitForTimeout(1200);
+    const final = await figure.innerText();
+    expect(final).toMatch(/\d/);
+    expect(samples.at(-1) === final || samples.some(x => x !== final)).toBe(true);
+    await page.evaluate(() => { const d = document as any, original = d.startViewTransition?.bind(d); (window as any).swaps = 0; if (original) d.startViewTransition = (update: () => void) => { (window as any).swaps++; return original(update); }; });
+    const supported = await page.evaluate(() => 'startViewTransition' in document);
+    await page.getByRole('button', { name: /^Menú de/ }).click();
+    await page.getByRole('button', { name: 'Oscuro' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    if (supported) expect(await page.evaluate(() => (window as any).swaps)).toBe(1);
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: path.join(evidence, 'hybrid-theme-dark.png') });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.getByRole('button', { name: 'Claro' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    expect(await page.evaluate(() => (window as any).swaps)).toBe(supported ? 1 : 0);
+
+});
 test('real HTTPS POS: open table, protected draft, kitchen, delivery, cash and close', async ({ page }) => {
 
     await login(page, 'pos');

@@ -22,7 +22,7 @@ public sealed partial class MainView {
     Control Stats(params (string Label, string Value, string Note, string Icon)[] items) {
 
         var grid = new UniformGrid { Columns = ViewWidth <= 900 ? 2 : 4 };
-        foreach (var item in items) { var title = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") }; title.Children.Add(Text(item.Label, 12, Muted)); if (ViewWidth > 380) { var icon = new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(9), Background = Brush.Parse("#EDF0F4"), Child = Brand.Icon(item.Icon, null, 18) }; Grid.SetColumn(icon, 1); title.Children.Add(icon); } var card = Card(Stack(title, Text(item.Value, ViewWidth <= 650 ? 28 : 32, Raised, true), Text(item.Note, 11, Muted))); card.MinHeight = 142; card.Padding = new Thickness(ViewWidth <= 650 ? 14 : 22, 20); card.Margin = new Thickness(0, 0, 18, 18); grid.Children.Add(card); }
+        foreach (var item in items) { var title = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") }; title.Children.Add(Text(item.Label, 12, Muted)); if (ViewWidth > 380) { var icon = new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(9), Background = Brush.Parse("#EDF0F4"), Child = Brand.Icon(item.Icon, null, 18) }; Grid.SetColumn(icon, 1); title.Children.Add(icon); } var figure = Text(item.Value, ViewWidth <= 650 ? 28 : 32, Raised, true); PrototypeMotion.CountUp(figure, "stats." + page + "." + item.Label); var card = Card(Stack(title, figure, Text(item.Note, 11, Muted))); card.MinHeight = 142; card.Padding = new Thickness(ViewWidth <= 650 ? 14 : 22, 20); card.Margin = new Thickness(0, 0, 18, 18); grid.Children.Add(card); }
         return grid;
 
     }
