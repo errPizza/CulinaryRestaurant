@@ -125,14 +125,29 @@ public sealed partial class BranchService {
     // First activation, or a new one after the provider released the machine: allowed only while the branch is locked.
     public async Task<JsonObject> Activate(JsonObject p, CancellationToken ct = default) {
 
-        Need(License(await View(ct)).Usable is false, "Culinary Restaurant ya tiene una licencia vigente", 409);
+        var state = await View(ct);
+        // The license is stored in the branch's records; with none yet, the code would be spent and nothing kept.
+        Need(state.Count > 0, "Configura primero el restaurante; después activa la licencia", 409);
+        Need(License(state).Usable is false, "Culinary Restaurant ya tiene una licencia vigente", 409);
         Need(Guid.TryParse(p.S("licenseId").Trim(), out var id), "Escribe el identificador de licencia que te dio tu proveedor");
         var code = Text(p, "activationCode", 40);
         var key = Key;
         var body = J.O("activationCode", code, "siteId", siteId, "key", J.O("alg", key.Alg, "spki", key.Spki), "binding", Binding());
         JsonObject reply;
-        try { reply = await Server.Signed(HttpMethod.Post, "/branch/v1/activate", id.ToString("D"), key, body, ct); } catch (ServerRejection e) { throw new BusinessException(e.Status is 400 or 401 or 403 or 409 ? 403 : 502, e.Code == "activation_rejected" ? "Código de activación inválido, ya usado o de una licencia cancelada" : e.Message); }
+        try { reply = await Server.Signed(HttpMethod.Post, "/branch/v1/activate", id.ToString("D"), key, body, ct); } catch (ServerRejection e) {
+            // A code already spent by this same machine (the install failed after CulinaryServer accepted it): only this
+            // machine's key can sign the renewal, so the license comes back without a new code.
+            if (e.Code == "activation_rejected" && await Recover(id, key, ct) is { } recovered) reply = recovered;
+            else throw new BusinessException(e.Status is 400 or 401 or 403 or 409 ? 403 : 502, e.Code == "activation_rejected" ? "Código de activación inválido, ya usado o de una licencia cancelada" : e.Message);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested) { throw new BusinessException(502, "No se pudo contactar a CulinaryServer; revisa que el equipo tenga Internet e inténtalo de nuevo"); }
         return (await InstallLicense(reply.S("license"), true, ct)).Summary();
+
+    }
+    async Task<JsonObject?> Recover(Guid id, ILicenseKey key, CancellationToken ct) {
+
+        var body = key.Binding == "tpm" ? new JsonObject() : J.O("fingerprint", HardwareIdentity.Fingerprint(licensing!.HardwareFile));
+        try { return await Server.Signed(HttpMethod.Post, "/branch/v1/license/renew", id.ToString("D"), key, body, ct); } catch (ServerRejection) { return null; }
 
     }
     public async Task<LicenseView> Renew(CancellationToken ct = default) {

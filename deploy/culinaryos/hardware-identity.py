@@ -26,8 +26,9 @@ def board():
 def disk():
     # The physical disk under the root file system, through any LUKS or LVM layers.
     source = command('findmnt', '-no', 'SOURCE', '/').strip()
-    rows = [line.split() for line in command('lsblk', '-nspo', 'NAME,TYPE', source).splitlines()]
-    device = next((row[0].lstrip('`|-') for row in rows if len(row) == 2 and row[1] == 'disk'), '')
+    # List format: the tree view prefixes names with box-drawing characters.
+    rows = [line.split() for line in command('lsblk', '-nslpo', 'NAME,TYPE', source).splitlines()]
+    device = next((row[0] for row in rows if len(row) == 2 and row[1] == 'disk'), '')
     if not device:
         return ''
     for line in command('udevadm', 'info', '--query=property', '--name=' + device).splitlines():
