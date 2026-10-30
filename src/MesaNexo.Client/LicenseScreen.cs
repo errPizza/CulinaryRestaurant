@@ -9,7 +9,7 @@ using MesaNexo.Core;
 namespace MesaNexo.Client;
 
 // Shown instead of everything else while the branch server refuses with 423: the license is missing, expired,
-// cancelled, unvalidated for 3 days, or the server's clock was set back. It shows no business data.
+// cancelled, unvalidated for 7 days, or the server's clock was set back. It shows no business data.
 public sealed partial class MainView {
     // While set, resizing redraws the lock screen instead of the sign-in form.
     JsonObject? lockedLicense;
@@ -64,7 +64,7 @@ public sealed partial class MainView {
         "expired" when l.S("plan") == "trial" => ("Tu periodo de prueba terminó", "Tus datos siguen guardados en este equipo. Para entrar de nuevo al panel de administración y a la operación, contrata un plan con tu proveedor. Al activarlo, el acceso vuelve solo."),
         "expired" => ("Tu licencia venció", "Tus datos siguen guardados en este equipo. Para entrar de nuevo al panel de administración y a la operación, contrata otra vez tu plan con tu proveedor. Al renovarlo, el acceso vuelve solo."),
         "revoked" => ("Tu licencia fue cancelada", "Tus datos siguen guardados en este equipo. Comunícate con tu proveedor para contratar una licencia nueva y activarla aquí."),
-        "offline" => ("No pudimos validar tu licencia", "Culinary Restaurant necesita conectarse a internet al menos una vez cada 3 días. Revisa la conexión del servidor de la sucursal y reintenta."),
+        "offline" => ("No pudimos validar tu licencia", "Culinary Restaurant necesita conectarse a internet al menos una vez cada 7 días. Revisa la conexión del servidor de la sucursal y reintenta."),
         "clock" => ("La fecha del equipo está atrasada", "Corrige la fecha y la hora del servidor de la sucursal y reintenta."),
         "mismatch" => ("Esta licencia es de otro equipo", "Pide a tu proveedor que libere la licencia y actívala de nuevo en este servidor."),
         "missing" => ("Activa Culinary Restaurant", "Escribe el identificador de licencia y el código de activación que te dio tu proveedor."),

@@ -10,7 +10,7 @@ function copy(l: License): [string, string] {
     switch (l.state) {
         case 'expired': return l.plan === 'trial' ? ['Tu periodo de prueba terminó', 'Tus datos siguen guardados en este equipo. Para entrar de nuevo al panel de administración y a la operación, contrata un plan con tu proveedor. Al activarlo, el acceso vuelve solo.'] : ['Tu licencia venció', 'Tus datos siguen guardados en este equipo. Para entrar de nuevo al panel de administración y a la operación, contrata otra vez tu plan con tu proveedor. Al renovarlo, el acceso vuelve solo.'];
         case 'revoked': return ['Tu licencia fue cancelada', 'Tus datos siguen guardados en este equipo. Comunícate con tu proveedor para contratar una licencia nueva y activarla aquí.'];
-        case 'offline': return ['No pudimos validar tu licencia', 'Culinary Restaurant necesita conectarse a internet al menos una vez cada 3 días. Revisa la conexión del servidor de la sucursal y reintenta.'];
+        case 'offline': return ['No pudimos validar tu licencia', 'Culinary Restaurant necesita conectarse a internet al menos una vez cada 7 días. Revisa la conexión del servidor de la sucursal y reintenta.'];
         case 'clock': return ['La fecha del equipo está atrasada', 'Corrige la fecha y la hora del servidor de la sucursal y reintenta.'];
         case 'mismatch': return ['Esta licencia es de otro equipo', 'Pide a tu proveedor que libere la licencia y actívala de nuevo en este servidor.'];
         case 'missing': return ['Activa Culinary Restaurant', 'Escribe el identificador de licencia y el código de activación que te dio tu proveedor.'];

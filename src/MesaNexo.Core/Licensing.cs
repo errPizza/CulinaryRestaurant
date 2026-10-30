@@ -97,8 +97,9 @@ public static class Jws {
 }
 
 // What a branch may do under its license. State "active" is the only usable one; every other state locks the
-// branch and is shown, with plan and expiry, on the lock screen.
-public sealed record LicenseView(string State, JsonObject? Payload) {
+// branch and is shown, with plan and expiry, on the lock screen. A lock only refuses requests: nothing here deletes,
+// changes or re-encrypts the branch's data, and the same data comes back when the license does.
+public sealed record LicenseView(string State, JsonObject? Payload, JsonObject? Warning = null) {
     public static readonly LicenseView Missing = new("missing", null);
     public bool Usable => State == "active";
     public string[] Features => Payload?.A("features").Strings() ?? [];
@@ -115,7 +116,7 @@ public sealed record LicenseView(string State, JsonObject? Payload) {
         "active" => "Licencia vigente",
         "expired" => "La licencia de Culinary Restaurant venció",
         "revoked" => "La licencia de Culinary Restaurant fue cancelada",
-        "offline" => "No se pudo validar la licencia con Culinary en los últimos 3 días",
+        "offline" => "No se pudo validar la licencia con Culinary en los últimos 7 días",
         "clock" => "La fecha del equipo está atrasada; corrígela para continuar",
         "mismatch" => "La licencia no corresponde a este equipo",
         _ => "Culinary Restaurant no tiene una licencia activada"
@@ -126,6 +127,7 @@ public sealed record LicenseView(string State, JsonObject? Payload) {
         var o = J.O("state", State, "message", Message);
         if (Payload is null) return o;
         foreach (var key in new[] { "licenseId", "plan", "customer", "branchName", "expiresAt", "validatedAt", "offlineUntil", "activatedAt" }) o[key] = Payload[key]?.DeepClone();
+        if (Warning is not null) o["warning"] = Warning.DeepClone();
         return o;
 
     }
@@ -138,9 +140,27 @@ public sealed record LicenseView(string State, JsonObject? Payload) {
         if (clockBehind) return new("clock", payload);
         if (payload["expiresAt"] is JsonValue && Time(payload, "expiresAt") <= now) return new("expired", payload);
         if (Time(payload, "offlineUntil") <= now) return new("offline", payload);
-        return new("active", payload);
+        return new("active", payload, Warn(payload, now));
 
     }
+    // Whichever lock comes first, from 14 days before the term ends or once the service has been silent for a day
+    // (the branch renews every 6 hours). A silent service counts down the signed offlineUntil, never the term.
+    static JsonObject? Warn(JsonObject p, DateTimeOffset now) {
+
+        var ends = p["expiresAt"] is JsonValue ? Time(p, "expiresAt") : DateTimeOffset.MaxValue;
+        var grace = Time(p, "offlineUntil");
+        var service = now - Time(p, "validatedAt") >= TimeSpan.FromDays(1) && grace < ends;
+        var left = (service ? grace : ends) - now;
+        if (left > TimeSpan.FromDays(14)) return null;
+        var days = (int)Math.Ceiling(left.TotalDays);
+        var span = days <= 1 ? "menos de un día" : days + " días";
+        var message = service ? $"No se ha podido validar la licencia con Culinary. La sucursal sigue trabajando; revisa el internet del servidor. Sin validarla, se bloquea en {span}."
+            : p.S("plan") == "trial" ? $"El periodo de prueba termina en {span}. Contrata un plan con tu proveedor para seguir trabajando."
+            : $"La licencia vence en {span}. Renuévala con tu proveedor para seguir trabajando.";
+        return J.O("kind", service ? "service" : "expiry", "days", days, "level", days <= 3 ? "critical" : "notice", "message", message);
+
+    }
+    public static DateTimeOffset OfflineUntil(JsonObject payload) => Time(payload, "offlineUntil");
     // The newest moment a trusted party signed: the branch's own clock may never read earlier than this.
     public static DateTimeOffset Signed(JsonObject payload) => new[] { Time(payload, "validatedAt"), Time(payload, "iat") }.Max();
     static DateTimeOffset Time(JsonObject p, string key) => DateTimeOffset.TryParse(p.S(key), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var t) ? t : DateTimeOffset.MinValue;

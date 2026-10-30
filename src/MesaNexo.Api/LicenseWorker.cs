@@ -5,7 +5,7 @@ using MesaNexo.Core;
 using static MesaNexo.Core.Rules;
 namespace MesaNexo.Api;
 
-// Renews at least daily while CulinaryServer is reachable (the license itself allows 3 days offline), carries
+// Renews at least daily while CulinaryServer is reachable (the license itself allows 7 days offline), carries
 // support tickets both ways and keeps the multi-company central's certificate registered.
 public sealed class LicenseWorker(BranchService branch, ILogger<LicenseWorker> log): BackgroundService {
     protected override async Task ExecuteAsync(CancellationToken ct) {

@@ -102,6 +102,8 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
         meta["maxUsers"] = license.MaxUsers;
         meta["maxTables"] = license.MaxTables;
         meta["license"] = license.Summary();
+        // Renewing is the manager's job; the rest of the team hears about it only when the branch is days from locking.
+        if (role != "manager" && meta.Obj("license").Obj("warning").S("level") != "critical") meta.Obj("license").Remove("warning");
         var outp = new StateParts();
         outp["user"] = SafeUser(u);
         outp["sessionId"] = session;

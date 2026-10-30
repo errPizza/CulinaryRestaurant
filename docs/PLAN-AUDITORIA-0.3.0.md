@@ -146,6 +146,28 @@ Estados: **Confirmado** (el riesgo existe en el código), **Parcial** (hay una p
 **Acciones** (según la decisión que se tome): avisos en la app a 14, 7, 3 y 1 días del vencimiento y cuando el servicio de licencias no responde; separar «servicio caído» de «licencia vencida o revocada»; garantía escrita de que un problema de licencia nunca borra, altera ni vuelve a cifrar datos.
 **Comprobación.** Pruebas: Worker caído 4 días, reloj incorrecto, renovación fallida y revocación, con el comportamiento definido en cada caso.
 
+**Estado (30 de octubre de 2026): código hecho, falta desplegar el Worker.**
+- Hecho:
+  - `OFFLINE_GRACE_MS` sube a 7 días en `CulinaryServer`. La sucursal no fija la cifra: lee el `offlineUntil` firmado. Una licencia ya emitida conserva sus 3 días hasta su siguiente renovación.
+  - `LicenseView.Warning` calcula un solo aviso, el del bloqueo más cercano: `expiry` desde 14 días antes del vencimiento y `service` tras un día sin validar. Es crítico en los últimos 3 días.
+  - Se muestra como franja dentro de la app, en la interfaz web y en la nativa. El gerente lo ve siempre; el resto del equipo, sólo cuando es crítico.
+  - La cuenta regresiva es diaria y corre desde 14 días antes. Cubre los avisos de 14, 7, 3 y 1 días sin marcas de «ya avisado».
+- Comportamiento por caso:
+
+| Caso | Resultado |
+|---|---|
+| Servicio caído o sin internet, hasta 7 días | Sigue vendiendo, con cuenta regresiva |
+| 7 días sin validar | Bloqueo `offline`; al renovar vuelve solo |
+| Renovación fallida con el vencimiento cerca | Sigue vendiendo hasta `expiresAt`; el aviso muestra lo que ocurra primero |
+| Pasó `expiresAt` | Bloqueo `expired`, aunque quede gracia: la gracia no alarga el plazo contratado |
+| Aviso firmado de revocación o vencimiento | Bloqueo inmediato |
+| Reloj atrasado | Bloqueo `clock`, sin cuenta regresiva |
+
+- Garantía: un problema de licencia sólo rechaza solicitudes. Nunca borra, altera ni vuelve a cifrar datos, y al renovar la sucursal vuelve con los mismos datos. Los datos siguen sin exportarse mientras dure el bloqueo (decisión del 29 de octubre).
+- Límite conocido: la sucursal no puede saber por qué falla la validación. La gracia también cubre su propia falta de internet y una renovación rechazada por hardware distinto (`binding_mismatch`). Acortarla en ese caso no serviría: quien copió la llave puede cortar la conexión al Worker.
+- Pruebas (`--license-only`): 4 días sin servicio con la venta abierta, los avisos a 14, 7, 3 y 1 días, rol mesero contra gerente, renovación fallida, reloj atrasado, revocación y un bloqueo que deja intactos todos los registros y archivos de llaves. Worker: `licenses.spec.ts`.
+- Falta, del proveedor: desplegar el Worker. Hasta entonces las licencias siguen saliendo con 3 días, y la pantalla de bloqueo dirá 7.
+
 ### 6. Certificados que se renuevan solos · `CulinaryOS`
 **Hoy.** El instalador genera en el propio servidor una CA de 10 años (su llave queda en el servidor) y un certificado de servidor de 365 días. No hay renovación ni avisos.
 **Acciones.** Temporizador de systemd que renueva el certificado de servidor 30 días antes de vencer con la CA local, reinicia el backend y registra el evento. Las terminales ya confían en la CA, así que el certificado nuevo no requiere tocar los clientes. Avisos en la app a 30, 14 y 7 días si la renovación falla. Procedimiento de rotación de la CA para el año 9.

@@ -49,7 +49,7 @@ sealed class FakeCulinaryServer: IAsyncDisposable {
         App = builder.Build();
         static string Iso(DateTimeOffset t) => t.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'");
         IResult Error(int status, string code, string message, string? notice = null) => Results.Json(J.O("error", J.O("code", code, "message", message, "notice", notice)), statusCode: status);
-        string License(DateTimeOffset now) => TestLicense.Sign(Jws.License, J.O("v", 1, "licenseId", TestLicense.LicenseId(site), "revision", Revision, "tenantId", "grupo", "siteId", site, "customer", "Restaurante La Plaza", "branchName", "Centro", "plan", Plan, "status", "active", "features", Features, "limits", J.O("maxUsers", 15, "maxTables", MaxTables), "activatedAt", Iso(now), "expiresAt", Plan == "permanent" ? null : Iso(Expires), "validatedAt", Iso(now), "offlineUntil", Iso(now.AddDays(3)), "key", J.O("alg", "ES256", "spki", Spki), "binding", "fingerprint", "iat", Iso(now)));
+        string License(DateTimeOffset now) => TestLicense.Sign(Jws.License, J.O("v", 1, "licenseId", TestLicense.LicenseId(site), "revision", Revision, "tenantId", "grupo", "siteId", site, "customer", "Restaurante La Plaza", "branchName", "Centro", "plan", Plan, "status", "active", "features", Features, "limits", J.O("maxUsers", 15, "maxTables", MaxTables), "activatedAt", Iso(now), "expiresAt", Plan == "permanent" ? null : Iso(Expires), "validatedAt", Iso(now), "offlineUntil", Iso(now.AddDays(7)), "key", J.O("alg", "ES256", "spki", Spki), "binding", "fingerprint", "iat", Iso(now)));
         // Verifies exactly what the Worker verifies; returns the parsed body and the nonce, or null.
         async Task<(JsonObject Body, string Nonce)?> Signed(HttpContext c, string? spki = null) {
 
@@ -254,19 +254,46 @@ static class LicenseTests {
         await service.Renew();
         var older = TestLicense.Sign(Jws.License, TestLicense.Payload(service, Restaurant.Modules, maxTables: 999, revision: 2));
         await Deny(() => service.InstallLicense(older), "an older license revision cannot replace the installed one", 409);
-        // Offline: past offlineUntil without renewing, the branch locks.
+        // Service down: four days without an answer keep the branch selling, with a countdown.
+        var options = new LicenseOptions(TestLicense.Folder(site), fake.Url, hardware, UseTpm: false, CentralCertificate: central);
         await service.InstallLicense(TestLicense.Sign(Jws.License, TestLicense.Payload(service, ["reservations"], maxTables: 1, revision: 4, validated: DateTimeOffset.UtcNow.AddDays(-4), expires: DateTimeOffset.UtcNow.AddDays(20))), true);
-        Check((await service.LicenseStatus()).S("state") == "offline", "three days without validation lock the branch");
+        service.UseLicensing(options, new CulinaryServer("http://127.0.0.1:9"));
+        try { await service.Renew(); throw new Exception("Renewal without a server accepted"); } catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { }
+        var silent = await service.LicenseStatus();
+        Check(silent.S("state") == "active" && silent.Obj("warning").S("kind") == "service" && silent.Obj("warning").L("days") == 3, "four days with the license service down keep the branch selling, with a countdown");
+        Check((await SignIn()).S("token") != "", "sign-in keeps working while the license service is down");
+        service.UseLicensing(options);
+        // Offline: past offlineUntil without renewing, the branch locks.
+        await service.InstallLicense(TestLicense.Sign(Jws.License, TestLicense.Payload(service, ["reservations"], maxTables: 1, revision: 5, validated: DateTimeOffset.UtcNow.AddDays(-8), expires: DateTimeOffset.UtcNow.AddDays(20))), true);
+        Check((await service.LicenseStatus()).S("state") == "offline", "seven days without validation lock the branch");
         await Deny(() => SignIn(), "an offline-expired license shows the lock screen at sign-in", 423);
-        fake.Revision = 4;
+        fake.Revision = 5;
         await service.Renew();
         Check((await service.LicenseStatus()).S("state") == "active", "renewing again unlocks the branch");
+        // The term's countdown reaches the manager first; the team sees it only in the last three days.
+        await service.Action((await SignIn()).S("token"), J.O("operationId", J.Id(), "type", "user.save", "payload", J.O("name", "Servicio", "username", "servicio", "role", "mesero", "password", password)));
+        async Task<(JsonObject Manager, JsonObject Waiter)> Warnings(int days) {
+
+            await service.InstallLicense(TestLicense.Sign(Jws.License, TestLicense.Payload(service, ["reservations"], maxTables: 1, revision: 5, expires: DateTimeOffset.UtcNow.AddDays(days))), true);
+            var manager = await service.State((await SignIn()).S("token"));
+            var waiter = await service.State((await service.Login(J.O("username", "servicio", "password", password, "deviceId", deviceId, "deviceSecret", deviceSecret, "deviceName", "Terminal de licencias", "enrollmentCode", ""))).S("token"));
+            return (manager.Obj("restaurant").Obj("license").Obj("warning"), waiter.Obj("restaurant").Obj("license").Obj("warning"));
+
+        }
+        var (lead, staff) = await Warnings(10);
+        Check(lead.S("level") == "notice" && staff.Count == 0, "ten days before the term ends only the manager is warned");
+        (lead, staff) = await Warnings(2);
+        Check(lead.S("level") == "critical" && staff.S("level") == "critical", "in the last three days the whole team is warned");
+        await service.Renew();
         var open = (await SignIn()).S("token");
         // Clock: CulinaryServer's time ahead of the branch's clock by more than the tolerance.
         await service.InstallLicense(TestLicense.Sign(Jws.License, TestLicense.Payload(service, ["reservations"], maxTables: 1, revision: 5, validated: DateTimeOffset.UtcNow.AddHours(2))), true);
         Check((await service.LicenseStatus()).S("state") == "clock", "a branch clock set behind signed time locks the branch");
         fake.Revision = 6;
         await service.Renew();
+        var unlocked = (await service.Load()).Committed;
+        string KeyFiles() => string.Join(",", Directory.GetFiles(TestLicense.Folder(site)).Select(f => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(f)))));
+        var keyFiles = KeyFiles();
         // Notices: a notice for another request is ignored; one for this request locks at once.
         fake.Expires = DateTimeOffset.UtcNow.AddMinutes(-1);
         fake.NoticeChallenge = "another-request";
@@ -281,6 +308,8 @@ static class LicenseTests {
         await Deny(() => service.Report(open, "", "", null), "an open session exports no report once the license expired", 423);
         await Deny(() => service.State(open), "an open session loses the state once the license expired", 423);
         Check(!(await service.CanInstall(device)).B("allowed"), "an expired license blocks client updates");
+        var during = (await service.Load()).Committed;
+        Check(unlocked.Records.Where(x => x.Key is not ("mn_license_current" or "mn_meta_site")).All(x => during.TryGet(x.Key, out var kept) && kept.Version == x.Value.Version && kept.Data.ToJsonString() == x.Value.Data.ToJsonString()) && KeyFiles() == keyFiles, "a lock leaves every record and key file as it was");
         // The provider renews: the next renewal unlocks without losing data.
         fake.Expires = DateTimeOffset.UtcNow.AddDays(30);
         fake.Revision = 7;
@@ -320,6 +349,23 @@ static class LicenseTests {
         restarted.UseLicensing(new LicenseOptions(TestLicense.Folder(site), HardwareFile: hardware, UseTpm: false));
         Check(restarted.License(await restarted.Load()).State == "active", "after a restart the kept floor still accepts the current generation");
         await Deny(() => restarted.InstallLicense(TestLicense.SignWith(first, Jws.License, Next(13))), "after a restart the kept floor still rejects the revoked generation", 403);
+        // The rule itself, at fixed times.
+        var at = DateTimeOffset.Parse("2026-11-01T12:00:00Z");
+        var spki = service.LicenseKey().S("spki");
+        LicenseView At(JsonObject payload, DateTimeOffset now, JsonObject? notice = null, bool behind = false) => LicenseView.Evaluate(payload, notice, site, spki, now, behind);
+        JsonObject Term(double validated, double expires, string plan = "annual") => TestLicense.Payload(service, [], plan: plan, validated: at.AddDays(validated), expires: at.AddDays(expires));
+        foreach (var days in new[] { 14, 7, 3, 1 }) { var w = At(Term(0, days), at).Warning; Check(w?.S("kind") == "expiry" && w.L("days") == days && w.S("level") == (days <= 3 ? "critical" : "notice"), "the expiry warning at " + days + " days"); }
+        Check(At(Term(0, 15), at).Warning is null && At(TestLicense.Payload(service, [], plan: "permanent", validated: at), at).Warning is null, "no warning beyond 14 days or on a permanent license");
+        Check(At(Term(0, 3, "trial"), at).Warning!.S("message").StartsWith("El periodo de prueba termina"), "a trial warns about the trial");
+        var quiet = At(Term(-2, 300), at);
+        Check(quiet.Usable && quiet.Warning!.S("kind") == "service" && quiet.Warning.L("days") == 5, "a day without validation counts down the offline grace");
+        var failing = At(Term(-2, 1), at);
+        Check(failing.Usable && failing.Warning!.S("kind") == "expiry" && failing.Warning.L("days") == 1, "a failed renewal shows the term when it ends before the grace");
+        Check(At(Term(-2, -1), at).State == "expired", "the offline grace never extends an expired term");
+        Check(At(Term(-7, 300), at).State == "offline" && At(Term(-6.9, 300), at).Usable, "the branch locks exactly when the signed offlineUntil passes");
+        var clock = At(Term(0, 300), at, behind: true);
+        Check(clock.State == "clock" && clock.Warning is null, "a clock set behind locks without a countdown");
+        Check(At(Term(-1, 300), at, J.O("revision", 1, "status", "revoked")).State == "revoked", "a revocation does not wait for the grace");
 
     }
 }

@@ -238,7 +238,7 @@ code { font-family: Consolas, monospace; font-size: 8pt; background: #f1f2f4; pa
 <ol class="steps">
 <li><strong>Emisión:</strong> CulinaryServer (Cloudflare) firma la licencia con la llave raíz del proveedor (Ed25519). La sucursal sólo trae la llave pública, incrustada al compilar.</li>
 <li><strong>Ligada al equipo:</strong> llave no exportable en el chip TPM 2.0; si no hay, huella del hardware (placa, disco y tarjeta de red).</li>
-<li><strong>Renovación:</strong> con reto firmado; hasta <strong>3 días</strong> sin conexión; se detecta un reloj atrasado.</li>
+<li><strong>Renovación:</strong> con reto firmado; hasta <strong>7 días</strong> sin conexión; se detecta un reloj atrasado.</li>
 <li><strong>Bloqueo:</strong> vencida, cancelada, sin validar o de otro equipo muestra sólo la pantalla de bloqueo, sin exportar datos.</li>
 </ol>
 <table>
@@ -425,7 +425,7 @@ code { font-family: Consolas, monospace; font-size: 8pt; background: #f1f2f4; pa
 </table>
 <h3>Licencia en operación</h3>
 <ul>
-<li>El backend renueva la licencia con CulinaryServer; sin conexión sigue trabajando hasta 3 días.</li>
+<li>El backend renueva la licencia con CulinaryServer; sin conexión sigue trabajando hasta 7 días.</li>
 <li>Al vencer, ser revocada o cambiar de equipo, sólo se ve la pantalla de bloqueo; los datos se conservan pero no se exportan.</li>
 <li>El plan (Lite o Pro), los add-ons y los límites de terminales, usuarios y mesas se aplican en el servidor.</li>
 </ul>

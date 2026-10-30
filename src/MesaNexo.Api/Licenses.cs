@@ -57,7 +57,7 @@ public sealed partial class BranchService {
         var floor = LicenseView.Signed(payload);
         // A commit made while the clock ran ahead must not lock the branch for good: past the offline grace after the
         // last signed time, the committed time is not trusted.
-        if (DateTimeOffset.TryParse(s.Meta.S("clock"), out var committed) && committed > floor && committed <= floor.AddDays(3)) floor = committed;
+        if (DateTimeOffset.TryParse(s.Meta.S("clock"), out var committed) && committed > floor && committed <= LicenseView.OfflineUntil(payload)) floor = committed;
         anchor ??= wall > floor ? wall : floor;
         var counted = anchor.Value + TimeSpan.FromMilliseconds(Environment.TickCount64 - startedTick);
         var now = new[] { wall, floor, counted }.Max();

@@ -680,6 +680,22 @@ test('a PAC submission that lost its answer is retried by the manager with the s
     expect(errors).toEqual([]);
 
 });
+test('a license about to expire warns inside the app and leaves it working', async ({ page }) => {
+
+    expect((await call('fixture', 'license.expiring', {})).data.state).toBe('active');
+    try {
+
+        await login(page, 'license-warning');
+        await expect(page.getByText('La licencia vence en 2 días.', { exact: false })).toBeVisible();
+        await page.screenshot({ path: path.join(evidence, 'hybrid-license-warning-1360.png') });
+        await page.setViewportSize({ width: 390, height: 844 });
+        await expect(page.getByText('La licencia vence en 2 días.', { exact: false })).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        await page.screenshot({ path: path.join(evidence, 'hybrid-license-warning-390.png') });
+
+    } finally { await call('fixture', 'license.restore', {}); }
+
+});
 test('an expired license replaces sign-in with the lock screen and nothing else', async ({ page }) => {
 
     const errors: string[] = [];
