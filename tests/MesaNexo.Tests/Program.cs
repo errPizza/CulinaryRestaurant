@@ -124,8 +124,9 @@ static class Program {
             var listening = false;
             await k.StartLive(() => { if (listening) pushed.TrySetResult(); return Task.CompletedTask; });
             listening = true;
-            await Act(manager, "command.priority", J.O("id", command.S("id"), "priority", true, "reason", "live test"));
-            await pushed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            // The connection joins the site group just after its handshake, so the first hint can go out before it has joined.
+            var hints = 0;
+            while (!pushed.Task.IsCompleted) { if (++hints > 10) throw new TimeoutException("No live hint"); await Act(manager, "command.priority", J.O("id", command.S("id"), "priority", hints % 2 == 1, "reason", "live test")); await Task.WhenAny(pushed.Task, Task.Delay(500)); }
             var liveState = await k.LiveSnapshot();
             Check(!liveState.A("units").ToJsonString().Contains("\"price\""), "authenticated TLS SignalR snapshot retains kitchen financial restrictions");
             await k.StopLive();

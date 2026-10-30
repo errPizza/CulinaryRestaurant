@@ -132,6 +132,7 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
 
             // Same rule as the store's per-record versions, checked first in memory: a state built before another commit is stale.
             if (Volatile.Read(ref committed) is not { } current || current.Version != s.Committed.Version) throw new StoreException("COS-DATA-CONFLICT");
+            Domain.ChargeTransitions(s, actor);
             AppendAudit(s, eventId, actor, fingerprint, type);
             s.Meta["revision"] = revision = s.Meta.L("revision") + 1;
             // The newest time this branch has committed: a clock set back later reads as tampering (see Clock).

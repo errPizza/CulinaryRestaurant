@@ -124,6 +124,21 @@ Estados: **Confirmado** (el riesgo existe en el código), **Parcial** (hay una p
 
 **Comprobación.** Inyección de fallos: el proveedor aprueba, se pierde la respuesta, el POS se reinicia y se reintenta. Resultado: un solo cargo y el corte cuadra. Se repite por adaptador con su simulador.
 
+**Estado (30 de octubre de 2026): código hecho, salvo el reverso de un cobro ya aprobado.**
+- Hecho:
+  - `src/MesaNexo.Core/PaymentStates.cs`: tabla única de transiciones. Corre en cada commit, así que ningún código puede sacar un cobro de un estado final.
+  - Cada cambio queda en `trail`: id de intento, referencia del proveedor, importe, moneda, hora, actor y respuesta del proveedor sin datos de tarjeta ni de cliente. El mesero no recibe `trail`.
+  - Capacidades declaradas por adaptador: `idempotent`, `lookup` y `reverse`. Mercado Pago las tiene todas. Clip sólo consulta por el id que ya dio. BBVA no tiene ninguna. Stripe Checkout las tiene todas.
+  - La captura manual de un cobro incierto ahora la hace sólo un gerente.
+  - Se corrigieron dos respuestas ambiguas, que ahora quedan como inciertas: un 2xx de Clip sin id se marcaba rechazado, y un 2xx de Mercado Pago sin id se quedaba en espera para siempre.
+- Pruebas (`LiveIntegrationTests`, «A charge across a crash», con simuladores HTTP):
+  - Mercado Pago: el proceso muere tras enviar el cobro. Al volver repite con la misma llave, encuentra la orden y queda un pago.
+  - Clip: no se reenvía nada, queda incierto, bloquea otro cobro y la captura del gerente aplica un solo pago.
+  - BBVA no pasa por esta ruta: se registra desde el voucher.
+- Falta:
+  - Reverso de un cobro aprobado. La transición existe (`approved → refund-queued`), pero no hay acción que la use: el dominio no tiene cómo revertir un `payment`. Depende de la trazabilidad del hallazgo 11 y de la segunda aprobación del hallazgo 12.
+  - Validar contra los sandbox reales (hallazgo 15). Las capacidades de Clip y Mercado Pago salen de su documentación, no de una prueba real.
+
 ## Fase 2 · Resiliencia de la sucursal
 
 ### 5. Licencia sin dejar a la sucursal sin vender

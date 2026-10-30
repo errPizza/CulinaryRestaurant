@@ -77,6 +77,8 @@ public sealed partial class Restaurant {
         Need(u.S("role") == "manager" || v.S("waiterId") == u.S("id"), "La cuenta pertenece a otro mesero", 403);
         if (txn.S("providerRef") != "" && p.S("outcome") == "") { txn["status"] = "waiting"; txn["message"] = "Consultando a la terminal"; return txn; }
         var outcome = Choice(p, "outcome", "charged", "not-charged");
+        // Without the provider's evidence, deciding is a manager's capture.
+        Need(u.S("role") == "manager", "Sólo un gerente captura el resultado de un cobro sin respuesta", 403);
         txn["reconciledBy"] = u.S("id");
         txn["reconciledAt"] = J.Now();
         if (outcome == "not-charged") { txn["status"] = "declined"; txn["message"] = "Sin cargo según el reporte de la terminal"; } else {

@@ -485,7 +485,7 @@ public sealed partial class Restaurant {
         output["integrations"] = new JsonArray(s.List("integration").Select(x => (JsonNode)J.O("id", x.S("id"), "mode", x.S("mode"))).ToArray());
         foreach (var kind in new[] { "integrationlog", "message", "pmspost" }) output[kind + "s"] = new JsonArray();
         var mine = s.Related("visit", "waiterId", u.S("id")).Select(v => v.S("id")).ToHashSet();
-        foreach (var kind in new[] { "terminaltxn", "paylink" }) output[kind + "s"] = new JsonArray(role == "mesero" ? s.List(kind).Where(x => mine.Contains(x.S("visitId"))).TakeLast(200).Select(x => (JsonNode)x.DeepClone()).ToArray() : []);
+        foreach (var kind in new[] { "terminaltxn", "paylink" }) output[kind + "s"] = new JsonArray(role == "mesero" ? s.List(kind).Where(x => mine.Contains(x.S("visitId"))).TakeLast(200).Select(x => { var copy = x.DeepClone(); copy.AsObject().Remove("trail"); return (JsonNode)copy; }).ToArray() : []);
         if (role != "mesero") output["aggregatororders"] = new JsonArray();
 
     }

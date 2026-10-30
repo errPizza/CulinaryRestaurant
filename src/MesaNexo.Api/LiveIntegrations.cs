@@ -59,7 +59,7 @@ public sealed partial class BranchService {
     // commit before the provider is called once; the answer is stored after. A claim whose lease ran out without an answer is
     // never sent again: `recover` asks the provider what happened, and without an answer it stays "uncertain" for a person.
     // Each kind of call on a record claims it with its own status (`claim`), so a lost claim goes back to the right `recover`.
-    public async Task<bool> SendNext(string kind, string actor, Func<JsonObject, bool> queued, Func<BranchState, JsonObject, CancellationToken, Task<JobResult>> send, Func<BranchState, JsonObject, CancellationToken, Task<JobResult?>>? recover = null, CancellationToken ct = default, string claim = "sending") {
+    public async Task<bool> SendNext(string kind, string actor, Func<JsonObject, bool> queued, Func<BranchState, JsonObject, CancellationToken, Task<JobResult>> send, Func<BranchState, JsonObject, CancellationToken, Task<JobResult?>>? recover = null, CancellationToken ct = default, string claim = "sending", TimeSpan? lease = null) {
 
         var s = await Load(ct);
         var now = DateTimeOffset.UtcNow;
@@ -79,7 +79,7 @@ public sealed partial class BranchService {
         var attempt = J.Id();
         row["status"] = claim;
         row["attemptId"] = attempt;
-        row["leaseUntil"] = now.AddMinutes(2).ToString("O");
+        row["leaseUntil"] = now.Add(lease ?? TimeSpan.FromMinutes(2)).ToString("O");
         row["attempts"] = row.L("attempts") + 1;
         var snapshot = (JsonObject)row.DeepClone();
         var view = s;

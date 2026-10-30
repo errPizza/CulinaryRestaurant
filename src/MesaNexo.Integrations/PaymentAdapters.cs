@@ -37,6 +37,7 @@ public static class SignedWebhooks {
 // refunds carry an Idempotency-Key, so repeating one after a lost answer returns the first result.
 public sealed record CheckoutState(string Status, string SessionId = "", string Url = "", string PaymentIntent = "", string Message = "");
 public sealed class StripeCheckout(HttpClient http, string secretKey, string successUrl) {
+    public static readonly TerminalCapabilities Capabilities = new(true, true, true);
     async Task<(int Code, JsonNode? Body)> Call(HttpMethod method, string path, Dictionary<string, string>? form, string? idempotency, CancellationToken ct) {
 
         using var request = new HttpRequestMessage(method, "https://api.stripe.com/v1/" + path);
