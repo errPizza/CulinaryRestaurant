@@ -71,9 +71,9 @@ sealed class FakeCulinaryServer: IAsyncDisposable {
         IResult? Refused(string nonce) {
 
             if (Status == "active" && Expires > DateTimeOffset.UtcNow) return null;
-            var state = Status == "revoked" ? "revoked" : "expired";
-            var notice = TestLicense.Sign(Jws.Status, J.O("v", 1, "licenseId", TestLicense.LicenseId(site), "revision", Revision, "siteId", site, "status", state, "plan", Plan, "expiresAt", Iso(Expires), "revokedAt", null, "challenge", NoticeChallenge ?? nonce, "iat", Iso(DateTimeOffset.UtcNow)));
-            return Error(403, "license_" + state, state == "revoked" ? "Licencia revocada" : "Licencia vencida", notice);
+            var state = Status is "revoked" or "transferred" ? Status : "expired";
+var notice = TestLicense.Sign(Jws.Status, J.O("v", 1, "licenseId", TestLicense.LicenseId(site), "revision", Revision, "siteId", site, "status", state, "plan", Plan, "expiresAt", Iso(Expires), "revokedAt", null, "challenge", NoticeChallenge ?? nonce, "iat", Iso(DateTimeOffset.UtcNow)));
+            return Error(403, "license_" + state, state == "revoked" ? "Licencia revocada" : "Licencia no vigente", notice);
 
         }
         App.MapPost("/branch/v1/challenges", () => { var nonce = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(56)); issued.Add(nonce); return Results.Json(J.O("nonce", nonce, "expiresAt", Iso(DateTimeOffset.UtcNow.AddMinutes(2)))); });
@@ -93,8 +93,9 @@ sealed class FakeCulinaryServer: IAsyncDisposable {
             if (Refused(r.Nonce) is { } refused) return refused;
             var given = r.Body.Obj("fingerprint");
             if (new[] { "board", "disk", "mac" }.Count(k => given.S(k) == Fingerprint!.S(k)) < 2) return Error(403, "binding_mismatch", "Otro equipo");
+            Fingerprint = given;
             Renewals++;
-            return Results.Json(J.O("license", License(DateTimeOffset.UtcNow)));
+return Results.Json(J.O("license", License(DateTimeOffset.UtcNow)));
 
         });
         App.MapPut("/branch/v1/registry", async (HttpContext c) => { if (await Signed(c) is not { } r) return Error(401, "unauthorized", "Firma inválida"); CentralCertificate = r.Body.S("centralCertificateSha256"); return Results.Json(J.O("siteId", site, "tenantId", "grupo", "centralCertificateSha256", CentralCertificate)); });
@@ -359,7 +360,38 @@ static class LicenseTests {
         restarted.UseLicensing(new LicenseOptions(TestLicense.Folder(site), HardwareFile: hardware, UseTpm: false));
         Check(restarted.License(await restarted.Load()).State == "active", "after a restart the kept floor still accepts the current generation");
         await Deny(() => restarted.InstallLicense(TestLicense.SignWith(first, Jws.License, Next(13))), "after a restart the kept floor still rejects the revoked generation", 403);
-        // The rule itself, at fixed times.
+        // Repairs: one part at a time follows the machine; two at once need the provider, and no repair touches the data.
+        fake.Revision = 13;
+        fake.Features = ["reservations"];
+        void Parts(string board, string disk, string mac) => File.WriteAllText(hardware, J.O("board", board, "disk", disk, "mac", mac).ToJsonString());
+        Parts("4c4c4544-0042-3510-8051-b4c04f563232", "S4EVNX0N" + site.Length, "52:54:00:aa:bb:cc");
+        Check((await service.Renew()).State == "active", "a new network card keeps the license");
+        Parts("4c4c4544-0042-3510-8051-b4c04f563232", "DISCO-NUEVO", "52:54:00:aa:bb:cc");
+        Check((await service.Renew()).State == "active", "a new disk later keeps the license");
+        Parts("otra-placa", "OTRO-DISCO", "52:54:00:aa:bb:cc");
+        try { await service.Renew(); throw new Exception("Other hardware accepted"); } catch (ServerRejection e) { Check(e.Code == "binding_mismatch", "two parts changed at once are refused"); }
+        var moved = await service.LicenseStatus();
+        Check(moved.S("state") == "active" && moved.Obj("warning").S("kind") == "hardware" && moved.Obj("warning").S("message").Contains("transferencia"), "refused hardware keeps selling and asks for a transfer, not for internet");
+        Parts("otra-placa", "OTRO-DISCO", "52:54:00:dd:ee:ff");
+        // The provider releases this machine: the old key is told so on its next contact.
+        fake.Status = "transferred";
+        try { await service.Renew(); throw new Exception("Released machine renewed"); } catch (ServerRejection e) { Check(e.Code == "license_transferred", "the released machine is refused"); }
+        Check((await service.LicenseStatus()).S("state") == "transferred", "the released machine locks on its next contact, without waiting for the grace");
+        await Deny(() => SignIn(), "a released machine shows only the lock screen", 423);
+        fake.Status = "active";
+        // The TPM died: the key is gone. The branch keeps its data and comes back through a new activation.
+        var keyPath = Path.Combine(TestLicense.Folder(site), "branch-license.p8");
+        File.Delete(keyPath);
+        var repaired = new BranchService(runtime, site, new Passwords());
+        repaired.UseLicensing(new LicenseOptions(TestLicense.Folder(site), fake.Url, hardware, UseTpm: false, CentralCertificate: central));
+        Check(repaired.License(await repaired.Load()).State == "mismatch", "a machine that lost its key is locked");
+        fake.Spki = null;
+        fake.Code = "CODIGO-DE-TRANSFERENCIA-01";
+        fake.Revision = 14;
+        Check((await repaired.Activate(J.O("licenseId", TestLicense.LicenseId(site), "activationCode", fake.Code))).S("state") == "active", "the provider's new code activates the repaired machine");
+        var after = (await repaired.Load()).Committed;
+        Check(unlocked.Records.Where(x => x.Value.Data.S("kind") is "table" or "ticket").All(x => after.TryGet(x.Key, out var kept) && kept.Version == x.Value.Version), "repairs and transfers leave the branch's data as it was");
+// The rule itself, at fixed times.
         var at = DateTimeOffset.Parse("2026-11-01T12:00:00Z");
         var spki = service.LicenseKey().S("spki");
         LicenseView At(JsonObject payload, DateTimeOffset now, JsonObject? notice = null, bool behind = false) => LicenseView.Evaluate(payload, notice, site, spki, now, behind);

@@ -119,7 +119,8 @@ public sealed record LicenseView(string State, JsonObject? Payload, JsonObject? 
         "offline" => "No se pudo validar la licencia con Culinary en los últimos 7 días",
         "clock" => "La fecha del equipo está atrasada; corrígela para continuar",
         "mismatch" => "La licencia no corresponde a este equipo",
-        _ => "Culinary Restaurant no tiene una licencia activada"
+        "transferred" => "La licencia de Culinary Restaurant pasó a otro equipo",
+_ => "Culinary Restaurant no tiene una licencia activada"
     };
     // Public: shown before sign-in, so it carries no business data.
     public JsonObject Summary() {
@@ -132,32 +133,33 @@ public sealed record LicenseView(string State, JsonObject? Payload, JsonObject? 
 
     }
     // A notice is applied only after its challenge was checked against the request that received it.
-    public static LicenseView Evaluate(JsonObject payload, JsonObject? notice, string siteId, string keySpki, DateTimeOffset now, bool clockBehind) {
+    public static LicenseView Evaluate(JsonObject payload, JsonObject? notice, string siteId, string keySpki, DateTimeOffset now, bool clockBehind, bool hardwareRefused = false) {
 
         if (payload.S("siteId") != siteId || payload.Obj("key").S("spki") != keySpki) return new("mismatch", payload);
-        if (notice is not null && notice.L("revision") >= payload.L("revision") && notice.S("status") is "revoked" or "expired") return new(notice.S("status"), payload);
+        if (notice is not null && notice.L("revision") >= payload.L("revision") && notice.S("status") is "revoked" or "expired" or "transferred") return new(notice.S("status"), payload);
         if (payload.S("status") == "revoked") return new("revoked", payload);
         if (clockBehind) return new("clock", payload);
         if (payload["expiresAt"] is JsonValue && Time(payload, "expiresAt") <= now) return new("expired", payload);
         if (Time(payload, "offlineUntil") <= now) return new("offline", payload);
-        return new("active", payload, Warn(payload, now));
+        return new("active", payload, Warn(payload, now, hardwareRefused));
 
     }
     // Whichever lock comes first, from 14 days before the term ends or once the service has been silent for a day
     // (the branch renews every 6 hours). A silent service counts down the signed offlineUntil, never the term.
-    static JsonObject? Warn(JsonObject p, DateTimeOffset now) {
+    static JsonObject? Warn(JsonObject p, DateTimeOffset now, bool hardwareRefused) {
 
         var ends = p["expiresAt"] is JsonValue ? Time(p, "expiresAt") : DateTimeOffset.MaxValue;
         var grace = Time(p, "offlineUntil");
-        var service = now - Time(p, "validatedAt") >= TimeSpan.FromDays(1) && grace < ends;
-        var left = (service ? grace : ends) - now;
+        var service = (hardwareRefused || now - Time(p, "validatedAt") >= TimeSpan.FromDays(1)) && grace < ends;
+var left = (service ? grace : ends) - now;
         if (left > TimeSpan.FromDays(14)) return null;
         var days = (int)Math.Ceiling(left.TotalDays);
         var span = days <= 1 ? "menos de un día" : days + " días";
-        var message = service ? $"No se ha podido validar la licencia con Culinary. La sucursal sigue trabajando; revisa el internet del servidor. Sin validarla, se bloquea en {span}."
+        var message = service && hardwareRefused ? $"Culinary ya no reconoce este equipo porque cambiaron varias piezas. La sucursal sigue trabajando; pide a tu proveedor la transferencia de la licencia. Sin ella, se bloquea en {span}."
+            : service ? $"No se ha podido validar la licencia con Culinary. La sucursal sigue trabajando; revisa el internet del servidor. Sin validarla, se bloquea en {span}."
             : p.S("plan") == "trial" ? $"El periodo de prueba termina en {span}. Contrata un plan con tu proveedor para seguir trabajando."
             : $"La licencia vence en {span}. Renuévala con tu proveedor para seguir trabajando.";
-        return J.O("kind", service ? "service" : "expiry", "days", days, "level", days <= 3 ? "critical" : "notice", "message", message);
+        return J.O("kind", service ? hardwareRefused ? "hardware" : "service" : "expiry", "days", days, "level", days <= 3 ? "critical" : "notice", "message", message);
 
     }
     public static DateTimeOffset OfflineUntil(JsonObject payload) => Time(payload, "offlineUntil");

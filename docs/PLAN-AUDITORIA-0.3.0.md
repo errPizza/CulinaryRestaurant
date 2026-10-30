@@ -191,6 +191,24 @@ Estados: **Confirmado** (el riesgo existe en el código), **Parcial** (hay una p
 **Acciones.** Flujo de transferencia en CulinaryAdmin (aprobación del proveedor y auditoría) que libera el equipo ligado y permite reactivar con el mismo código en el equipo nuevo. La huella se documenta como señal, no como secreto. El cambio de disco o de tarjeta de red no debe perder datos: la llave de datos no depende de la identidad de licencia.
 **Comprobación.** Pruebas: cambio de MAC, de disco y fallo de TPM, con migración autorizada.
 
+**Estado (30 de octubre de 2026): código hecho, falta desplegar y probar en TPM real.**
+- Hecho:
+  - **Liberar el equipo** en CulinaryAdmin ahora exige un motivo, que queda en la auditoría con la llave liberada. El panel exige TOTP, y esa es la aprobación del proveedor. El código de activación es nuevo, no el mismo: uno gastado no debe volver a servir.
+  - El equipo liberado recibe un aviso firmado (`transferred`) en su siguiente contacto y se bloquea. Sin esto, con 7 días de gracia dos equipos podían vender a la vez una semana.
+  - La huella guardada sigue a cada cambio aceptado, y el cambio queda auditado. Antes, cambiar la tarjeta de red y meses después el disco terminaba en rechazo.
+  - Si rechazan el hardware, la app pide la transferencia en lugar de decir «revisa el internet».
+  - Un TPM averiado muestra la pantalla de bloqueo, no un error 503 en cada solicitud.
+  - La huella queda documentada como señal, no como secreto, en `CulinaryServer/README.md`.
+  - La llave de datos no depende de la identidad de licencia, y no hizo falta cambiarla: el llavero vive en `/etc/culinaryos/secrets` y la licencia sólo firma solicitudes.
+- Pruebas:
+  - `--license-only`: tarjeta de red, disco, dos piezas a la vez, equipo liberado y llave perdida con reactivación, con los datos intactos.
+  - Worker: transferencia con auditoría y cambios sucesivos de hardware.
+  - Panel: el motivo es obligatorio.
+- Falta:
+  - Desplegar el Worker. La migración `0004_llave_liberada.sql` se aplica sola al arrancar.
+  - Probar el fallo de TPM en hardware real. La prueba elimina el archivo de llave; `TpmLicenseKey` no corre en Windows.
+  - Sólo se recuerda el último equipo liberado. Uno anterior, o uno sin internet, se bloquea al terminar la gracia.
+
 ### 8. Puntos de control externos de la bitácora
 **Acciones.** Cada hora (y en cada cierre de caja) la sucursal firma el hash de la cabeza de la bitácora y lo envía a un destino con permisos separados (ver preguntas). Un verificador independiente compara la cadena local con los puntos publicados. Ante una discrepancia: alerta, preservación de evidencia y bloqueo de nuevas autorizaciones.
 **Comprobación.** Prueba: reescribir un registro antiguo y recalcular la cadena con todas las llaves locales; el verificador lo detecta.
