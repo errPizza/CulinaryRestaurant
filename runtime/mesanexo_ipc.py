@@ -19,12 +19,11 @@ MAX_PAGE_BYTES, MAX_PAGE_RECORDS = 1024 * 1024, 4096
 # then dropped a few per transaction; unacknowledged ones are never dropped, so delivery stays at least once.
 ACKED_RETENTION = 7 * 24 * 3600
 COMPACT_BATCH = 16
-# The same service-controlled file the sync worker reads; never supplied by a terminal. Without a central nothing
-# will ever acknowledge the outbox, so pending events are kept this long and then dropped. Connecting a central later
-# first queues a baseline: every mn_ record at its current version, audits included, in events of at most 56 KiB.
+# The same service-controlled file the sync worker reads; never supplied by a terminal. Without a central pending
+# events are kept whatever their age, so a central connected later receives the whole history. Only a store that an
+# earlier version of this extension let drop pending events queues, when a central appears, a baseline: every mn_
+# record at its current version, audits included, in events of at most 56 KiB.
 BRANCH_CONFIG = Path('/etc/culinaryos/branch.json')
-PENDING_RETENTION = 7 * 24 * 3600
-MAINTAIN_EVENTS = 256
 BASELINE_EVENTS = 1
 
 def transaction_v1(store, request):
@@ -215,20 +214,11 @@ def outbox_maintain_v1(store, request):
         result = {}
         if not central:
             state = {'mode': 'standalone'}
-            cutoff = time.time() - PENDING_RETENTION
-            dropped = []
-            for event in db.execute('SELECT rowid,created FROM events WHERE acked IS NULL ORDER BY rowid LIMIT ?', (MAINTAIN_EVENTS,)):
-                if event['created'] >= cutoff:
-                    break
-                dropped.append((event['rowid'],))
-            db.executemany('DELETE FROM events WHERE rowid=?', dropped)
-            # From now on a missing event may never have reached a central: event_status_v1 must not claim it did.
-            if dropped:
-                db.execute("INSERT OR IGNORE INTO metadata VALUES('mesanexo_outbox_dropped','1')")
-            result = {'dropped': len(dropped), 'more': len(dropped) == MAINTAIN_EVENTS}
+            result = {'more': False}
         else:
             if state['mode'] == 'standalone':
-                state = {'mode': 'baseline', 'after': '', 'events': 0, 'started': time.time()}
+                dropped = db.execute("SELECT 1 FROM metadata WHERE key='mesanexo_outbox_dropped'").fetchone()
+                state = {'mode': 'baseline', 'after': '', 'events': 0, 'started': time.time()} if dropped else {'mode': 'complete'}
             if state['mode'] == 'baseline':
                 if shutil.disk_usage(store.path.parent).free < store.min_free_bytes:
                     raise StorageFull('disk reserve')

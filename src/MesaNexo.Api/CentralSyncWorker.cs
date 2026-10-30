@@ -9,8 +9,11 @@ namespace MesaNexo.Api;
 // Delivers the outbox to the central over mTLS, oldest first, as syncworker.py did: an event counts as delivered only
 // when the central answers that it committed exactly that event, and nothing is ever removed on a failure or an
 // ambiguous answer. One sender per branch keeps the order and keeps retries from racing acknowledgements.
-public sealed class CentralSyncWorker(PostgresBranchStore store, string branchConfig, string credentials, ILogger<CentralSyncWorker> log): BackgroundService {
+// Acknowledgements are stored in batches; one lost with a crash only makes the central see an event again, which it
+// answers as the same commit.
+public sealed class CentralSyncWorker(PostgresBranchStore store, string branchConfig, string credentials, ILogger<CentralSyncWorker> log, HttpMessageHandler? transport = null): BackgroundService {
     static readonly TimeSpan Interval = TimeSpan.FromSeconds(30), Budget = TimeSpan.FromSeconds(20);
+    const int AckBatch = 16;
     HttpClient? http; string? url;
     protected override async Task ExecuteAsync(CancellationToken ct) {
 
@@ -33,6 +36,8 @@ public sealed class CentralSyncWorker(PostgresBranchStore store, string branchCo
         if (http is null || url != target) { http?.Dispose(); http = Client(); url = target; }
         var sent = 0;
         var started = DateTime.UtcNow;
+        var acked = new List<(string, string)>();
+        async Task Flush() { await store.Acknowledge(acked, ct); sent += acked.Count; acked.Clear(); }
         foreach (var (wire, raw, digest) in await store.Pending(64, ct)) {
 
             if (DateTime.UtcNow - started >= Budget) break;
@@ -49,19 +54,22 @@ public sealed class CentralSyncWorker(PostgresBranchStore store, string branchCo
                 using var response = await http.SendAsync(request, timeout.Token);
                 var body = await response.Content.ReadAsByteArrayAsync(timeout.Token);
                 var ack = (int)response.StatusCode is 200 or 201 && body.Length <= 8192 ? JsonNode.Parse(body) as JsonObject : null;
-                if (ack is not null && ack.S("site_id") == store.Site && ack.S("event_id") == eventId && ack.S("sha256") == digest && ack.S("status") == "committed") { await store.Acknowledge(eventId, digest, ct); sent++; continue; }
+                if (ack is not null && ack.S("site_id") == store.Site && ack.S("event_id") == eventId && ack.S("sha256") == digest && ack.S("status") == "committed") { acked.Add((eventId, digest)); if (acked.Count == AckBatch) await Flush(); continue; }
                 reason = "ack";
 
             } catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; } catch (HttpRequestException e) when (e.InnerException is AuthenticationException) { reason = "tls"; } catch (Exception e) when (e is HttpRequestException or OperationCanceledException or IOException) { reason = "network"; } catch (System.Text.Json.JsonException) { reason = "ack"; }
+            await Flush();
             await store.Retry(eventId, ct);
             return J.O("sent", sent, "state", "pending", "reason", reason);
 
         }
+        await Flush();
         return J.O("sent", sent, "state", sent == 0 ? "idle" : "delivered");
 
     }
     HttpClient Client() {
 
+        if (transport is not null) return new HttpClient(transport, false);
         var ca = X509Certificate2.CreateFromPem(File.ReadAllText(Path.Combine(credentials, "central-ca")));
         // A client certificate needs an exportable key on Windows; on Linux the PEM pair loads as is.
         using var pem = X509Certificate2.CreateFromPemFile(Path.Combine(credentials, "central-cert"), Path.Combine(credentials, "central-key"));

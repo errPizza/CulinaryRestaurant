@@ -78,6 +78,18 @@ Estados: **Confirmado** (el riesgo existe en el código), **Parcial** (hay una p
 
 **Comprobación.** Prueba automática: 30 días simulados sin central, ventas y cambios. Al reconectar, cada evento llega una sola vez y en orden, y `events + events_archive` cuadra con el número de transacciones.
 
+**Estado (30 de octubre de 2026): hecho.**
+- `mesanexo_ipc.py` no está en la ruta de datos de una sucursal PostgreSQL. El backend sólo usa `PostgresBranchStore`. En el appliance, `culinaryos-data` sólo responde `health`. Como la extensión se sigue entregando y la usan las pruebas de contrato, se quitó `PENDING_RETENTION`. Sin central ya no descarta nada, y sólo un almacén que la versión anterior hizo descartar pasa a línea base. El SHA256 de esa versión (entregada en las entradas r13 y r14 del appliance) quedó en `extension-history.json`.
+- `PostgresBranchStore.Acknowledge` recibe lotes. Cada lote se guarda en una transacción con `outbox_acked_seq` y se rechaza completo si deja atrás un pendiente anterior. `CentralSyncWorker` confirma de 16 en 16.
+- `outbox_status_v1` responde `bytes`, `acked_seq` y `alert` (`size` arriba de 2 GiB, `age` con central y más de un día sin confirmar). `OutboxWorker` registra `COS-OUTBOX-*` y la barra de estado lo muestra. Nada se recorta.
+- La línea base y la retención quedaron documentadas en `docs/ARQUITECTURA.md`.
+- Pruebas:
+  - `StoreTests.OfflineMonth`: 450 transacciones en 30 días sin central. Al reconectar, una central simulada pierde un acuse y rechaza una conexión. Cada evento queda confirmado una sola vez, en el orden de la sucursal, y `events + events_archive` = 450. Evidencia en `evidence/store-outbox.json` (35 de 35).
+  - Extensión Python: 28 de 28.
+  - Instalador: 44 de 44.
+  - Central: 37 de 37.
+- Pendiente fuera de este repositorio: quitar `mesanexo_ipc.py` y su gancho de `build-appliance.sh` y `prepare-appliance-input.py` en CulinaryOS. Esos archivos tienen cambios de licencias sin commit, así que no se tocaron.
+
 ### 3. Restauración completa en otro equipo · `CulinaryOS`
 **Lo que hay hoy.** `backup.py` respalda archivos de configuración y tiene `--restore-staging`, que restaura a un directorio nuevo, no a un servidor en marcha. Hay instantáneas `pg_dump` en `/var/lib/culinaryos-app/snapshots`. El llavero `branch.keys.json` y la identidad (TPM o huella) se guardan aparte.
 

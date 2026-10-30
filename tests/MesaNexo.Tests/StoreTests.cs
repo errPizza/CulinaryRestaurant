@@ -118,4 +118,94 @@ static class StoreTests {
         Check(snapshot.S("sha256").Length == 64 && File.Exists(Path.Combine(folder, "schema-backups", snapshot.S("backup"))), "a snapshot is a pg_dump in the service-owned folder");
 
     }
+    // A central that commits each event once, in the order it first sees them. It can lose the answer to one event
+    // after committing it, and refuse one connection, as a real network does.
+    sealed class FakeCentral(string site): HttpMessageHandler {
+        public readonly List<string> Committed = [];
+        public int Posts;
+        public string? LoseAnswerTo, FailOnce;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) {
+
+            Posts++;
+            var raw = request.Content!.ReadAsByteArrayAsync(ct).GetAwaiter().GetResult();
+            var wire = JsonNode.Parse(raw)!;
+            var eventId = wire.S("event_id");
+            var digest = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(raw));
+            if (eventId == FailOnce) { FailOnce = null; throw new HttpRequestException("refused"); }
+            if (wire.S("site_id") != site || request.Headers.GetValues("Idempotency-Key").Single() != eventId || request.Headers.GetValues("X-CulinaryOs-SHA256").Single() != digest) return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.BadRequest));
+            if (!Committed.Contains(eventId)) Committed.Add(eventId);
+            if (eventId == LoseAnswerTo) { LoseAnswerTo = null; throw new HttpRequestException("answer lost"); }
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(J.O("site_id", site, "event_id", eventId, "sha256", digest, "status", "committed").ToJsonString()) });
+
+        }
+    }
+    // Thirty days without a central, then the central appears: every event arrives once and in order, and nothing is
+    // dropped on the way.
+    public static async Task OfflineMonth(string root, List<JsonObject> evidence) {
+
+        void Check(bool ok, string name) { if (!ok) throw new Exception("FAIL: " + name); evidence.Add(J.O("test", name, "result", "passed")); Console.WriteLine("PASS " + name); }
+        async Task<string> Fails(Task action) { try { await action; return "none"; } catch (StoreException e) { return e.Code; } }
+        const string site = "month-site";
+        var folder = Path.Combine(root, ".lab", "offline-month-" + J.Id());
+        using var store = LabPostgres.Test(root, folder, site);
+        async Task Sql(string sql) { await using var db = await store.Data.OpenConnectionAsync(); await using var cmd = new NpgsqlCommand(sql, db); await cmd.ExecuteNonQueryAsync(); }
+        async Task<long> Count(string sql) { await using var db = await store.Data.OpenConnectionAsync(); await using var cmd = new NpgsqlCommand(sql, db); return (long)(await cmd.ExecuteScalarAsync())!; }
+        long meta = 0;
+        var versions = new Dictionary<string, long>();
+        var order = new List<string>();
+        async Task Commit(params (string Id, JsonObject Data)[] changes) {
+
+            var eventId = J.Id();
+            var list = new JsonArray(J.O("record_id", "mn_meta_site", "expected_version", meta, "data", J.O("revision", meta + 1)));
+            foreach (var (id, data) in changes) list.Add(J.O("record_id", id, "expected_version", versions.GetValueOrDefault(id), "data", data));
+            await store.CallAsync(J.O("op", "transaction_v1", "protocol", 1, "event_id", eventId, "receipt", J.O("actor", "month-test", "fingerprint", eventId), "changes", list));
+            meta++;
+            foreach (var (id, _) in changes) versions[id] = versions.GetValueOrDefault(id) + 1;
+            order.Add(eventId);
+
+        }
+        // Each day: twelve sales and three price changes, then the clock moves a day and the upkeep runs.
+        for (var day = 0; day < 30; day++) {
+
+            for (var sale = 0; sale < 12; sale++) await Commit(($"mn_visit_{day:D2}_{sale:D2}", J.O("day", day, "total", 100 + sale)), ("mn_audit_" + J.Id(), J.O("operation", "visit.close")));
+            for (var change = 0; change < 3; change++) await Commit(($"mn_unit_{change}", J.O("price", 1000 + day)));
+            await Sql("UPDATE events SET created = created - 86400");
+            var upkeep = (await store.CallAsync(J.O("op", "outbox_maintain_v1", "protocol", 1)))!;
+            if (upkeep.S("mode") != "standalone" || upkeep.L("pending") != order.Count) Check(false, "day " + day + " keeps every pending event");
+
+        }
+        var offline = (await store.CallAsync(J.O("op", "outbox_status_v1")))!;
+        Check(offline.L("pending") == 450 && offline["alert"] is null, "thirty days without a central keep all 450 events pending, with no age alert while no central is configured");
+        var first = await store.Pending(2);
+        Check(await Fails(store.Acknowledge(first[1].Wire.S("event_id"), first[1].Digest)) == "COS-DATA-CONFLICT" && (await store.CallAsync(J.O("op", "outbox_status_v1")))!.L("pending") == 450, "an acknowledgement that skips an earlier event is refused");
+        // The central appears.
+        File.WriteAllText(Path.Combine(folder, "branch.json"), J.O("version", 1, "site_id", site, "central", J.O("url", "https://central.test/v1/events")).ToJsonString());
+        var connected = (await store.CallAsync(J.O("op", "outbox_maintain_v1", "protocol", 1)))!;
+        Check(connected.S("mode") == "complete" && !connected.B("more") && connected.S("alert") == "age", "with a central the month-old outbox needs no baseline and raises the age alert");
+        var central = new FakeCentral(site) { LoseAnswerTo = order[100], FailOnce = order[300] };
+        using (var sync = new CentralSyncWorker(store, Path.Combine(folder, "branch.json"), folder, Microsoft.Extensions.Logging.Abstractions.NullLogger<CentralSyncWorker>.Instance, central)) {
+
+            var states = new List<string>();
+            for (var round = 0; round < 40 && (await store.CallAsync(J.O("op", "outbox_status_v1")))!.L("pending") > 0; round++) {
+
+                states.Add((await sync.DeliverOnce()).S("state"));
+                // A failed event waits for its backoff; the test does not.
+                await Sql("UPDATE events SET next_attempt = 0");
+
+            }
+            Check(states.Count(x => x == "pending") == 2, "a lost answer and a refused connection each leave the event pending for a retry");
+
+        }
+        var status = (await store.CallAsync(J.O("op", "outbox_status_v1")))!;
+        Check(status.L("pending") == 0 && status["alert"] is null && status.L("acked_seq") == await Count("SELECT max(seq) FROM events"), "after reconnecting nothing is pending and the last confirmed sequence is the newest event");
+        Check(central.Committed.SequenceEqual(order) && central.Posts == order.Count + 2, "the central commits every event exactly once and in the order the branch committed them");
+        // A week later the acknowledged events move to the archive as the branch keeps selling.
+        await Sql("UPDATE events SET acked = acked - 8 * 86400");
+        for (var i = 0; i < 30; i++) await Commit(($"mn_visit_after_{i:D2}", J.O("total", i)));
+        var hot = await Count("SELECT count(*) FROM events");
+        var archived = await Count("SELECT count(*) FROM events_archive");
+        Check(archived == 450 && hot + archived == order.Count && await Count("SELECT count(*) FROM records WHERE id LIKE 'tx\\_%'") == order.Count, "events plus archive add up to every committed transaction");
+        Check(await Count("SELECT count(*) FROM (SELECT id FROM events UNION SELECT id FROM events_archive) x") == order.Count, "no event is in both the outbox and the archive");
+
+    }
 }

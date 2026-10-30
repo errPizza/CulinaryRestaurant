@@ -238,7 +238,7 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
         // of health, whose integrity check reads the whole file and stalls the single-threaded store as it grows.
         var cached = Volatile.Read(ref health);
         if (cached is null || DateTimeOffset.UtcNow - cached.Item1 > TimeSpan.FromSeconds(2)) Volatile.Write(ref health, cached = Tuple.Create(DateTimeOffset.UtcNow, (await store.CallAsync(J.O("op", "outbox_status_v1"), ct))!));
-        var connection = J.O("local", "available", "outboxPending", cached.Item2.L("pending"), "central", CentralState, "internet", "unverified", "cloudOrders", CloudState);
+        var connection = J.O("local", "available", "outboxPending", cached.Item2.L("pending"), "outboxAlert", cached.Item2["alert"]?.DeepClone(), "central", CentralState, "internet", "unverified", "cloudOrders", CloudState);
         if (PrinterState != "") connection["printer"] = PrinterState;
         if (FiscalState != "") connection["fiscal"] = FiscalState;
         connection["integrations"] = IntegrationConnection();

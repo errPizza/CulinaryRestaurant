@@ -1,6 +1,6 @@
 {
   "suite": "CulinaryOS runtime extension",
-  "tests": 27,
+  "tests": 28,
   "failures": 0,
   "errors": 0,
   "successful": true,
