@@ -86,6 +86,7 @@ public static class LabPostgres {
     public static PostgresBranchStore Test(string root, string folder, string site) => Branch(Bin(root), Shared(root), folder, site).GetAwaiter().GetResult();
     // A database of its own in the test cluster, for the central's tests.
     public static string TestDatabase(string root, string folder) => Database(Shared(root), folder).GetAwaiter().GetResult();
+    public static string TestCluster(string root) => Shared(root);
     static string Shared(string root) {
 
         var bin = Bin(root);

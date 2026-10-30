@@ -441,6 +441,35 @@ public sealed partial class PostgresBranchStore: IBranchStore, IDisposable {
 
     }
     public Task Acknowledge(string eventId, string digest, CancellationToken ct = default) => Acknowledge([(eventId, digest)], ct);
+    // After a restore: every event opens under this keyring and matches its digest, none is in both tables, and
+    // together they account for every committed transaction. A store migrated from SQLite may have dropped some.
+    public async Task<JsonObject> VerifyOutbox(CancellationToken ct = default) {
+
+        await using var db = await data.OpenConnectionAsync(ct);
+        long total = 0, transactions = 0, damaged = 0, last = 0;
+        foreach (var table in new[] { "events", "events_archive" }) {
+
+            await using var cmd = Command(db, null, "SELECT id, record_id, version, envelope, digest, seq FROM " + table);
+            await using var row = await cmd.ExecuteReaderAsync(ct);
+            while (await row.ReadAsync(ct)) {
+
+                total++;
+                last = Math.Max(last, row.GetInt64(5));
+                if (row.GetString(1).StartsWith("tx_")) transactions++;
+                try { if (Digest(OpenEvent((byte[])row[3], row.GetString(1), row.GetInt64(2), row.GetString(0))) != row.GetString(4)) damaged++; } catch (StoreException) { damaged++; }
+
+            }
+
+        }
+        var receipts = await Scalar<long>(db, null, "SELECT count(*) FROM records WHERE id LIKE 'tx\\_%'", ct);
+        var duplicated = await Scalar<long>(db, null, "SELECT count(*) FROM events e JOIN events_archive a ON a.id = e.id", ct);
+        var dropped = await Scalar<string>(db, null, "SELECT value FROM store_metadata WHERE key='mesanexo_outbox_dropped'", ct) is not null;
+        var acked = long.Parse(await Scalar<string>(db, null, "SELECT value FROM store_metadata WHERE key='outbox_acked_seq'", ct) ?? "0");
+        var pending = await Scalar<long>(db, null, "SELECT count(*) FROM events WHERE acked IS NULL", ct);
+        var valid = damaged == 0 && duplicated == 0 && acked <= last && (dropped ? transactions <= receipts : transactions == receipts);
+        return J.O("valid", valid, "events", total, "pending", pending, "transactions", receipts, "damaged", damaged, "duplicated", duplicated, "acked_seq", acked, "dropped_before", dropped);
+
+    }
     public async Task Retry(string eventId, CancellationToken ct = default) {
 
         await using var db = await data.OpenConnectionAsync(ct);

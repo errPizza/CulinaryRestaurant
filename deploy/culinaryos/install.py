@@ -203,14 +203,14 @@ def certificates(site, temporary_root="/run"):
     run('openssl', 'x509', '-in', cert, '-noout', '-checkend', '604800', stdout=subprocess.DEVNULL)
     return ca, cert, key
 
-def app_command(*args, stdin=None):
+def app_command(*args, stdin=None, keys=KEYRING):
     # The backend as the service account, with the keyring the way systemd hands it over to the service.
     account = pwd.getpwnam(DATA_ROLE)
     with tempfile.TemporaryDirectory(prefix='culinary-credentials-', dir='/run') as tmp:
         tmp = Path(tmp)
         os.chown(tmp, account.pw_uid, account.pw_gid)
         keyring = tmp / 'keyring'
-        keyring.write_bytes(KEYRING.read_bytes())
+        keyring.write_bytes(Path(keys).read_bytes())
         keyring.chmod(0o400)
         os.chown(keyring, account.pw_uid, account.pw_gid)
         return subprocess.run(['runuser', '-u', DATA_ROLE, '--', 'env', 'CREDENTIALS_DIRECTORY=' + str(tmp), 'DOTNET_BUNDLE_EXTRACT_BASE_DIR=/var/lib/culinaryos-app/dotnet-bundle', str(APP / 'backend/MesaNexo.Api'), *[str(a) for a in args]], stdin=stdin, stdout=subprocess.PIPE, check=False)

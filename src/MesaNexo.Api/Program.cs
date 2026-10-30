@@ -27,6 +27,8 @@ public static class Program {
             // One-time move off SQLite: runtime/export_store.py pipes the old store in on stdin.
             if (args.Contains("--migrate-from-export")) { Console.WriteLine((await StoreMigration.Import(store, Console.In)).ToJsonString()); if (lab) File.WriteAllText(Path.Combine(options.LabDirectory!, "initialized"), site); return 0; }
             var service = new BranchService(store, site, new Passwords());
+            // For culinaryos-restore: the audit chain and the outbox of a database loaded from a snapshot (exit 4 when they fail).
+            if (args.Contains("--verify-store")) { var audit = await service.AuditChain(); var outbox = await store.VerifyOutbox(); var valid = audit.B("valid") && outbox.B("valid"); Console.WriteLine(J.O("valid", valid, "audit", audit, "outbox", outbox).ToJsonString()); return valid ? 0 : 4; }
             if (args.Contains("--upgrade-schema")) { Console.WriteLine((await service.UpgradeSchema()).ToJsonString()); return 0; }
             if (Arg("import-plan") is string plan) { var result = await service.ImportPlan(plan, Arg("plan-sha256") ?? throw new Exception()); Console.WriteLine(result.ToJsonString()); return 0; }
             if (Arg("initialize") is string initial) { var config = JsonNode.Parse(await File.ReadAllTextAsync(initial))!.AsObject(); await service.Initialize(config); if (lab) File.WriteAllText(Path.Combine(options.LabDirectory!, "initialized"), site); Console.WriteLine("Sucursal inicializada. Retira el archivo de aprovisionamiento que contiene credenciales."); return 0; }

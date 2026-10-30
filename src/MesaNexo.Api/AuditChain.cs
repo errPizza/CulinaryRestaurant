@@ -33,6 +33,12 @@ public sealed partial class BranchService {
         // Memory keeps only the newest audit records; the chain is verified against every record in the store.
         var view = await View(ct);
         Role(Authenticate(view, token, out _), "manager");
+        return await AuditChain(ct);
+
+    }
+    // Reads every record, so a record this keyring cannot open fails here too.
+    public async Task<JsonObject> AuditChain(CancellationToken ct = default) {
+
         var s = new BranchState(await Read(ct, bounded: false), true);
         string previous = "";
         long seq = 0;

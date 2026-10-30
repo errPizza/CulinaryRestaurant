@@ -75,7 +75,7 @@ static class Program {
         if (args.Contains("--central-only")) { await CentralTests.Run(root, python, evidence); await File.WriteAllTextAsync(Path.Combine(root, "evidence", "central.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); return; }
         if (args.Contains("--business-only")) { await BusinessTests.Run(root, python, evidence); await File.WriteAllTextAsync(Path.Combine(root, "evidence", "business.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); return; }
         if (args.Contains("--setup-only")) { try { await SetupTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "setup.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
-        if (args.Contains("--store-only")) { try { await StoreTests.Run(root, evidence); await StoreTests.OfflineMonth(root, evidence); await StoreTests.Migration(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "store-outbox.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
+        if (args.Contains("--store-only")) { try { await StoreTests.Run(root, evidence); await StoreTests.OfflineMonth(root, evidence); await StoreTests.Restore(root, evidence); await StoreTests.Migration(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "store-outbox.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--migration-only")) { await MigrationTests.Run(root, python, evidence); await File.WriteAllTextAsync(Path.Combine(root, "evidence", "migration.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); return; }
         folder = Path.Combine(root, ".lab", "integration-" + J.Id());
         Directory.CreateDirectory(folder);
@@ -215,6 +215,7 @@ static class Program {
             await SchemaTests.Run(root, python, evidence);
             await StoreTests.Run(root, evidence);
             await StoreTests.OfflineMonth(root, evidence);
+            await StoreTests.Restore(root, evidence);
             await StoreTests.Migration(root, python, evidence);
             await PrintTests.Run(root, python, evidence);
             await FiscalTests.Run(root, python, evidence);

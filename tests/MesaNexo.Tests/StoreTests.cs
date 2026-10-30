@@ -118,6 +118,51 @@ static class StoreTests {
         Check(snapshot.S("sha256").Length == 64 && File.Exists(Path.Combine(folder, "schema-backups", snapshot.S("backup"))), "a snapshot is a pg_dump in the service-owned folder");
 
     }
+    // What culinaryos-restore does on a new machine: a snapshot loaded into another database opens with the same keyring,
+    // and --verify-store catches a wrong keyring and a damaged outbox.
+    public static async Task Restore(string root, List<JsonObject> evidence) {
+
+        void Check(bool ok, string name) { if (!ok) throw new Exception("FAIL: " + name); evidence.Add(J.O("test", name, "result", "passed")); Console.WriteLine("PASS " + name); }
+        const string site = "restore-site";
+        var folder = Path.Combine(root, ".lab", "restore-" + J.Id());
+        var dump = Path.Combine(folder, "branch.dump");
+        JsonNode? before;
+        JsonObject origin;
+        using (var store = LabPostgres.Test(root, folder, site)) {
+
+            var branch = new BranchService(store, site, new Passwords());
+            await TestLicense.Initialize(branch, J.O("siteId", site, "name", "Origen", "mode", "licencia", "managerName", "Gerencia", "managerUsername", "gerencia", "managerPassword", "Restore-" + J.Id(), "enrollmentCode", J.Id(), "modules", new JsonArray()));
+            origin = await store.VerifyOutbox();
+            await store.Dump(dump);
+            before = await store.CallAsync(J.O("op", "scan_v1", "protocol", 1, "max_records", 4096, "max_bytes", 1024 * 1024));
+            Check((await branch.AuditChain()).B("valid") && origin.B("valid") && origin.L("transactions") > 0, "the origin store verifies its audit chain and outbox");
+
+        }
+        var restored = folder + "-restored";
+        Directory.CreateDirectory(restored);
+        File.Copy(Path.Combine(folder, "test-only-keyring.json"), Path.Combine(restored, "test-only-keyring.json"));
+        var builder = new NpgsqlConnectionStringBuilder(await LabPostgres.Database(LabPostgres.TestCluster(root), restored));
+        var restore = new System.Diagnostics.ProcessStartInfo(Path.Combine(LabPostgres.Bin(root), "pg_restore")) { UseShellExecute = false, RedirectStandardError = true };
+        foreach (var arg in new[] { "--no-owner", "--exit-on-error", "--single-transaction", "--host", builder.Host!, "--port", builder.Port.ToString(), "--username", builder.Username!, "--dbname", builder.Database!, dump }) restore.ArgumentList.Add(arg);
+        using (var p = System.Diagnostics.Process.Start(restore)!) { var error = await p.StandardError.ReadToEndAsync(); await p.WaitForExitAsync(); Check(p.ExitCode == 0, "pg_restore loads the snapshot into a new database " + error); }
+        using (var target = LabPostgres.Test(root, restored, site)) {
+
+            var after = await target.CallAsync(J.O("op", "scan_v1", "protocol", 1, "max_records", 4096, "max_bytes", 1024 * 1024));
+            Check(J.Canonical(after) == J.Canonical(before), "every record comes back identical on the new machine");
+            var moved = new BranchService(target, site, new Passwords());
+            var outbox = await target.VerifyOutbox();
+            Check((await moved.AuditChain()).B("valid") && outbox.B("valid") && J.Canonical(outbox) == J.Canonical(origin), "the restored store verifies, with the same outbox as the origin");
+            await using var db = await target.Data.OpenConnectionAsync();
+            await using (var cmd = new NpgsqlCommand("UPDATE events SET envelope = decode('01', 'hex') || envelope WHERE seq = (SELECT min(seq) FROM events)", db)) await cmd.ExecuteNonQueryAsync();
+            Check((await target.VerifyOutbox()).L("damaged") == 1, "a damaged event is counted, not skipped");
+            await using (var cmd = new NpgsqlCommand("DELETE FROM events WHERE seq = (SELECT max(seq) FROM events)", db)) await cmd.ExecuteNonQueryAsync();
+            Check(!(await target.VerifyOutbox()).B("valid"), "a snapshot missing an outbox event does not verify");
+
+        }
+        File.WriteAllText(Path.Combine(restored, "test-only-keyring.json"), Keyring.Generate().ToJsonString());
+        try { using var wrong = LabPostgres.Test(root, restored, site); Check(false, "another keyring opens the snapshot"); } catch (StoreException e) { Check(e.Code == "COS-DATA-INTEGRITY", "a snapshot only opens with the keyring of its branch"); }
+
+    }
     // A central that commits each event once, in the order it first sees them. It can lose the answer to one event
     // after committing it, and refuse one connection, as a real network does.
     sealed class FakeCentral(string site): HttpMessageHandler {

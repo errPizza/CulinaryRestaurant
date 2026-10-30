@@ -100,6 +100,20 @@ Estados: **Confirmado** (el riesgo existe en el código), **Parcial** (hay una p
 
 **Comprobación.** Simulacro en una VM nueva: instalar ISO, restaurar, transferir licencia y vender. Verificar ventas, recibos, caja, inventario, bitácora, facturas y outbox contra el origen. Se mide el tiempo.
 
+**Estado (30 de octubre de 2026): código hecho, falta el simulacro.**
+- Hecho:
+  - Inventario de llaves y procedimiento en `CulinaryOS/docs/SIMULACRO-RESTAURACION.md`.
+  - `culinaryos-recovery-kit`: guarda en un archivo cifrado con contraseña (Argon2id) el llavero, la identidad, la CA y las credenciales.
+  - `culinaryos-restore`: carga el `pg_dump` en una base temporal y la verifica con el llavero del kit. Sólo si pasa, reemplaza la sucursal. Rechaza un equipo que ya tenga restaurante.
+  - `MesaNexo.Api --verify-store`: comprueba todos los registros, la cadena de auditoría y `events + events_archive` contra las transacciones.
+- Pruebas:
+  - `StoreTests.Restore`, con `pg_dump` y `pg_restore` reales en el laboratorio.
+  - `CulinaryOS/tests/test_recovery.py`: 15 de 15, con servicios y PostgreSQL simulados.
+- Falta:
+  - El simulacro en VM: `culinaryos-restore` no se ha ejecutado en Linux, y el RTO no se ha medido.
+  - El RPO de 15 minutos: no hay temporizador de copias ni envío externo. Depende del hallazgo 9.
+  - La transferencia de licencia es manual, con **Restablecer activación**. El flujo con aprobación es el hallazgo 7.
+
 ### 4. Pagos inciertos · `MesaNexoNativo`
 **Lo que hay hoy.** Existe el estado `uncertain` para cobros de terminal, con `terminal.reconcile` (consulta al proveedor en modo real) y bloqueo de cierre de cuenta mientras haya un cobro incierto. Faltan estados explícitos de reverso y reembolso, el registro de cada intento con referencia del proveedor, y una tabla de capacidades por proveedor (Clip, Mercado Pago Point, BBVA semi-integrado, Stripe).
 
