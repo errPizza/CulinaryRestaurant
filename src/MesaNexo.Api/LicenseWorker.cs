@@ -34,6 +34,17 @@ public sealed class LicenseWorker(BranchService branch, ILogger<LicenseWorker> l
     }
 }
 public sealed partial class BranchService {
+    DateTimeOffset? certificateExpires;
+    public void UseCertificate(DateTimeOffset notAfter) => certificateExpires = notAfter;
+    // Renewal runs daily from 35 days out and restarts this process, so 30 days left on the certificate in use means it failed.
+    JsonObject? CertificateWarning(string role) {
+
+        if (certificateExpires is not { } ends) return null;
+        var days = (int)Math.Ceiling((ends - DateTimeOffset.UtcNow).TotalDays);
+        if (days > 30 || role != "manager" && days > 7) return null;
+        return J.O("days", days, "level", days <= 7 ? "critical" : "notice", "message", days <= 0 ? "El certificado de este servidor venció. Reinicia el servidor y llama a soporte." : $"El certificado de este servidor vence en {days} {(days == 1 ? "día" : "días")} y no se renovó solo. Reinicia el servidor; si el aviso sigue, llama a soporte.");
+
+    }
     // The certificate this branch presents to MesaNexo.Central; the panel lists it for --provision-tenant.
     public async Task<bool> RegisterCentral(CancellationToken ct = default) {
 

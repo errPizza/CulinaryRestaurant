@@ -244,6 +244,7 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
         if (FiscalState != "") connection["fiscal"] = FiscalState;
         connection["integrations"] = IntegrationConnection();
         connection["terminals"] = Domain.LiveCatalog.A("terminals").DeepClone();
+        if (CertificateWarning(u.S("role")) is { } certificate) connection["certificate"] = certificate;
         result["connection"] = connection;
         return result;
 

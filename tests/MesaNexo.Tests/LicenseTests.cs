@@ -286,6 +286,16 @@ static class LicenseTests {
         Check(lead.S("level") == "critical" && staff.S("level") == "critical", "in the last three days the whole team is warned");
         await service.Renew();
         var open = (await SignIn()).S("token");
+        // The certificate in use: 30 days left means the daily renewal failed.
+        JsonObject CertificateIn(JsonObject state) => state.Obj("connection").Obj("certificate");
+        service.UseCertificate(DateTimeOffset.UtcNow.AddDays(40));
+        Check(CertificateIn(await service.State(open)).Count == 0, "a certificate that can still renew raises no warning");
+        service.UseCertificate(DateTimeOffset.UtcNow.AddDays(14));
+        var certificate = CertificateIn(await service.State(open));
+        Check(certificate.L("days") == 14 && certificate.S("level") == "notice", "a certificate that did not renew warns the manager");
+        service.UseCertificate(DateTimeOffset.UtcNow.AddDays(7));
+        Check(CertificateIn(await service.State(open)).S("level") == "critical", "seven days from expiry the warning is critical");
+        service.UseCertificate(DateTimeOffset.UtcNow.AddDays(365));
         // Clock: CulinaryServer's time ahead of the branch's clock by more than the tolerance.
         await service.InstallLicense(TestLicense.Sign(Jws.License, TestLicense.Payload(service, ["reservations"], maxTables: 1, revision: 5, validated: DateTimeOffset.UtcNow.AddHours(2))), true);
         Check((await service.LicenseStatus()).S("state") == "clock", "a branch clock set behind signed time locks the branch");

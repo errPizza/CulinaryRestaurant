@@ -43,6 +43,7 @@ public static class ApiHost {
         var app = builder.Build();
         var service = app.Services.GetRequiredService<BranchService> ();
         service.UseIntegrations(integrations, terminals);
+        service.UseCertificate(cert.NotAfter);
         if (licensing is not null) service.UseLicensing(licensing);
 
         app.Use(async(ctx, next) => {

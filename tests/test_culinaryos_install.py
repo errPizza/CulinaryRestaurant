@@ -1,4 +1,4 @@
-import hashlib, importlib.util, json, os, ssl, struct, subprocess, sys, tempfile, unittest
+import hashlib, importlib.util, json, os, ssl, struct, subprocess, sys, tempfile, time, unittest
 from pathlib import Path
 from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
@@ -132,6 +132,70 @@ class CulinaryInstallation(unittest.TestCase):
             cert.unlink()
             with self.assertRaises(ValueError):
                 i.certificates(self.site(), tmp)
+    def renewal(self):
+        spec = importlib.util.spec_from_file_location('culinary_renew', ROOT / 'deploy/culinaryos/renew-tls.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    def test_tls_renewal(self):
+        openssl = str(Path('C:/Program Files/Git/usr/bin/openssl.exe') if os.name == 'nt' else Path('/usr/bin/openssl'))
+        original, renew = i.run, self.renewal().renew
+        def command(*args, **kwargs): return original(openssl if args[0] == 'openssl' else args[0], *args[1:], **kwargs)
+        def tool(*args, **kwargs): return subprocess.run([openssl, *map(str, args)], capture_output=True, text=True, **kwargs)
+        site = self.site()
+        with tempfile.TemporaryDirectory() as tmp, patch.object(i, 'run', side_effect=command), patch.object(os, 'chown', create=True):
+            config, other = Path(tmp) / 'config', Path(tmp) / 'other'
+            config.mkdir()
+            other.mkdir()
+            with patch.object(i, 'CONFIG', config):
+                ca, cert, key = i.certificates(site, tmp)
+            with patch.object(i, 'CONFIG', other):
+                foreign = i.certificates(site, tmp)[0]
+            (config / 'restaurant-connection.json').write_text(json.dumps(i.connection(site, ca)))
+            restarts = []
+            run = lambda: renew(config, openssl, lambda: restarts.append(1))
+            self.assertFalse(run(), 'a year away from expiry nothing happens')
+            self.assertEqual(restarts, [])
+            # A certificate with 20 days left, from the same key and CA, the way the clock would reach it.
+            names = tool('x509', '-in', cert, '-noout', '-ext', 'subjectAltName', check=True).stdout
+            tool('req', '-new', '-key', key, '-subj', '/CN=' + site['server_name'], '-out', Path(tmp) / 'old.csr', check=True)
+            (Path(tmp) / 'ext').write_text('subjectAltName=DNS:' + site['server_name'] + ',IP:' + site['server_address'] + '\n')
+            tool('x509', '-req', '-in', Path(tmp) / 'old.csr', '-CA', ca, '-CAkey', config / 'secrets/restaurant-ca.key', '-set_serial', 5, '-days', 20, '-extfile', Path(tmp) / 'ext', '-out', cert, check=True)
+            old = cert.read_bytes()
+            (Path(tmp) / 'old.crt').write_bytes(old)
+            # With a broken CA key nothing changes and the backend is not touched.
+            secret = config / 'secrets/restaurant-ca.key'
+            kept = secret.read_bytes()
+            secret.write_bytes(b'not a key')
+            with self.assertRaises(subprocess.CalledProcessError):
+                run()
+            self.assertEqual((cert.read_bytes(), restarts), (old, []))
+            secret.write_bytes(kept)
+            before = i.digest(ca), i.digest(key)
+            self.assertTrue(run())
+            self.assertEqual(restarts, [1])
+            self.assertEqual(before, (i.digest(ca), i.digest(key)), 'terminals keep trusting the same CA')
+            self.assertEqual(names, tool('x509', '-in', cert, '-noout', '-ext', 'subjectAltName', check=True).stdout)
+            self.assertFalse(list((config / 'secrets').glob('culinary-tls-*')), 'nothing temporary stays beside the keys')
+            # Terminals, with the clock moved 300 days ahead.
+            later = int(time.time()) + 300 * 86400
+            verify = lambda authority, leaf: tool('verify', '-attime', later, '-purpose', 'sslserver', '-verify_hostname', site['server_name'], '-CAfile', authority, leaf).returncode
+            self.assertEqual(verify(ca, cert), 0)
+            self.assertNotEqual(verify(ca, Path(tmp) / 'old.crt'), 0)
+            self.assertNotEqual(verify(foreign, cert), 0)
+            self.assertFalse(run(), 'the renewed certificate is left alone')
+            self.assertEqual(restarts, [1])
+            # A CA that ends before the certificate can be extended fails, and that failure is what the app warns about.
+            tool('req', '-x509', '-key', secret, '-days', 10, '-subj', '/CN=corta', '-out', ca, check=True)
+            cert.write_bytes(old)
+            with self.assertRaises(ValueError):
+                run()
+    def test_tls_timer_units(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(i, 'SYSTEMD', Path(tmp)), patch.object(i, 'run') as run, patch.object(os, 'chown', create=True):
+            i.tls_renewal()
+            run.assert_called_with('systemctl', 'enable', '--now', i.TLS_TIMER)
+            self.assertIn('ExecStart=/usr/bin/python3 ' + str(i.APP / 'renew-tls.py'), (Path(tmp) / i.TLS_SERVICE).read_text())
+            self.assertIn('Persistent=true', (Path(tmp) / i.TLS_TIMER).read_text())
     def historical_runtime(self, root):
         bundle, runtime = self.runtime(root)
         archived = ROOT / 'vendor/culinaryos/compat/store-0.2.0-installed.py'

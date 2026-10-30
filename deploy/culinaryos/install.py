@@ -36,6 +36,7 @@ CENTRAL_CREDENTIALS = {'central-ca': 'central-ca.crt', 'central-cert': 'central-
 SQLITE_STORE = Path('/var/lib/culinaryos-data/store.sqlite')
 SYSTEMD = Path('/etc/systemd/system')
 SYNC_TIMER, SYNC_SERVICE = 'culinaryos-sync.timer', 'culinaryos-sync.service'
+TLS_TIMER, TLS_SERVICE = 'culinaryos-renew-tls.timer', 'culinaryos-renew-tls.service'
 def known_extensions(bundle):
     # Earlier MesaNexo extensions this package may replace. Without the list nothing is replaced.
     path = bundle / 'deploy/culinaryos/extension-history.json'
@@ -359,6 +360,13 @@ def single_outbox_sender():
     run('systemctl', 'mask', SYNC_TIMER, SYNC_SERVICE)
     run('systemctl', 'daemon-reload')
 
+def tls_renewal():
+    # Persistent: a machine that was off at that hour renews when it next starts.
+    write_new(SYSTEMD / TLS_SERVICE, ('[Unit]\nDescription=Renovacion del certificado TLS de la sucursal\n[Service]\nType=oneshot\nExecStart=/usr/bin/python3 ' + str(APP / 'renew-tls.py') + '\n').encode())
+    write_new(SYSTEMD / TLS_TIMER, b'[Unit]\nDescription=Renovacion diaria del certificado TLS\n[Timer]\nOnCalendar=*-*-* 04:00:00\nRandomizedDelaySec=30m\nPersistent=true\n[Install]\nWantedBy=timers.target\n')
+    run('systemctl', 'daemon-reload')
+    run('systemctl', 'enable', '--now', TLS_TIMER)
+
 def install(bundle, client, server):
     server = license_server(server)
     site = preflight(bundle)
@@ -371,6 +379,7 @@ def install(bundle, client, server):
     APP.mkdir(mode=0o755, exist_ok=True)
     write_new(APP / 'culinary-restaurant-installing.json', b'{"version":"0.3.0"}\n')
     write_new(APP / 'hardware-identity.py', (bundle / 'deploy/culinaryos/hardware-identity.py').read_bytes(), 0o755)
+    write_new(APP / 'renew-tls.py', (bundle / 'deploy/culinaryos/renew-tls.py').read_bytes(), 0o755)
     copy_files(bundle / 'payload/backend', APP / 'backend')
     copy_files(bundle / 'payload/bridge', APP / 'client')
     write_new(APP / 'client/culinary-restaurant', binary, 0o755)
@@ -382,6 +391,7 @@ def install(bundle, client, server):
     initialize_branch(site)
     ca, cert, key = certificates(site)
     write_new(CONFIG / 'restaurant-connection.json', (json.dumps(connection(site, ca), indent=2) + '\n').encode())
+    tls_renewal()
     integrations_directory()
     manifest = {'version': 1, 'mode': 'server', 'ui_argv': [ENTRY], 'backend_argv': [str(APP / 'backend/MesaNexo.Api'), '--site', site['site_id'], '--port', '8443', '--license-server', server], 'port': 8443, 'readiness_socket': '/run/culinaryos-app/ready.sock', 'tls_ca_file': str(ca), 'credentials': {'tls-key': str(key), 'tls-cert': str(cert)}}
     file = APP / 'application.json'

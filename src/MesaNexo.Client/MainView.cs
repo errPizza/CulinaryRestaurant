@@ -26,14 +26,14 @@ public sealed partial class MainView: UserControl {
         shell.Children.Add(content);
         shell.Children.Add(status);
         SizeChanged += (_, e) => { var width = e.NewSize.Width; var bucket = width < 381 ? 0 : width < 651 ? 1 : width < 901 ? 2 : width < 1201 ? 3 : width < 1300 ? 4 : width < 1360 ? 5 : width < 1551 ? 6 : 7; if (bucket != layoutBucket) { layoutBucket = bucket; narrow = width <= 650; if (state is not null) Render(); else if (lockedLicense is not null) RenderLicenseLock(lockedLicense); else ShowLogin(); } };
-        timer.Tick += async (_, _) => { if (session is null || busy || polling || modal is not null) return; foreach (var refresh in clockRefresh.ToArray()) refresh(); polling = true; try { var next = await session.State(); if (state is null || next.Obj("restaurant").L("revision") != state.Obj("restaurant").L("revision") || LicenseWarning(next).S("message") != LicenseWarning(state).S("message")) { state = next; Render(); } Status(); } catch (Exception e) { status.Text = e.Message; status.Foreground = Brushes.DarkRed; } finally { polling = false; } };
+        timer.Tick += async (_, _) => { if (session is null || busy || polling || modal is not null) return; foreach (var refresh in clockRefresh.ToArray()) refresh(); polling = true; try { var next = await session.State(); if (state is null || next.Obj("restaurant").L("revision") != state.Obj("restaurant").L("revision") || !Warnings(next).Select(x => x.S("message")).SequenceEqual(Warnings(state).Select(x => x.S("message")))) { state = next; Render(); } Status(); } catch (Exception e) { status.Text = e.Message; status.Foreground = Brushes.DarkRed; } finally { polling = false; } };
         DetachedFromVisualTree += (_, _) => timer.Stop();
         _ = RestoreMotion();
         ShowLogin();
 
     }
-    // The warning changes with the calendar, not with a commit, so the revision alone would not redraw it.
-    static JsonObject LicenseWarning(JsonObject state) => state.Obj("restaurant").Obj("license").Obj("warning");
+    // These change with the calendar, not with a commit, so the revision alone would not redraw them.
+    static IEnumerable<JsonObject> Warnings(JsonObject state) => new[] { state.Obj("restaurant").Obj("license").Obj("warning"), state.Obj("connection").Obj("certificate") }.Where(x => x.Count > 0);
     async Task RestoreMotion() { try { PrototypeMotion.ReduceMotion = await vault.Read("motion.reduced") == "true"; } catch { } }
     async Task RefreshLive() { if (session is null || busy || polling || modal is not null) return; polling = true; try { state = await session.State(); Render(); Status(); } catch (ApiFailure e) when (e.Status == 423) { await ShowLicenseLock(); } finally { polling = false; } }
     static TextBlock Text(string text, double size = 14, IBrush? color = null, bool bold = false) => new() { Text = text, FontFamily = Brand.InterfaceFont, FontSize = size, Foreground = color ?? Graphite, FontWeight = bold ? (size >= 24 ? FontWeight.Bold : FontWeight.SemiBold) : FontWeight.Normal, TextWrapping = TextWrapping.Wrap };

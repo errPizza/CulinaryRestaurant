@@ -173,6 +173,20 @@ Estados: **Confirmado** (el riesgo existe en el código), **Parcial** (hay una p
 **Acciones.** Temporizador de systemd que renueva el certificado de servidor 30 días antes de vencer con la CA local, reinicia el backend y registra el evento. Las terminales ya confían en la CA, así que el certificado nuevo no requiere tocar los clientes. Avisos en la app a 30, 14 y 7 días si la renovación falla. Procedimiento de rotación de la CA para el año 9.
 **Comprobación.** Prueba con reloj adelantado: renueva, las terminales se conectan y un certificado de otra CA sigue rechazándose.
 
+**Estado (30 de octubre de 2026): código hecho, falta probarlo en systemd.**
+- Hecho:
+  - `deploy/culinaryos/renew-tls.py`, con `culinaryos-renew-tls.timer` a diario a las 04:00. `install.py` crea las unidades, y la ISO también en su primer arranque. Renueva a 35 días, no a 30: así hay cinco intentos antes del primer aviso.
+  - Conserva la llave del servidor. Sólo cambia un archivo, de forma atómica, y un fallo en cualquier paso deja el par anterior funcionando y no reinicia el backend.
+  - El backend avisa con la fecha del certificado que tiene en uso, sin archivo de estado: con 30 días o menos, la renovación falló. El gerente lo ve desde 30 días, y en los últimos 7 es crítico y lo ve todo el equipo.
+  - Procedimiento de rotación de la CA en `CulinaryOS/docs/CERTIFICADOS-LOCALES.md`. Cada terminal fija la huella de una sola CA, así que la rotación se hace terminal por terminal.
+- Pruebas:
+  - `test_tls_renewal`, con OpenSSL real y `-attime` a 300 días: el certificado nuevo valida, el viejo no, y el de otra CA tampoco. También una llave de CA dañada y una CA por vencer.
+  - `--license-only`: avisos a 40, 14 y 7 días.
+- Falta:
+  - Ejecutar el temporizador en systemd, en la VM.
+  - Comprobar una terminal real tras el reinicio del backend. Lo probado es la cadena con `openssl verify`, no el cliente.
+  - Las ISO ya aprovisionadas no reciben el temporizador: `tls_renewal()` corre sólo en el primer arranque. Hoy ninguna sucursal está en producción.
+
 ### 7. Transferencia de licencia por reparación · `CulinaryServer`, `MesaNexoNativo`
 **Acciones.** Flujo de transferencia en CulinaryAdmin (aprobación del proveedor y auditoría) que libera el equipo ligado y permite reactivar con el mismo código en el equipo nuevo. La huella se documenta como señal, no como secreto. El cambio de disco o de tarjeta de red no debe perder datos: la llave de datos no depende de la identidad de licencia.
 **Comprobación.** Pruebas: cambio de MAC, de disco y fallo de TPM, con migración autorizada.
