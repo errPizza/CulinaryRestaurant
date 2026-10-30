@@ -31,7 +31,11 @@ def validate_site(site):
 DATABASE = 'culinaryos'
 DATA_ROLE = 'culinaryos-app'
 KEYRING = CONFIG / 'secrets/branch.keys.json'
+# Only with all three in place: LoadCredential stops the backend from starting when a file is missing.
+CENTRAL_CREDENTIALS = {'central-ca': 'central-ca.crt', 'central-cert': 'central-client.crt', 'central-key': 'central-client.key'}
 SQLITE_STORE = Path('/var/lib/culinaryos-data/store.sqlite')
+SYSTEMD = Path('/etc/systemd/system')
+SYNC_TIMER, SYNC_SERVICE = 'culinaryos-sync.timer', 'culinaryos-sync.service'
 def known_extensions(bundle):
     # Earlier MesaNexo extensions this package may replace. Without the list nothing is replaced.
     path = bundle / 'deploy/culinaryos/extension-history.json'
@@ -341,7 +345,19 @@ def backend_dropin():
         tpm = False
     if tpm:
         lines += ['BindPaths=/dev/tpmrm0', 'DeviceAllow=/dev/tpmrm0 rw', 'SupplementaryGroups=tss']
+    secrets = KEYRING.parent
+    if all((secrets / name).is_file() for name in CENTRAL_CREDENTIALS.values()):
+        lines += ['LoadCredential=' + key + ':' + str(secrets / name) for key, name in CENTRAL_CREDENTIALS.items()]
     return ('\n'.join(lines) + '\n').encode()
+
+def single_outbox_sender():
+    # The outbox lives in PostgreSQL and the backend is its only sender; the old timer would resend the SQLite file.
+    # Masking needs the unit files gone, and a masked timer is one culinaryos-runtime leaves alone.
+    subprocess.run(['systemctl', 'disable', '--now', SYNC_TIMER], check=False, stderr=subprocess.DEVNULL)
+    for name in (SYNC_TIMER, SYNC_SERVICE):
+        (SYSTEMD / name).unlink(missing_ok=True)
+    run('systemctl', 'mask', SYNC_TIMER, SYNC_SERVICE)
+    run('systemctl', 'daemon-reload')
 
 def install(bundle, client, server):
     server = license_server(server)
@@ -371,6 +387,7 @@ def install(bundle, client, server):
     file = APP / 'application.json'
     write_new(file, (json.dumps(manifest, indent=2) + '\n').encode())
     write_new(Path('/etc/systemd/system/culinaryos-backend.service.d/restaurant.conf'), backend_dropin())
+    single_outbox_sender()
     run('culinaryos-runtime', 'register-app', file)
     # Reuse the existing autostart ID. OS authentication policy remains unchanged.
     autostart = Path('/etc/xdg/autostart/culinaryos.desktop')

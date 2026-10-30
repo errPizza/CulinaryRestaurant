@@ -1,4 +1,4 @@
-import hashlib, importlib.util, json, os, ssl, struct, sys, tempfile, unittest
+import hashlib, importlib.util, json, os, ssl, struct, subprocess, sys, tempfile, unittest
 from pathlib import Path
 from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
@@ -429,5 +429,35 @@ class CulinaryInstallation(unittest.TestCase):
         self.assertEqual(cfg['build']['frontendDist'], '../dist')
         linux = json.loads((ROOT / 'src/MesaNexo.Web/src-tauri/tauri.linux.conf.json').read_text())
         self.assertTrue(linux['app']['windows'][0]['maximized'])
+    def test_install_leaves_the_backend_as_only_outbox_sender(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            units = Path(tmp)
+            for name in (i.SYNC_TIMER, i.SYNC_SERVICE):
+                (units / name).write_text('[Unit]')
+            seen = []
+            def systemctl(args, **kwargs):
+                seen.append((args[1], (units / i.SYNC_TIMER).exists()))
+                return subprocess.CompletedProcess(args, 0)
+            with patch.object(i, 'SYSTEMD', units), patch.object(i.subprocess, 'run', side_effect=systemctl):
+                i.single_outbox_sender()
+                self.assertEqual(seen, [('disable', True), ('mask', False), ('daemon-reload', False)])
+                # A resumed install finds the units already gone.
+                i.single_outbox_sender()
+        install_source = Path(i.__file__).read_text(encoding='utf-8')
+        install_source = install_source[install_source.index('def install('):]
+        self.assertLess(install_source.index('single_outbox_sender()'), install_source.index("'register-app'"))
+    def test_backend_gets_central_credentials_only_when_all_three_exist(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            secrets = Path(tmp)
+            names = list(i.CENTRAL_CREDENTIALS.values())
+            with patch.object(i, 'KEYRING', secrets / 'branch.keys.json'), patch.object(i, 'grp', create=True) as groups:
+                groups.getgrnam.side_effect = KeyError
+                for name in names[:2]:
+                    (secrets / name).write_text('x')
+                self.assertNotIn(b'central-', i.backend_dropin())
+                (secrets / names[2]).write_text('x')
+                text = i.backend_dropin().decode()
+            for key, name in i.CENTRAL_CREDENTIALS.items():
+                self.assertIn('LoadCredential=' + key + ':' + str(secrets / name) + '\n', text)
 if __name__ == '__main__':
     unittest.main(verbosity=2)

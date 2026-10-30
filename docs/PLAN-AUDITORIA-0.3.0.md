@@ -88,7 +88,7 @@ Estados: **Confirmado** (el riesgo existe en el código), **Parcial** (hay una p
   - Extensión Python: 28 de 28.
   - Instalador: 44 de 44.
   - Central: 37 de 37.
-- Pendiente fuera de este repositorio: quitar `mesanexo_ipc.py` y su gancho de `build-appliance.sh` y `prepare-appliance-input.py` en CulinaryOS. Esos archivos tienen cambios de licencias sin commit, así que no se tocaron.
+- El backend es el único remitente. La ISO ya no incluye `mesanexo_ipc.py` y enmascara `culinaryos-sync`; `install.py` enmascara lo mismo en una instalación fuera de la ISO. El backend recibe las credenciales `central-*` sólo cuando existen las tres. Falta probarlo en systemd y con una central real.
 
 ### 3. Restauración completa en otro equipo · `CulinaryOS`
 **Lo que hay hoy.** `backup.py` respalda archivos de configuración y tiene `--restore-staging`, que restaura a un directorio nuevo, no a un servidor en marcha. Hay instantáneas `pg_dump` en `/var/lib/culinaryos-app/snapshots`. El llavero `branch.keys.json` y la identidad (TPM o huella) se guardan aparte.
