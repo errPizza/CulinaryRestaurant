@@ -7,10 +7,13 @@ using Org.BouncyCastle.Crypto.Signers;
 using static MesaNexo.Core.Rules;
 namespace MesaNexo.Core;
 
-// Documents signed by the provider's root (CulinaryServer): compact JWS with EdDSA over Ed25519, verified on the
-// exact bytes received. The root public key comes only from this assembly, never from the network or a file.
+// Documents signed by the provider: compact JWS with EdDSA over Ed25519, verified on the exact bytes received. The
+// root public key comes only from this assembly, never from the network or a file. The root stays offline and signs
+// intermediates; a document signed by one carries its certificate in the "chain" header, and the intermediate may sign
+// only the types it lists. Documents the root signed itself (licenses issued before the intermediates) stay valid.
 public static class Jws {
     public const string License = "culinary-license+jws", Status = "culinary-license-status+jws", Update = "culinary-update+jws", Release = "culinary-release+jws";
+    public const string Intermediate = "culinary-intermediate+jws", Floor = "culinary-key-floor+jws";
     static readonly byte[] SpkiPrefix = Convert.FromHexString("302a300506032b6570032100");
     static readonly Lazy<byte[]?> Root = new(() => {
 
@@ -22,18 +25,67 @@ public static class Jws {
     });
     public static bool HasRoot => Root.Value is not null;
     // Same derivation as CulinaryServer: the first 16 base64url characters of SHA-256 over the raw public key.
-    public static string RootKid => Root.Value is { } raw ? Base64Url.EncodeToString(SHA256.HashData(raw))[..16] : "";
-    public static JsonObject Verify(string jws, string type) {
+    public static string RootKid => Root.Value is { } raw ? Kid(raw) : "";
+    static string Kid(byte[] raw) => Base64Url.EncodeToString(SHA256.HashData(raw))[..16];
+    // Lowest intermediate generation still valid per use, raised by the root to revoke a compromised intermediate.
+    public sealed record KeyFloor(long License, long Release) {
+        public static readonly KeyFloor None = new(0, 0);
+        public long For(string type) => type == Jws.Release ? Release : License;
+        public KeyFloor Max(KeyFloor other) => new(Math.Max(License, other.License), Math.Max(Release, other.Release));
+        // A missing or unverifiable floor counts as none: it can only be raised by something the root signed.
+        public static KeyFloor Read(string? jws) {
+
+            if (string.IsNullOrEmpty(jws)) return None;
+            try { var floor = Signed(jws, Floor, Root.Value ?? throw new BusinessException(503, "Esta compilación no trae la llave raíz del proveedor"), out _); return new(floor.L("license"), floor.L("release")); } catch (BusinessException) { return None; }
+
+        }
+    }
+    public static JsonObject Verify(string jws, string type, KeyFloor? floor = null) {
 
         var root = Root.Value ?? throw new BusinessException(503, "Esta compilación no trae la llave raíz del proveedor");
+        var header = Header(jws);
+        if (header["chain"] is null) return Signed(jws, type, root, out _);
+        var certificate = Signed(header.S("chain"), Intermediate, root, out _);
+        byte[] key;
+        try { key = Base64Url.DecodeFromChars(certificate.S("key")); } catch (FormatException) { throw new BusinessException(403, "Llave intermedia ilegible"); }
+        Need(key.Length == 32 && certificate.S("kid") == Kid(key) && header.S("kid") == certificate.S("kid"), "Llave intermedia inconsistente", 403);
+        Need(certificate.A("uses").Strings().Contains(type), "La llave intermedia no puede firmar este tipo de documento", 403);
+        Need(certificate.L("generation") >= (floor ?? KeyFloor.None).For(type), "La llave intermedia del proveedor fue revocada", 403);
+        var payload = Signed(jws, type, key, out _);
+        // Validity is checked at signing time, so a license signed while the intermediate was valid keeps verifying.
+        Need(DateTimeOffset.TryParse(payload.S("iat"), out var iat) && DateTimeOffset.TryParse(certificate.S("nbf"), out var nbf) && DateTimeOffset.TryParse(certificate.S("exp"), out var exp) && iat >= nbf && iat <= exp, "Firmado fuera de la vigencia de la llave intermedia", 403);
+        return payload;
+
+    }
+    // An update offer: the authorization (license intermediate, online) names the branch; the manifest (release
+    // intermediate, offline) vouches for the bytes. Both must describe the same package, so the Worker alone cannot
+    // authorize other bytes. Returns the authorization.
+    public static JsonObject VerifyUpdate(JsonObject offer, KeyFloor? known = null) {
+
+        var floor = (known ?? KeyFloor.None).Max(KeyFloor.Read(offer.S("keyFloor")));
+        var update = Verify(offer.S("update"), Update, floor);
+        var release = Verify(offer.S("release"), Release, floor);
+        foreach (var field in new[] { "releaseId", "version", "platform", "filename", "sha512" }) Need(release.S(field) == update.S(field), "El manifiesto del paquete no corresponde a la actualización", 403);
+        Need(release.L("bytes") == update.L("bytes"), "El manifiesto del paquete no corresponde a la actualización", 403);
+        return update;
+
+    }
+    static JsonObject Header(string jws) {
+
+        Need(jws.Length <= 32768 && jws.Count(c => c == '.') == 2, "Documento firmado inválido", 403);
+        try { return Decode(jws[..jws.IndexOf('.')]); } catch (Exception e) when (e is FormatException or System.Text.Json.JsonException or InvalidOperationException) { throw new BusinessException(403, "Documento firmado ilegible"); }
+
+    }
+    static JsonObject Signed(string jws, string type, byte[] key, out JsonObject header) {
+
         var parts = jws.Split('.');
         Need(parts.Length == 3 && jws.Length <= 32768, "Documento firmado inválido", 403);
-        JsonObject header, payload;
+        JsonObject payload;
         byte[] signature;
         try { header = Decode(parts[0]); payload = Decode(parts[1]); signature = Base64Url.DecodeFromChars(parts[2]); } catch (Exception e) when (e is FormatException or System.Text.Json.JsonException or InvalidOperationException) { throw new BusinessException(403, "Documento firmado ilegible"); }
         Need(header.S("alg") == "EdDSA" && header.S("typ") == type, "El documento firmado no es del tipo esperado", 403);
         var signer = new Ed25519Signer();
-        signer.Init(false, new Ed25519PublicKeyParameters(root));
+        signer.Init(false, new Ed25519PublicKeyParameters(key));
         var input = Encoding.ASCII.GetBytes(parts[0] + "." + parts[1]);
         signer.BlockUpdate(input, 0, input.Length);
         Need(signature.Length == 64 && signer.VerifySignature(signature), "Firma del proveedor inválida", 403);

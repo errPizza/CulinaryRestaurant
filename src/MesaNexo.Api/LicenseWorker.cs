@@ -108,10 +108,10 @@ public sealed partial class BranchService {
         Need(System.Text.RegularExpressions.Regex.IsMatch(p.S("currentVersion"), "^\\d{1,5}\\.\\d{1,5}\\.\\d{1,5}$"), "Versión actual inválida");
         var reply = await Call(HttpMethod.Post, "/branch/v1/updates/check", J.O("platform", platform, "currentVersion", p.S("currentVersion")), ct);
         if (reply["update"] is not JsonValue) return J.O("update", null);
-        var update = Jws.Verify(reply.S("update"), Jws.Update);
+        var update = Jws.VerifyUpdate(reply, floor);
         Need(update.S("siteId") == siteId && update.S("platform") == platform, "La actualización no es para esta sucursal", 403);
         lock (downloads) downloads[update.S("releaseId")] = reply.Obj("download");
-        return J.O("update", reply.S("update"), "version", update.S("version"), "notes", update.S("notes"), "bytes", update.L("bytes"));
+        return J.O("update", reply.S("update"), "release", reply.S("release"), "keyFloor", reply.S("keyFloor"), "version", update.S("version"), "notes", update.S("notes"), "bytes", update.L("bytes"));
 
     }
     public async Task<HttpResponseMessage> DownloadUpdate(JsonObject p, CancellationToken ct = default) {

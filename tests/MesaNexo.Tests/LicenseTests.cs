@@ -28,6 +28,9 @@ sealed class FakeCulinaryServer: IAsyncDisposable {
     public DateTimeOffset Expires = DateTimeOffset.UtcNow.AddDays(30);
     public readonly List<JsonObject> Tickets = [];
     public JsonObject? Update;
+    // Update offers as the Worker sends them: authorization from the license intermediate, manifest from the release one.
+    public TestLicense.Key UpdateSigner = TestLicense.Intermediate(TestLicense.LicenseUses), ReleaseSigner = TestLicense.Intermediate(TestLicense.ReleaseUses);
+    public JsonObject? ReleaseOverride;
     public byte[] Package = [];
     readonly HashSet<string> issued = [], used = [];
     public int Renewals;
@@ -102,7 +105,8 @@ sealed class FakeCulinaryServer: IAsyncDisposable {
 
             if (await Signed(c) is not { } r) return Error(401, "unauthorized", "Firma inválida");
             if (Update is null) return Results.Json(J.O("update", null));
-            return Results.Json(J.O("update", TestLicense.Sign(Jws.Update, Update), "release", "", "download", J.O("path", "/branch/v1/downloads/" + Update.S("releaseId"), "token", "download-token", "expiresAt", Iso(DateTimeOffset.UtcNow.AddHours(1)))));
+            var manifest = ReleaseOverride ?? J.O("v", 1, "releaseId", Update.S("releaseId"), "version", Update.S("version"), "platform", Update.S("platform"), "filename", Update.S("filename"), "bytes", Update.L("bytes"), "sha512", Update.S("sha512"), "iat", J.Now());
+            return Results.Json(J.O("update", TestLicense.SignWith(UpdateSigner, Jws.Update, Update), "release", TestLicense.SignWith(ReleaseSigner, Jws.Release, manifest), "download", J.O("path", "/branch/v1/downloads/" + Update.S("releaseId"), "token", "download-token", "expiresAt", Iso(DateTimeOffset.UtcNow.AddHours(1)))));
 
         });
         App.MapGet("/branch/v1/downloads/{id}", (HttpContext c) => c.Request.Headers.Authorization.ToString() == "Bearer download-token" ? Results.Bytes(Package, "application/octet-stream") : Error(401, "unauthorized", "Permiso inválido"));
@@ -225,14 +229,26 @@ static class LicenseTests {
             var package = Path.Combine(folder, "updates", "culinary-9.0.0.exe");
             Directory.CreateDirectory(Path.GetDirectoryName(package)!);
             await File.WriteAllBytesAsync(package, await download.Content.ReadAsByteArrayAsync());
-            var update = Updates.Signed(check.S("update"), site, "win-x64");
+            var update = Updates.Signed(check, site, "win-x64");
             await Updates.Verify(update, package, "win-x64");
             Check(true, "the terminal verifies the signed update and installer bytes");
-            await Deny(() => Task.Run(() => Updates.Signed(check.S("update"), "other-site", "win-x64")), "an update for another branch is rejected by the terminal", 403);
+            await Deny(() => Task.Run(() => Updates.Signed(check, "other-site", "win-x64")), "an update for another branch is rejected by the terminal", 403);
             await File.AppendAllTextAsync(package, "x");
             await Deny(() => Updates.Verify(update, package, "win-x64"), "a changed installer is rejected by the terminal");
 
         }
+        // The online license intermediate cannot vouch for bytes: the manifest must come from the release intermediate.
+        Task<JsonObject> CheckAgain() => service.CheckUpdate(J.O("siteId", site, "deviceId", deviceId, "deviceSecret", deviceSecret, "platform", "win-x64", "currentVersion", "0.2.0"));
+        fake.ReleaseOverride = (JsonObject)fake.Update.DeepClone();
+        fake.ReleaseOverride["sha512"] = new string('0', 128);
+        await Deny(CheckAgain, "a release manifest for other bytes is rejected even with a valid authorization", 403);
+        fake.ReleaseOverride = null;
+        var releaseSigner = fake.ReleaseSigner;
+        fake.ReleaseSigner = fake.UpdateSigner;
+        await Deny(CheckAgain, "the license intermediate cannot sign a release manifest", 403);
+        fake.ReleaseSigner = releaseSigner;
+        Check((await CheckAgain()).S("version") == "9.0.0", "manifest and authorization from their own intermediates are accepted");
+        fake.Update = null;
         // A lower revision never replaces a higher one.
         fake.Revision = 3;
         await service.Renew();
@@ -287,6 +303,23 @@ static class LicenseTests {
         await Enroll("terminal");
         for (var i = 0; i < 3; i++) await Enroll("mobile");
         Check(true, "with the add-on, mobile order takers are unlimited and do not use terminal slots");
+        // Intermediates: the root stays offline and certifies keys for specific document types and generations.
+        JsonObject Next(long revision) => TestLicense.Payload(service, [], maxTables: 1, revision: revision, tier: "pro", addons: ["mobileOrdering", "deliveryHub"]);
+        var first = TestLicense.Intermediate(TestLicense.LicenseUses, 1);
+        await service.InstallLicense(TestLicense.SignWith(first, Jws.License, Next(10)), true);
+        Check((await service.LicenseStatus()).S("state") == "active", "a license signed by the license intermediate installs");
+        await Deny(() => service.InstallLicense(TestLicense.SignWith(TestLicense.Intermediate(TestLicense.ReleaseUses), Jws.License, Next(11))), "the release intermediate cannot sign a license", 403);
+        await Deny(() => service.InstallLicense(TestLicense.SignWith(TestLicense.Intermediate(TestLicense.LicenseUses, expires: DateTimeOffset.UtcNow.AddDays(-1)), Jws.License, Next(11))), "a license signed after its intermediate expired is rejected", 403);
+        await service.InstallLicense(TestLicense.SignWith(first, Jws.License, Next(11)), false, default, TestLicense.SignWith(first, Jws.Floor, J.O("v", 1, "license", 9, "release", 9, "iat", J.Now())));
+        Check((await service.LicenseStatus()).S("state") == "active", "a key floor not signed by the root is ignored");
+        var floor = TestLicense.Floor(2, 0);
+        await service.InstallLicense(TestLicense.SignWith(TestLicense.Intermediate(TestLicense.LicenseUses, 2), Jws.License, Next(12)), false, default, floor);
+        Check((await service.Load()).Get("license", "current").S("keyFloor") == floor, "a root-signed key floor is kept with the license");
+        await Deny(() => service.InstallLicense(TestLicense.SignWith(first, Jws.License, Next(13))), "below the key floor a revoked intermediate signs nothing", 403);
+        var restarted = new BranchService(runtime, site, new Passwords());
+        restarted.UseLicensing(new LicenseOptions(TestLicense.Folder(site), HardwareFile: hardware, UseTpm: false));
+        Check(restarted.License(await restarted.Load()).State == "active", "after a restart the kept floor still accepts the current generation");
+        await Deny(() => restarted.InstallLicense(TestLicense.SignWith(first, Jws.License, Next(13))), "after a restart the kept floor still rejects the revoked generation", 403);
 
     }
 }
