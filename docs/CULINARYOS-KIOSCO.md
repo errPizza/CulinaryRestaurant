@@ -55,6 +55,20 @@ sudo reboot
 
 Usa la ruta real impresa, sin escribir literalmente `<fecha>`. También puede ejecutarse el mismo `install-kiosk.py` desde el CD. La restauración se limita a archivos de interfaz/sesión respaldados. No restaura ni modifica datos o claves del restaurante.
 
+## Si aparece «Recuperando Culinary Restaurant»
+
+Esa pantalla sólo sale cuando la app termina o deja de enviar señales durante 45 segundos. Cada vez queda la causa (código de salida, señal o falta de señales) y el final de la salida de la app en `/home/operador/.local/state/culinary-restaurant/kiosk.log`. Desde TTY2:
+
+```sh
+sudo tail -n 60 /home/operador/.local/state/culinary-restaurant/kiosk.log
+```
+
+En X11, Ctrl+C es una tecla y no llega como SIGINT: la app corre en su propia sesión, sin terminal. Una señal `SIGSEGV` o `SIGABRT` apunta a WebKitGTK o al controlador gráfico. La sesión desactiva el renderizador DMA-BUF de WebKitGTK por eso.
+
+## Pila y UPS
+
+Mientras el equipo funciona sin corriente, la barra superior muestra el porcentaje y, si el hardware lo informa, el tiempo de servicio. Con cable no se muestra nada. El dato sale de `/sys/class/power_supply` en una laptop y de `upsc culinaryos@localhost` con un UPS configurado por `culinaryos-ups`; si ambos están sin corriente, manda el UPS. Se comprueba sólo en el equipo local: un UPS conectado a otro equipo de la sucursal no aparece aquí. Si el UPS no informa `battery.runtime`, o la laptop no informa consumo, se muestra sólo el porcentaje.
+
 ## Marco exterior de VirtualBox
 
 Las barras de VirtualBox pertenecen al anfitrión Windows. Para ocupar toda la pantalla, usa **Ctrl derecha + F** (Host+F con la tecla Host predeterminada). La minibarra puede ocultarse en la configuración de interfaz de usuario de la VM. El kiosco del invitado no modifica la configuración del anfitrión.
