@@ -127,6 +127,50 @@ static class CheckpointTests {
         var accepted = await service.CompareCheckpoints(bucket);
         Check(accepted.B("valid") && accepted.L("accepted") > 0 && locked.Objects.Keys.Any(x => x.StartsWith(Checkpoints.AcceptedPrefix(site))), "an accepted divergence is recorded and counted");
         Check((await service.State(token)).Obj("connection").Obj("auditAlert").Count == 0, "accepting clears the alert");
+        // Offsite copy: real pg_dump into the bucket, and back through pg_restore on a new database.
+        Check(await service.PublishBackup(runtime, bucket, folder), "a change is copied outside the branch");
+        Check(!await service.PublishBackup(runtime, bucket, folder), "with no change nothing is uploaded");
+        Check(!Directory.EnumerateFiles(Path.Combine(folder, "offsite")).Any(), "the local copy does not stay on the disk");
+        var backupKey = locked.Objects.Keys.Single(x => x.EndsWith(".dump"));
+        var hash = Encoding.ASCII.GetString(locked.Objects[backupKey + ".sha256"]).Split(' ')[0];
+        Check(hash == Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(locked.Objects[backupKey])), "the copy travels with the checksum culinaryos-restore asks for");
+        Check(!Encoding.Latin1.GetString(locked.Objects[backupKey]).Contains("Mesa 1"), "the bucket never sees the branch's data in the clear");
+        var restored = folder + "-offsite";
+        if (Directory.Exists(restored)) Directory.Delete(restored, true);
+        Directory.CreateDirectory(restored);
+        File.Copy(Path.Combine(folder, "test-only-keyring.json"), Path.Combine(restored, "test-only-keyring.json"));
+        var download = Path.Combine(restored, "copia.dump");
+        await File.WriteAllBytesAsync(download, locked.Objects[backupKey]);
+        await LabPostgres.RestoreTest(root, download, restored);
+        using (var target = LabPostgres.Test(root, restored, site)) {
+
+            var moved = new BranchService(target, site, new Passwords());
+            Check((await moved.AuditChain()).B("valid") && (await target.VerifyOutbox()).B("valid") && (await moved.Load()).List("table").Count() >= 4, "the copy from the bucket restores and verifies");
+
+        }
+        await Act("table.save", J.O("name", "Mesa 6", "capacity", 4, "zone", "Salón"));
+        locked.Down = true;
+        try { await service.PublishBackup(runtime, bucket, folder); throw new Exception("Copied without a bucket"); } catch (HttpRequestException) { }
+        locked.Down = false;
+        Check(!Directory.EnumerateFiles(Path.Combine(folder, "offsite")).Any(), "a failed upload leaves nothing on the disk");
+        Check(service.BackupAlert(DateTimeOffset.UtcNow) is null, "one failed copy is not an alert");
+        Check(service.BackupAlert(DateTimeOffset.UtcNow.AddMinutes(61))?.S("level") == "notice" && service.BackupAlert(DateTimeOffset.UtcNow.AddHours(5))?.S("level") == "critical", "an hour without copies warns, and four are critical");
+        Check(await service.PublishBackup(runtime, bucket, folder) && service.BackupAlert(DateTimeOffset.UtcNow.AddHours(5)) is null, "the next copy clears it");
+        // Server alerts: what culinaryos-health reports, for the manager.
+        var report = Path.Combine(folder, "status.json");
+        var checkedAt = DateTimeOffset.UtcNow;
+        string Health(DateTimeOffset generated) => J.O("generated_at", generated.ToUnixTimeSeconds(), "checks", new JsonArray(J.O("id", "COS-SMART", "parte", "Disco", "gravedad", "critico", "mensaje", "El disco anuncia una falla.", "accion", "Cámbialo."), J.O("id", "COS-DISK", "parte", "Almacenamiento", "gravedad", "correcto", "mensaje", "ok", "accion", "ok"), J.O("id", "COS-PACKAGES", "parte", "Actualizaciones", "gravedad", "aviso", "mensaje", "Hay paquetes.", "accion", "Revisa."))).ToJsonString();
+        await File.WriteAllTextAsync(report, Health(checkedAt));
+        var alerts = BranchService.ReadServerHealth(report, checkedAt);
+        Check(alerts.Count == 1 && alerts[0].S("level") == "critical" && alerts[0].S("message").Contains("disco anuncia"), "a failing disk reaches the app, and routine notices do not");
+        await File.WriteAllTextAsync(report, Health(checkedAt.AddMinutes(-20)));
+        Check(BranchService.ReadServerHealth(report, checkedAt).Single().S("message").Contains("dejó de actualizarse"), "a report that stopped arriving is an alert");
+        await File.WriteAllTextAsync(report, "{no es json");
+        Check(BranchService.ReadServerHealth(report, checkedAt).Count == 1, "an unreadable report is an alert, not a failure");
+        Check(BranchService.ReadServerHealth(Path.Combine(folder, "no-existe.json"), checkedAt).Count == 0, "outside CulinaryOS there is no report to read");
+        await File.WriteAllTextAsync(report, Health(checkedAt));
+        service.UseServerHealth(report);
+        Check((await service.State(token)).Obj("connection").A("server").Objects().Any(x => x.S("message").Contains("disco anuncia")), "the manager's state carries the alert");
 
     }
 }

@@ -33,7 +33,7 @@ public sealed partial class MainView: UserControl {
 
     }
     // These change with the calendar, not with a commit, so the revision alone would not redraw them.
-    static IEnumerable<JsonObject> Warnings(JsonObject state) => new[] { state.Obj("connection").Obj("auditAlert"), state.Obj("restaurant").Obj("license").Obj("warning"), state.Obj("connection").Obj("certificate") }.Where(x => x.Count > 0);
+    static IEnumerable<JsonObject> Warnings(JsonObject state) => new[] { state.Obj("connection").Obj("auditAlert"), state.Obj("restaurant").Obj("license").Obj("warning"), state.Obj("connection").Obj("certificate") }.Concat(state.Obj("connection").A("server").Objects()).Where(x => x.Count > 0);
     async Task RestoreMotion() { try { PrototypeMotion.ReduceMotion = await vault.Read("motion.reduced") == "true"; } catch { } }
     async Task RefreshLive() { if (session is null || busy || polling || modal is not null) return; polling = true; try { state = await session.State(); Render(); Status(); } catch (ApiFailure e) when (e.Status == 423) { await ShowLicenseLock(); } finally { polling = false; } }
     static TextBlock Text(string text, double size = 14, IBrush? color = null, bool bold = false) => new() { Text = text, FontFamily = Brand.InterfaceFont, FontSize = size, Foreground = color ?? Graphite, FontWeight = bold ? (size >= 24 ? FontWeight.Bold : FontWeight.SemiBold) : FontWeight.Normal, TextWrapping = TextWrapping.Wrap };

@@ -11,19 +11,33 @@ namespace MesaNexo.Api;
 // An S3-compatible bucket (Cloudflare R2) reached with its own credentials, separate from CulinaryServer. R2 has no
 // write-only token: what protects the objects is the bucket lock, which refuses overwriting or deleting them.
 public sealed class ObjectBucket(HttpClient http, string endpoint, string bucket, string accessKey, string secretKey) {
-    const string Region = "auto";
-    public static ObjectBucket? From(string? file) {
+    const string Region = "auto", EmptyHash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    public static ObjectBucket? From(string? file, int timeoutSeconds = 30) {
 
         if (file is null || !File.Exists(file)) return null;
         var o = JsonNode.Parse(File.ReadAllText(file)) as JsonObject ?? throw new BusinessException(400, "checkpoints.json no es un objeto JSON");
         Need(Uri.TryCreate(o.S("endpoint"), UriKind.Absolute, out var url) && url.Scheme == "https" && o.S("bucket") != "" && o.S("accessKeyId") != "" && o.S("secretAccessKey") != "", "checkpoints.json está incompleto");
-        return new(new HttpClient { Timeout = TimeSpan.FromSeconds(30) }, o.S("endpoint").TrimEnd('/'), o.S("bucket"), o.S("accessKeyId"), o.S("secretAccessKey"));
+        return new(new HttpClient { Timeout = TimeSpan.FromSeconds(timeoutSeconds) }, o.S("endpoint").TrimEnd('/'), o.S("bucket"), o.S("accessKeyId"), o.S("secretAccessKey"));
 
     }
     // False when the object already exists: the same checkpoint sent twice, which is not an error.
     public async Task<bool> Put(string key, byte[] body, CancellationToken ct) {
 
-        using var reply = await Send(HttpMethod.Put, key, "", body, ct);
+        using var reply = await Send(HttpMethod.Put, key, "", new ByteArrayContent(body), Convert.ToHexStringLower(SHA256.HashData(body)), ct);
+        return Stored(reply);
+
+    }
+    public async Task<bool> PutFile(string key, string file, CancellationToken ct) {
+
+        string hash;
+        await using (var input = File.OpenRead(file)) hash = Convert.ToHexStringLower(await SHA256.HashDataAsync(input, ct));
+        await using var stream = File.OpenRead(file);
+        using var reply = await Send(HttpMethod.Put, key, "", new StreamContent(stream), hash, ct);
+        return Stored(reply);
+
+    }
+    static bool Stored(HttpResponseMessage reply) {
+
         if (reply.StatusCode == HttpStatusCode.PreconditionFailed) return false;
         Ensure(reply);
         return true;
@@ -31,7 +45,7 @@ public sealed class ObjectBucket(HttpClient http, string endpoint, string bucket
     }
     public async Task<byte[]> Get(string key, CancellationToken ct) {
 
-        using var reply = await Send(HttpMethod.Get, key, "", [], ct);
+        using var reply = await Send(HttpMethod.Get, key, "", null, EmptyHash, ct);
         Ensure(reply);
         return await reply.Content.ReadAsByteArrayAsync(ct);
 
@@ -44,7 +58,7 @@ public sealed class ObjectBucket(HttpClient http, string endpoint, string bucket
 
             var query = new SortedDictionary<string, string>(StringComparer.Ordinal) { ["list-type"] = "2", ["prefix"] = prefix };
             if (token is not null) query["continuation-token"] = token;
-            using var reply = await Send(HttpMethod.Get, "", string.Join("&", query.Select(x => Uri.EscapeDataString(x.Key) + "=" + Uri.EscapeDataString(x.Value))), [], ct);
+            using var reply = await Send(HttpMethod.Get, "", string.Join("&", query.Select(x => Uri.EscapeDataString(x.Key) + "=" + Uri.EscapeDataString(x.Value))), null, EmptyHash, ct);
             Ensure(reply);
             var xml = XDocument.Parse(await reply.Content.ReadAsStringAsync(ct));
             keys.AddRange(xml.Descendants().Where(x => x.Name.LocalName == "Key").Select(x => x.Value));
@@ -55,14 +69,13 @@ public sealed class ObjectBucket(HttpClient http, string endpoint, string bucket
 
     }
     static void Ensure(HttpResponseMessage reply) { if (!reply.IsSuccessStatusCode) throw new HttpRequestException("El bucket de puntos de control respondió " + (int)reply.StatusCode); }
-    async Task<HttpResponseMessage> Send(HttpMethod method, string key, string query, byte[] body, CancellationToken ct) {
+    async Task<HttpResponseMessage> Send(HttpMethod method, string key, string query, HttpContent? content, string hash, CancellationToken ct) {
 
         var url = new Uri(endpoint + "/" + bucket + (key == "" ? "" : "/" + key) + (query == "" ? "" : "?" + query));
         var at = DateTimeOffset.UtcNow;
-        var hash = Convert.ToHexStringLower(SHA256.HashData(body));
         var signed = new SortedDictionary<string, string>(StringComparer.Ordinal) { ["host"] = url.Authority, ["x-amz-content-sha256"] = hash, ["x-amz-date"] = at.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture) };
         using var request = new HttpRequestMessage(method, url);
-        if (method == HttpMethod.Put) { request.Content = new ByteArrayContent(body); request.Headers.TryAddWithoutValidation("If-None-Match", "*"); }
+        if (content is not null) { request.Content = content; request.Headers.TryAddWithoutValidation("If-None-Match", "*"); }
         request.Headers.TryAddWithoutValidation("x-amz-content-sha256", hash);
         request.Headers.TryAddWithoutValidation("x-amz-date", signed["x-amz-date"]);
         request.Headers.TryAddWithoutValidation("Authorization", Authorization(method.Method, url.AbsolutePath, query, signed, hash, at, accessKey, secretKey, Region));

@@ -12,7 +12,7 @@ namespace MesaNexo.Api;
 
 public sealed record ApiOptions(string SiteId, int Port = 8443, string Bind = "0.0.0.0", string Socket = "/run/culinaryos-data/store.sock", string? Credentials = null, string? LabPython = null, string? LabScript = null, string? LabDirectory = null, string? ReadySocket = "/run/culinaryos-app/ready.sock", string? SetupCode = null);
 public static class ApiHost {
-    public static WebApplication Build(ApiOptions options, IBranchStore store, X509Certificate2 cert, LicenseOptions? licensing = null, CloudOptions? cloud = null, IPrintDriver? printer = null, FiscalOptions? fiscal = null, IntegrationConfig? integrations = null, ObjectBucket? checkpoints = null) {
+    public static WebApplication Build(ApiOptions options, IBranchStore store, X509Certificate2 cert, LicenseOptions? licensing = null, CloudOptions? cloud = null, IPrintDriver? printer = null, FiscalOptions? fiscal = null, IntegrationConfig? integrations = null, ObjectBucket? checkpoints = null, ObjectBucket? backups = null) {
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions{ Args = [], ContentRootPath = AppContext.BaseDirectory });
         builder.Logging.ClearProviders();
@@ -28,6 +28,7 @@ public static class ApiHost {
         if (licensing?.ServerUrl is not null) builder.Services.AddSingleton<IHostedService>(sp => new LicenseWorker(sp.GetRequiredService<BranchService> (), sp.GetRequiredService<ILogger<LicenseWorker>> ()));
        
         if (checkpoints is not null && licensing is not null) builder.Services.AddSingleton<IHostedService>(sp => new CheckpointWorker(sp.GetRequiredService<BranchService> (), checkpoints, sp.GetRequiredService<ILogger<CheckpointWorker>> ()));
+        if (backups is not null && store is PostgresBranchStore offsite) builder.Services.AddSingleton<IHostedService>(sp => new OffsiteBackupWorker(sp.GetRequiredService<BranchService> (), offsite, backups, options.LabDirectory ?? "/var/lib/culinaryos-app", sp.GetRequiredService<ILogger<OffsiteBackupWorker>> ()));
         builder.Services.AddSignalR(o => { o.MaximumReceiveMessageSize = 16 * 1024; o.EnableDetailedErrors = false; });
         builder.Services.AddHostedService<InventoryWorker> (); builder.Services.AddHostedService<OutboxWorker> ();
         if (store is PostgresBranchStore branchStore && options.Credentials is not null) builder.Services.AddSingleton<IHostedService> (sp => new CentralSyncWorker(branchStore, "/etc/culinaryos/branch.json", options.Credentials, sp.GetRequiredService<ILogger<CentralSyncWorker>> ()));
@@ -45,6 +46,7 @@ public static class ApiHost {
         var service = app.Services.GetRequiredService<BranchService> ();
         service.UseIntegrations(integrations, terminals);
         service.UseCertificate(cert.NotAfter);
+        if (options.Credentials is not null) service.UseServerHealth("/run/culinaryos/status.json");
         if (licensing is not null) service.UseLicensing(licensing);
 
         app.Use(async(ctx, next) => {

@@ -236,6 +236,24 @@ Estados: **Confirmado** (el riesgo existe en el código), **Parcial** (hay una p
 **Acciones.** Alertas de disco (SMART), espacio, temperatura, servicios caídos y respaldo fallido visibles en la app del gerente; copia externa cifrada automática (destino en preguntas); guía de sustitución del servidor basada en el hallazgo 3.
 **Comprobación.** Simulacro de servidor caído con medición del tiempo hasta volver a vender.
 
+**Estado (30 de octubre de 2026): código hecho, falta el simulacro y crear los buckets.**
+- Hecho:
+  - `culinaryos-health` agrega SMART y temperatura. Un equipo sin esos sensores, como una VM, no alarma.
+  - El gerente ve en la app los avisos de disco, espacio, sólo lectura, temperatura, servicios y respaldo, leídos de `/run/culinaryos/status.json`. Un diagnóstico que deja de llegar también es un aviso. El resto del diagnóstico se queda en la consola.
+  - `OffsiteBackupWorker` envía un `pg_dump` a R2 cada 15 minutos si hubo cambios, con su `.sha256`, y no deja la copia en disco. Una hora sin copias avisa, y cuatro son críticas.
+  - Guía de sustitución en `CulinaryOS/docs/SIMULACRO-RESTAURACION.md`.
+- Decisiones de implementación:
+  - **Sin una capa de cifrado adicional.** Las filas ya van selladas con AES-GCM bajo el llavero, que nunca llega al bucket. Otra capa exigiría custodiar otra llave y cambiar la restauración. En R2 sólo se ven identificadores, tamaños y horas.
+  - **Copia completa, no incremental.** Es lo que `culinaryos-restore` ya sabe cargar y verificar. El costo crece con la base: una de 200 MB son unos 2 Mbit/s de subida mientras hay actividad. Si una sucursal no da abasto, lo siguiente es archivar WAL de PostgreSQL.
+- Pruebas:
+  - `--checkpoint-only`: `pg_dump` real hacia el bucket simulado, vuelta por `pg_restore` a una base nueva y verificación de cadena y outbox; fallos de envío y su alerta.
+  - `test_diagnostics.py`: SMART y temperatura, incluido que `smartctl` informa la falla con un código de error.
+- Falta:
+  - Crear el bucket y el token de cada sucursal, con ciclo de vida de 7 días. Sin `backups.json` el trabajador no corre.
+  - Probar SMART en hardware real y correr `culinaryos-health` con `PrivateDevices=no` en systemd.
+  - Medir el RTO: el simulacro sigue pendiente desde el hallazgo 3. Mientras no se mida, 4 horas y 15 minutos son objetivos.
+  - Si el backend cae, la app no puede avisar por sí misma; el cliente sólo muestra que perdió la conexión.
+
 ### 10. Inventario concurrente
 **Hoy.** Reservas al enviar a cocina, consumo al cobrar y recetas versionadas. Se valida existencia al reservar.
 **Acciones.** Guardar versión de receta y costo en cada movimiento; movimientos inmutables con compensaciones; política explícita de existencias negativas; idempotencia de reservar, liberar y consumir ante reintentos.
