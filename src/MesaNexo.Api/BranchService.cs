@@ -23,6 +23,8 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
         var c = await store.CallAsync(J.O("op", "capabilities_v1"), ct);
         if (!new[] { "transaction_v1", "scan_v1", "recent_v1", "event_status_v1", "outbox_status_v1", "outbox_maintain_v1" }.All(c!.A("extensions").Strings().Contains)) return false;
         var m = await store.CallAsync(J.O("op", "get", "record_id", "mn_meta_site"), ct);
+        // After reverting only the program: this build does not know how to read a newer database.
+        if (m is not null && m.Obj("data").L("schemaVersion", 1) > Contract.Schema) { Console.Error.WriteLine($"COS-SCHEMA-NEWER: base {m.Obj("data").L("schemaVersion")}, programa {Contract.Schema}; carga la copia anterior o actualiza"); return false; }
         return m?.Obj("data").S("siteId") == siteId && m.Obj("data").S("status") == "active";
 
     }

@@ -696,6 +696,19 @@ test('a license about to expire warns inside the app and leaves it working', asy
     } finally { await call('fixture', 'license.restore', {}); }
 
 });
+test('the cash page offers refunds with a second manager and the double-approval threshold', async ({ page }) => {
+
+    await login(page, 'refund-ui');
+    await nav(page, 'Caja');
+    await page.getByRole('button', { name: 'Devolver un pago' }).click();
+    await expect(page.getByRole('combobox', { name: 'Gerente que autoriza' })).toBeVisible();
+    await expect(page.getByLabel('PIN del gerente que autoriza')).toBeVisible();
+    await expect(page.getByText(/lo autoriza otro gerente con su PIN/)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Doble aprobación' }).click();
+    await expect(page.getByRole('spinbutton', { name: /desde el que hacen falta dos gerentes/ })).toHaveValue('1000');
+
+});
 test('an expired license replaces sign-in with the lock screen and nothing else', async ({ page }) => {
 
     const errors: string[] = [];

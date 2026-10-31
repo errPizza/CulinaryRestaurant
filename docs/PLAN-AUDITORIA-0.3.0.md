@@ -308,9 +308,26 @@ Estados: **Confirmado** (el riesgo existe en el código), **Parcial** (hay una p
 **Acciones.** Id de correlación desde la interfaz hasta el almacén; errores tipados y tiempos límite; distinguir «no ejecutado» de «ejecutado con respuesta perdida» (ya existe en parte con `command.send` y el recibo IPC). Pruebas de caída del puente, del backend y de PostgreSQL antes y después del commit.
 **Comprobación.** Por cada frontera, una sola transición financiera y una sola operación persistida.
 
+**Estado (30 de octubre de 2026): hecho, salvo la caída real de PostgreSQL.**
+- Ya existía, y es la base: el cliente guarda la intención en su bóveda antes de enviar, con un `operationId` que llega hasta el recibo del almacén. `api/operations/{id}` distingue «no consta» de «confirmada», y un reintento devuelve el primer resultado. Los tiempos límite también estaban: 10 s de conexión a la base y el del cliente HTTP.
+- Hecho:
+  - El identificador sirve de correlación: viaja en cada error de `/api/action` y en el log `COS-API`, y la app muestra su referencia en un resultado incierto.
+  - Errores tipados: `code`, y `outcome`, que dice si el cliente puede dar por no ejecutada la operación (`not-executed`) o debe reconciliar (`unknown`).
+- Pruebas (`--boundary-only`): un pago con el almacén fallando antes del commit, con la respuesta perdida después, y con un backend nuevo tras la caída. Siempre queda un solo pago, y la cadena y el outbox verifican. La caída del puente ya la cubría `hybrid.spec.ts` («lost-ipc»).
+- Falta: matar PostgreSQL de verdad a mitad de una transacción. Lo probado es la pérdida de respuesta del almacén, no un apagón del proceso; encaja en el simulacro de la VM.
+
 ### 14. Versiones y migraciones
 **Acciones.** Versión en el contrato de la API y de los eventos (`culinaryos-events-v1` ya existe); matriz de compatibilidad publicada; prueba de actualización desde 0.2.x y de reversión; respaldo automático antes de una migración destructiva.
 **Comprobación.** Actualizar una copia realista con terminales antiguas conectadas y eventos pendientes, y revertir.
+
+**Estado (30 de octubre de 2026): hecho, salvo la prueba con binarios 0.2.x reales.**
+- Ya existía: migración explícita e idempotente, con `pg_dump` automático antes del cambio, y una prueba que restaura esa copia. Se niega con cuentas o sesiones abiertas, así que no hay terminales conectadas durante la migración.
+- Hecho:
+  - `src/MesaNexo.Core/Contract.cs`: API, esquema y eventos en un solo lugar. `api/identity` los publica, y el cliente pide actualizarse si la API no coincide, antes de enviar credenciales.
+  - Un backend no queda listo sobre una base más nueva que él (`COS-SCHEMA-NEWER`). Antes, revertir sólo el programa corría sobre datos que no entiende.
+  - `docs/COMPATIBILIDAD.md`: matriz, cuándo sube cada número y cómo actualizar y revertir.
+- Pruebas (`SchemaTests`): la actualización conserva los eventos pendientes, la copia restaura el esquema anterior, y un backend rechaza una base futura.
+- Falta: la matriz para 0.2.x sale de que el contrato no cambió. No se ha probado con un binario 0.2.x real ni sobre una copia de tamaño real.
 
 ## Fase 3 · Validación real y lanzamiento
 

@@ -10,7 +10,7 @@ namespace MesaNexo.Client;
 
 public record ConnectionProfile(string ServerUrl, string SiteId, string CaFile, string CaSha256, string? ConnectAddress = null, string TenantId = "", string BranchId = "");
 public enum ConnectionState { Unverified, Available, LocalServerUnreachable, InternalNetworkDisconnected, Uncertain, TlsRejected }
-public sealed class ApiFailure(int status, string message): Exception(message) { public int Status => status; }
+public sealed class ApiFailure(int status, string message, string code = "", string outcome = ""): Exception(message) { public int Status => status; public string Code => code; public string Outcome => outcome; }
 public interface ISecureVault {
     Task<string?> Read(string key);
     Task Write(string key, string value);
@@ -46,6 +46,7 @@ public sealed partial class NativeSession: IDisposable {
         // Verify branch identity through an already trusted TLS channel before sending credentials.
         var identity = await Request(HttpMethod.Get, "api/identity", null, ct);
         if (identity.S("siteId") != profile.SiteId) throw new InvalidOperationException("El servidor pertenece a otra sucursal");
+        if (identity.L("protocol", Contract.Api) != Contract.Api) throw new InvalidOperationException("Esta versión de la aplicación no es compatible con el servidor; actualízala");
         var deviceKey = "device_" + profile.SiteId;
         var raw = await vault.Read(deviceKey);
         var device = raw is null ? J.O("deviceId", J.Id(), "deviceSecret", Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))) : JsonNode.Parse(raw)!.AsObject();
@@ -112,7 +113,7 @@ public sealed partial class NativeSession: IDisposable {
     async Task<JsonObject> SendPending(JsonObject pending, CancellationToken ct) {
 
         if (pending.S("userId") != UserId) throw new InvalidOperationException("La operación pendiente pertenece a otro usuario; inicia su sesión para reconciliar");
-        try { var result = await Request(HttpMethod.Post, "api/action", pending, ct); if (result.S("local") != "committed") throw new IOException("Confirmación ambigua"); await ClearConfirmedDraft(pending); if (!DeferConfirmation || pending.S("type") == "session.logout") await vault.Delete(PendingKey); OperationState = "Confirmada localmente · sincronización pendiente de verificar"; return result; } catch (ApiFailure e) when (e.Status is >= 400 and < 500 && e.Status != 409) { await vault.Delete(PendingKey); OperationState = "Rechazada por el servidor local"; throw; } catch { OperationState = "Resultado incierto · conserva el mismo identificador y reconcilia"; Connection = ConnectionState.Uncertain; throw; }
+        try { var result = await Request(HttpMethod.Post, "api/action", pending, ct); if (result.S("local") != "committed") throw new IOException("Confirmación ambigua"); await ClearConfirmedDraft(pending); if (!DeferConfirmation || pending.S("type") == "session.logout") await vault.Delete(PendingKey); OperationState = "Confirmada localmente · sincronización pendiente de verificar"; return result; } catch (ApiFailure e) when (e.Status is >= 400 and < 500 && e.Status != 409) { await vault.Delete(PendingKey); OperationState = "Rechazada por el servidor local"; throw; } catch { OperationState = "Resultado incierto · referencia " + pending.S("operationId")[..8] + " · reconcilia antes de repetir"; Connection = ConnectionState.Uncertain; throw; }
 
     }
     public async Task<JsonObject?> Reconcile(bool retryIfUnknown, CancellationToken ct = default) {
@@ -163,7 +164,7 @@ public sealed partial class NativeSession: IDisposable {
             using var response = await http.SendAsync(request, ct);
             var raw = await response.Content.ReadAsStringAsync(ct);
             var data = string.IsNullOrEmpty(raw) ? new JsonObject() : JsonNode.Parse(raw) as JsonObject ?? throw new IOException("Respuesta inválida");
-            if (!response.IsSuccessStatusCode) throw new ApiFailure((int)response.StatusCode, data.S("error", "Operación rechazada"));
+            if (!response.IsSuccessStatusCode) throw new ApiFailure((int)response.StatusCode, data.S("error", "Operación rechazada"), data.S("code"), data.S("outcome"));
             Connection = ConnectionState.Available;
             return data;
 

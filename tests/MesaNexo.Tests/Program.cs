@@ -19,9 +19,10 @@ sealed class MemoryVault: ISecureVault {
     public Task Delete(string key) { Values.Remove(key); return Task.CompletedTask; }
 }
 sealed class FaultStore(IBranchStore inner): IBranchStore {
-    public bool LoseNextResponse;
+    public bool LoseNextResponse, LoseNextRequest;
     public async Task<JsonNode?> CallAsync(JsonObject request, CancellationToken ct = default) {
 
+        if (LoseNextRequest && request.S("op") == "transaction_v1") { LoseNextRequest = false; throw new StoreException("COS-DATA-UNAVAILABLE"); }
         var r = await inner.CallAsync(request, ct);
         if (LoseNextResponse && request.S("op") == "transaction_v1") { LoseNextResponse = false; throw new StoreException("COS-DATA-UNAVAILABLE"); }
         return r;
@@ -66,6 +67,7 @@ static class Program {
         if (args.Contains("--inventory-only")) { try { await InventoryTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "inventory.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--money-only")) { try { await MoneyTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "money.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--approval-only")) { try { await ApprovalTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "approvals.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
+        if (args.Contains("--boundary-only")) { try { await BoundaryTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "boundaries.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--tenant-only")) { try { await TenantTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "tenants.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--integrations-only")) { try { await IntegrationTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "integrations.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--loyalty-only")) { try { await LoyaltyTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "loyalty.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
@@ -211,6 +213,7 @@ static class Program {
             await InventoryTests.Run(root, evidence);
             await MoneyTests.Run(root, evidence);
             await ApprovalTests.Run(root, evidence);
+            await BoundaryTests.Run(root, evidence);
             await UiTests.RunLicenseLock(root, evidence);
             await MigrationTests.Run(root, python, evidence);
             await BusinessTests.Run(root, python, evidence);
