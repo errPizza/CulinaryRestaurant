@@ -32,6 +32,8 @@ sealed class FaultStore(IBranchStore inner): IBranchStore {
 static class Program {
     static readonly List<JsonObject> evidence = []; static string root = "", folder = "", python = ""; static int port; static X509Certificate2 cert = null!; static PostgresBranchStore runtime = null!; static FaultStore faults = null!; static WebApplication app = null!; static BranchService service = null!; static ConnectionProfile profile = null!;
     static void Check(bool condition, string name) { if (!condition) throw new Exception("FAIL: " + name); evidence.Add(J.O("test", name, "result", "passed")); Console.WriteLine("PASS " + name); }
+    // The full run leaves the same per-suite evidence as each --x-only, which is what tools/evidence_report.py reads.
+    static async Task Suite(string file, Func<Task> run) { var start = evidence.Count; await run(); await File.WriteAllTextAsync(Path.Combine(root, "evidence", file + ".json"), new JsonArray(evidence.Skip(start).Select(x => (JsonNode)x.DeepClone()).ToArray()).ToJsonString()); }
     static async Task Reject(Func<Task> action, string name, int? status = null) { try { await action(); throw new Exception("Expected rejection: " + name); } catch (ApiFailure e) { Check(status is null || e.Status == status, name); } catch (IOException) { Check(status is null, name); } }
     static int FreePort() { var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start(); var p = ((IPEndPoint)listener.LocalEndpoint).Port; listener.Stop(); return p; }
     static async Task Start() {
@@ -68,6 +70,7 @@ static class Program {
         if (args.Contains("--money-only")) { try { await MoneyTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "money.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--approval-only")) { try { await ApprovalTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "approvals.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--boundary-only")) { try { await BoundaryTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "boundaries.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
+        if (args.Contains("--privacy-only")) { try { await PrivacyTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "privacy.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--tenant-only")) { try { await TenantTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "tenants.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--integrations-only")) { try { await IntegrationTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "integrations.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--loyalty-only")) { try { await LoyaltyTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "loyalty.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
@@ -208,30 +211,28 @@ static class Program {
             await Reject(() => manager.State(), "local server inaccessible produces no success");
 
             await CentralTests.Run(root, python, evidence);
-            await LicenseTests.Run(root, python, evidence);
-            await CheckpointTests.Run(root, evidence);
-            await InventoryTests.Run(root, evidence);
-            await MoneyTests.Run(root, evidence);
-            await ApprovalTests.Run(root, evidence);
-            await BoundaryTests.Run(root, evidence);
+            await Suite("licenses", () => LicenseTests.Run(root, python, evidence));
+            await Suite("checkpoints", () => CheckpointTests.Run(root, evidence));
+            await Suite("inventory", () => InventoryTests.Run(root, evidence));
+            await Suite("money", () => MoneyTests.Run(root, evidence));
+            await Suite("approvals", () => ApprovalTests.Run(root, evidence));
+            await Suite("boundaries", () => BoundaryTests.Run(root, evidence));
+            await Suite("privacy", () => PrivacyTests.Run(root, evidence));
             await UiTests.RunLicenseLock(root, evidence);
             await MigrationTests.Run(root, python, evidence);
             await BusinessTests.Run(root, python, evidence);
             await DevMapTests.Run(root, python, evidence);
             await FrontofficeTests.Run(root, python, evidence);
-            await BackofficeTests.Run(root, python, evidence);
+            await Suite("backoffice", () => BackofficeTests.Run(root, python, evidence));
             await LoyaltyTests.Run(root, python, evidence);
             await IntegrationTests.Run(root, python, evidence);
-            await TenantTests.Run(root, evidence);
+            await Suite("tenants", () => TenantTests.Run(root, evidence));
             await AdapterTests.Run(evidence);
             await SchemaTests.Run(root, python, evidence);
-            await StoreTests.Run(root, evidence);
-            await StoreTests.OfflineMonth(root, evidence);
-            await StoreTests.Restore(root, evidence);
-            await StoreTests.Migration(root, python, evidence);
+            await Suite("store-outbox", async () => { await StoreTests.Run(root, evidence); await StoreTests.OfflineMonth(root, evidence); await StoreTests.Restore(root, evidence); await StoreTests.Migration(root, python, evidence); });
             await PrintTests.Run(root, python, evidence);
-            await FiscalTests.Run(root, python, evidence);
-            await LiveIntegrationTests.Run(root, python, evidence);
+            await Suite("fiscal-sandbox", () => FiscalTests.Run(root, python, evidence));
+            await Suite("live-integrations", () => LiveIntegrationTests.Run(root, python, evidence));
             Console.WriteLine($"{evidence.Count} integration/UI checks passed.");
 
         } catch (Exception e) { Console.Error.WriteLine(e); evidence.Add(J.O("result", "failed", "message", e.ToString())); Environment.ExitCode = 1; try { await Stop(); } catch { } } finally { cert.Dispose(); Directory.CreateDirectory(Path.Combine(root, "evidence")); await File.WriteAllTextAsync(Path.Combine(root, "evidence", "integration.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString(new JsonSerializerOptions { WriteIndented = true })); }

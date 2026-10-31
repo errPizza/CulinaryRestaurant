@@ -333,8 +333,12 @@ Estados: **Confirmado** (el riesgo existe en el código), **Parcial** (hay una p
 
 - **15. Hardware e integraciones.** Matriz proveedor, modelo, sistema y versión. Sandbox de Clip, Mercado Pago Point, Stripe y Facturama; impresoras y cajones físicos; piloto controlado. Sólo se publica como compatible lo validado. Requiere cuentas y equipos.
 - **16. Evidencia de pruebas.** CI en GitHub Actions con informe por commit (versiones, entorno, duración y resultados), etiquetas por riesgo (dinero, inventario, seguridad, restauración y sincronización) y cobertura de ramas en `MesaNexo.Core`.
+  - **Estado (30 de octubre de 2026): escrito, sin ejecutar.** `.github/workflows/ci.yml` corre las baterías, y `tools/evidence_report.py` genera `evidence/INFORME.md` por riesgo, y falla si una suite no dejó evidencia. El informe se probó aquí; el flujo no, porque nada se ha subido. Falta correrlo la primera vez, sobre todo por el Python del laboratorio, y la cobertura de ramas, que no está incluida.
+  - La suite web ya no reutiliza un servidor en el puerto 1420: mientras otra sesión tuvo su `vite preview` ahí, las pruebas pasaban contra el código de ese worktree.
 - **17. Estado comercial.** Tabla por plataforma y función con cuatro estados: implementado, probado automáticamente, validado en real y habilitado comercialmente. Corregir el resumen ejecutivo.
+  - **Estado (30 de octubre de 2026): hecho.** La tabla está en `docs/ESTADO-COMERCIAL.md`. Nada está validado en real ni habilitado. El resumen decía que la CA se crea fuera de línea; hoy la genera el instalador en el servidor, y quedó corregido.
 - **18. Privacidad.** Inventario de datos personales, finalidades y plazos; exportación y eliminación por cliente; respuesta a incidentes. Revisión con asesoría jurídica mexicana del aviso de privacidad (ya hay un borrador en el escritorio).
+  - **Estado (30 de octubre de 2026): lo técnico hecho, falta la asesoría.** `docs/PRIVACIDAD-DATOS.md` tiene el inventario, los plazos propuestos y la respuesta a incidentes. `customer.export` y `customer.erase` funcionan en las dos interfaces, con `--privacy-only`. La eliminación anonimiza los registros vivos; no alcanza el historial sellado ni los CFDI, y el documento lo explica. Faltan la purga automática a 90 días, la revisión legal y definir al responsable, que sigue como `[POR DEFINIR]` en el borrador.
 
 ## Criterios para autorizar el piloto
 

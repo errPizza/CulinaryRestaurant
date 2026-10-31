@@ -387,7 +387,7 @@ code { font-family: Consolas, monospace; font-size: 8pt; background: #f1f2f4; pa
 <li>Llaves TLS y de datos entregadas con <code>LoadCredential</code> de systemd, nunca en la línea de comandos ni en el código.</li>
 <li>Credenciales de proveedores en <code>/etc/culinaryos/integrations</code> (<code>root:culinaryos-app</code>, carpeta 0750, archivos 0640).</li>
 <li>Root bloqueado; el usuario operador no tiene sudo ni grupos administrativos. El mantenimiento se hace con una cuenta administradora aparte.</li>
-<li>La CA de cada sitio se crea fuera de línea en un volumen cifrado; el servidor sólo guarda su propia llave (0600) y las terminales sólo la CA pública. Certificado de servidor por 365 días.</li>
+<li>La CA de cada sitio la genera el instalador en el propio servidor, con su llave en <code>/etc/culinaryos/secrets</code> (0600); el certificado se renueva solo con ella y las terminales sólo reciben la CA pública. Certificado de servidor por 365 días.</li>
 </ul>
 
 <section class="chapter cont">
