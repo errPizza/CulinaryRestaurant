@@ -21,6 +21,21 @@ El outbox nunca descarta un evento pendiente, tenga la antigüedad que tenga y h
 - **Línea base (`mesa-nexo-baseline-v1`).** Sólo existe para sucursales migradas desde SQLite cuya extensión anterior descartó pendientes sin central (`standalone-dropped`). Al configurar la central, `outbox_maintain_v1` encola en pasos acotados todos los registros `mn_` en su versión actual, auditoría incluida, en eventos de 56 KiB como máximo. La central la proyecta con su upsert por versión, así que el orden respecto a los eventos retenidos no importa. Lo que la línea base no recupera es la secuencia de las transacciones descartadas. Sólo queda su resultado final y el rastro before/after de la auditoría. `event_status_v1` responde `untracked` para esos eventos. Un almacén que nunca descartó eventos no necesita línea base.
 - **Extensión SQLite.** `runtime/mesanexo_ipc.py` ya no está en la ruta de datos de una sucursal PostgreSQL. CulinaryOS la sigue enganchando al servicio `culinaryos-data`, que en el appliance sólo responde `health`, y sirve para el laboratorio y las pruebas de contrato. Tampoco descarta pendientes.
 
+## Puntos de control de la bitácora
+
+La cadena de auditoría detecta un cambio aislado, pero quien tenga todas las llaves locales puede reescribir un registro y recalcular la cadena. Por eso `CheckpointWorker` firma la cabeza cada hora y en cada cierre de caja, y la publica en un bucket de Cloudflare R2 con credenciales propias, separadas de CulinaryServer.
+
+- **Por qué no se puede borrar lo publicado.** R2 no tiene tokens de sólo escritura. La protección es un bucket lock, que rechaza sobrescribir o borrar durante el plazo. El nombre del objeto incluye secuencia y hash: una segunda cabeza para la misma secuencia queda junto a la primera.
+- **Quién compara.** La sucursal, al arrancar y a diario. Si no coincide, avisa al gerente, detiene las autorizaciones con PIN y deja evidencia en `alerts/`. La venta sigue. Un atacante con root puede apagar esa revisión local, así que la que cuenta es la externa: `--export-audit` en la sucursal y, en otro equipo, `--verify-checkpoints bitacora.json --checkpoints-dir copia-del-bucket --site SITIO`, que no usa base de datos ni llaves.
+- **Restauraciones.** Una copia anterior a lo publicado también diverge. `--accept-checkpoints "motivo"` declara esos objetos en `accepted/`. La declaración queda en el bucket y el verificador externo la lista, porque cada una debe corresponder a una restauración real.
+
+Cada sucursal lleva su propio bucket, porque los tokens de R2 se limitan por bucket, y sus credenciales van en `/etc/culinaryos/integrations/checkpoints.json` (ver `deploy/integrations/checkpoints.example.json`). Para crear uno:
+
+```bash
+npx wrangler r2 bucket create culinary-bitacora-SITIO
+npx wrangler r2 bucket lock add culinary-bitacora-SITIO --name retencion --retention-indefinite
+```
+
 ## Límites explícitos
 
 IPC original: tramas de 128 KiB y eventos de 64 KiB. La extensión limita transacciones a 56 KiB, 256 cambios y páginas a 32 registros/~100 KiB. La importación rechaza registros mayores de 40 KiB, incluidas imágenes inline grandes; deben externalizarse en una copia hacia HTTPS de confianza. No se truncan datos. Operaciones demasiado grandes se rechazan y requieren dividir el trabajo.

@@ -4,7 +4,7 @@ using static MesaNexo.Core.Rules;
 namespace MesaNexo.Core;
 // Stage 2 back office: suppliers, purchases, payables, counts, expenses, petty cash, cash limit and PIN authorization.
 public sealed partial class Restaurant {
-    static readonly string[] PinActions = ["request.decide", "visit.unlock", "visit.reopen", "drawer.request", "cash.withdraw"];
+    public static readonly string[] PinActions = ["request.decide", "visit.unlock", "visit.reopen", "drawer.request", "cash.withdraw"];
     public static readonly string[] UserPermissions = ["payments", "shiftReports", "quickSale", "mergeTables", "transfer"];
     const int PinAttempts = 5;
     long DrawerCash(BranchState s, JsonObject cash) => cash.L("initial") + s.Related("payment", "cashId", cash.S("id")).Where(x => x.S("method") == "cash").Sum(x => x.L("amount") + x.L("tip")) + s.Related("movement", "cashId", cash.S("id")).Sum(x => x.S("type") == "income" ? x.L("amount") : -x.L("amount"));

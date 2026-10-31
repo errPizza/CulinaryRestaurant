@@ -10,6 +10,8 @@ public static class Program {
 
             string? Arg(string key) => args.SkipWhile(x => x != "--" + key).Skip(1).FirstOrDefault();
             if (Arg("decrypt-backup") is string legacy) { await Migration.DecryptBackup(legacy, Arg("legacy-key") ?? throw new Exception(), Arg("output") ?? throw new Exception()); Console.WriteLine("Copia descifrada y validada; protege la salida y continúa con el exportador."); return 0; }
+            // Outside the branch: an export of the chain against a copy of the bucket, with no database and no keys.
+            if (Arg("verify-checkpoints") is string export) { var verdict = await OfflineCheck.Run(export, Arg("checkpoints-dir") ?? throw new Exception("Especifica --checkpoints-dir"), Arg("site") ?? throw new Exception("Especifica --site")); Console.WriteLine(verdict.ToJsonString()); return verdict.B("valid") ? 0 : 4; }
             var lab = args.Contains("--lab");
             var site = Arg("site") ?? (File.Exists("/etc/culinaryos/site.json") ? JsonNode.Parse(File.ReadAllText("/etc/culinaryos/site.json"))!.S("site_id") : throw new InvalidOperationException("Especifica --site"));
             var credentials = Environment.GetEnvironmentVariable("CREDENTIALS_DIRECTORY");
@@ -29,6 +31,9 @@ public static class Program {
             var service = new BranchService(store, site, new Passwords());
             // For culinaryos-restore: the audit chain and the outbox of a database loaded from a snapshot (exit 4 when they fail).
             if (args.Contains("--verify-store")) { var audit = await service.AuditChain(); var outbox = await store.VerifyOutbox(); var valid = audit.B("valid") && outbox.B("valid"); Console.WriteLine(J.O("valid", valid, "audit", audit, "outbox", outbox).ToJsonString()); return valid ? 0 : 4; }
+            var checkpoints = ObjectBucket.From(Arg("checkpoints-config") ?? (lab ? null : Path.Combine(IntegrationConfig.Directory, "checkpoints.json")));
+            if (Arg("export-audit") is string chainFile) { await File.WriteAllTextAsync(chainFile, (await service.AuditRecords()).ToJsonString()); Console.WriteLine("Bitácora exportada a " + chainFile); return 0; }
+            if (Arg("accept-checkpoints") is string accept) { Console.WriteLine((await service.AcceptCheckpoints(checkpoints ?? throw new BusinessException(409, "Sin destino de puntos de control"), accept)).ToJsonString()); return 0; }
             if (args.Contains("--upgrade-schema")) { Console.WriteLine((await service.UpgradeSchema()).ToJsonString()); return 0; }
             if (Arg("import-plan") is string plan) { var result = await service.ImportPlan(plan, Arg("plan-sha256") ?? throw new Exception()); Console.WriteLine(result.ToJsonString()); return 0; }
             if (Arg("initialize") is string initial) { var config = JsonNode.Parse(await File.ReadAllTextAsync(initial))!.AsObject(); await service.Initialize(config); if (lab) File.WriteAllText(Path.Combine(options.LabDirectory!, "initialized"), site); Console.WriteLine("Sucursal inicializada. Retira el archivo de aprovisionamiento que contiene credenciales."); return 0; }
@@ -43,7 +48,7 @@ public static class Program {
             var fiscal = integrations.Use("pac", FiscalOptions.From);
             // The license key lives in the backend's own state directory, outside the synchronized store.
             var licensing = new LicenseOptions(lab ? Path.Combine(options.LabDirectory!, "license") : "/var/lib/culinaryos-app/license", Arg("license-server"), Arg("hardware-file") ?? (lab ? Path.Combine(options.LabDirectory!, "hardware.json") : HardwareIdentity.DefaultFile), UseTpm: !lab, CentralCertificate: options.Credentials is null ? null : Path.Combine(options.Credentials, "central-cert"));
-            using (certificate) { await using var app = ApiHost.Build(options, store, certificate, licensing, Arg("cloud-url") is string cloudUrl ? new CloudOptions(cloudUrl, options.Credentials ?? throw new Exception(), Arg("central-public-key") ?? throw new Exception()) : null, printer, fiscal, integrations); await app.RunAsync(); }
+            using (certificate) { await using var app = ApiHost.Build(options, store, certificate, licensing, Arg("cloud-url") is string cloudUrl ? new CloudOptions(cloudUrl, options.Credentials ?? throw new Exception(), Arg("central-public-key") ?? throw new Exception()) : null, printer, fiscal, integrations, checkpoints); await app.RunAsync(); }
             return 0;
 
         } catch (BusinessException e) { Console.Error.WriteLine(e.Message); return 1; } catch (Exception e) { Console.Error.WriteLine("No se pudo iniciar Culinary Restaurant. Comprueba identidad, configuración, credenciales y runtime."); if (args.Contains("--lab")) Console.Error.WriteLine(e); return 1; }

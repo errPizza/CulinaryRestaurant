@@ -72,7 +72,7 @@ sealed class FakeCulinaryServer: IAsyncDisposable {
 
             if (Status == "active" && Expires > DateTimeOffset.UtcNow) return null;
             var state = Status is "revoked" or "transferred" ? Status : "expired";
-var notice = TestLicense.Sign(Jws.Status, J.O("v", 1, "licenseId", TestLicense.LicenseId(site), "revision", Revision, "siteId", site, "status", state, "plan", Plan, "expiresAt", Iso(Expires), "revokedAt", null, "challenge", NoticeChallenge ?? nonce, "iat", Iso(DateTimeOffset.UtcNow)));
+            var notice = TestLicense.Sign(Jws.Status, J.O("v", 1, "licenseId", TestLicense.LicenseId(site), "revision", Revision, "siteId", site, "status", state, "plan", Plan, "expiresAt", Iso(Expires), "revokedAt", null, "challenge", NoticeChallenge ?? nonce, "iat", Iso(DateTimeOffset.UtcNow)));
             return Error(403, "license_" + state, state == "revoked" ? "Licencia revocada" : "Licencia no vigente", notice);
 
         }
@@ -95,7 +95,7 @@ var notice = TestLicense.Sign(Jws.Status, J.O("v", 1, "licenseId", TestLicense.L
             if (new[] { "board", "disk", "mac" }.Count(k => given.S(k) == Fingerprint!.S(k)) < 2) return Error(403, "binding_mismatch", "Otro equipo");
             Fingerprint = given;
             Renewals++;
-return Results.Json(J.O("license", License(DateTimeOffset.UtcNow)));
+            return Results.Json(J.O("license", License(DateTimeOffset.UtcNow)));
 
         });
         App.MapPut("/branch/v1/registry", async (HttpContext c) => { if (await Signed(c) is not { } r) return Error(401, "unauthorized", "Firma inválida"); CentralCertificate = r.Body.S("centralCertificateSha256"); return Results.Json(J.O("siteId", site, "tenantId", "grupo", "centralCertificateSha256", CentralCertificate)); });
@@ -391,7 +391,7 @@ static class LicenseTests {
         Check((await repaired.Activate(J.O("licenseId", TestLicense.LicenseId(site), "activationCode", fake.Code))).S("state") == "active", "the provider's new code activates the repaired machine");
         var after = (await repaired.Load()).Committed;
         Check(unlocked.Records.Where(x => x.Value.Data.S("kind") is "table" or "ticket").All(x => after.TryGet(x.Key, out var kept) && kept.Version == x.Value.Version), "repairs and transfers leave the branch's data as it was");
-// The rule itself, at fixed times.
+        // The rule itself, at fixed times.
         var at = DateTimeOffset.Parse("2026-11-01T12:00:00Z");
         var spki = service.LicenseKey().S("spki");
         LicenseView At(JsonObject payload, DateTimeOffset now, JsonObject? notice = null, bool behind = false) => LicenseView.Evaluate(payload, notice, site, spki, now, behind);

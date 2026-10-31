@@ -245,6 +245,7 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
         connection["integrations"] = IntegrationConnection();
         connection["terminals"] = Domain.LiveCatalog.A("terminals").DeepClone();
         if (CertificateWarning(u.S("role")) is { } certificate) connection["certificate"] = certificate;
+        if (auditAlert is { } alert && u.S("role") == "manager") connection["auditAlert"] = alert.DeepClone();
         result["connection"] = connection;
         return result;
 
@@ -253,6 +254,7 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
 
         var eventId = Operation(request.S("operationId"));
         var type = Text(request, "type", 100);
+        Need(auditAlert is null || !Restaurant.PinActions.Contains(type), "Autorizaciones detenidas: la bitácora no coincide con los puntos de control externos", 409);
         var p = request.Obj("payload");
         Need(!p.Any(x => new[] { "cvv", "pin", "pan", "cardNumber" }.Contains(x.Key, StringComparer.OrdinalIgnoreCase)), "No se admiten datos bancarios sensibles");
         return await Exclusive(async () => {

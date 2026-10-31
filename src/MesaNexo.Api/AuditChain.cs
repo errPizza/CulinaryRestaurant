@@ -40,12 +40,10 @@ public sealed partial class BranchService {
     public async Task<JsonObject> AuditChain(CancellationToken ct = default) {
 
         var s = new BranchState(await Read(ct, bounded: false), true);
-        string previous = "";
-        long seq = 0;
-        var valid = true;
-        foreach (var a in s.List("audit").Where(x => x.ContainsKey("sequence")).OrderBy(x => x.L("sequence"))) { var copy = (JsonObject)a.DeepClone(); copy.Remove("hash"); copy.Remove("kind"); valid &= a.L("sequence") == ++seq && a.S("previousHash") == previous && a.S("hash") == J.Hash(J.Canonical(copy)); previous = a.S("hash"); }
-        valid &= seq == s.Meta.L("auditSequence") && previous == s.Meta.S("auditHead");
-        return J.O("valid", valid, "chainedRecords", seq, "legacyRecords", s.List("audit").Count(x => !x.ContainsKey("sequence")), "scope", "Detección local; conservar anclas y respaldos fuera del equipo");
+        var heads = Checkpoints.Heads(s.List("audit"), out var valid);
+        long seq = heads.Count;
+        valid &= seq == s.Meta.L("auditSequence") && heads.GetValueOrDefault(seq, "") == s.Meta.S("auditHead");
+        return J.O("valid", valid, "chainedRecords", seq, "legacyRecords", s.List("audit").Count(x => !x.ContainsKey("sequence")), "scope", "Detección local; la comparación con los puntos de control externos es la que detecta una reescritura");
 
     }
 }

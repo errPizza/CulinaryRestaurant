@@ -14,7 +14,7 @@ public sealed partial class BranchService {
     readonly long startedTick = Environment.TickCount64; DateTimeOffset? anchor;
     // CulinaryServer answered that this machine is not the one activated. Kept in memory: the worker asks again on start.
     bool hardwareRefused;
-// A wall clock behind what was already signed or committed by more than this is treated as tampering.
+    // A wall clock behind what was already signed or committed by more than this is treated as tampering.
     static readonly TimeSpan ClockTolerance = TimeSpan.FromMinutes(15);
     public void UseLicensing(LicenseOptions options, CulinaryServer? client = null) {
 

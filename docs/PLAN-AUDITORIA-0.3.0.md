@@ -213,6 +213,24 @@ Estados: **Confirmado** (el riesgo existe en el código), **Parcial** (hay una p
 **Acciones.** Cada hora (y en cada cierre de caja) la sucursal firma el hash de la cabeza de la bitácora y lo envía a un destino con permisos separados (ver preguntas). Un verificador independiente compara la cadena local con los puntos publicados. Ante una discrepancia: alerta, preservación de evidencia y bloqueo de nuevas autorizaciones.
 **Comprobación.** Prueba: reescribir un registro antiguo y recalcular la cadena con todas las llaves locales; el verificador lo detecta.
 
+**Estado (30 de octubre de 2026): código hecho, falta crear los buckets y probar contra R2 real.**
+- Hecho:
+  - `CheckpointWorker` firma la cabeza con la llave de la sucursal y la publica cada hora y en cada cierre de caja. Si el envío falla, la siguiente cabeza cubre lo anterior.
+  - La sucursal compara al arrancar y a diario. Una discrepancia avisa al gerente, detiene las autorizaciones con PIN y deja evidencia en el bucket. La venta sigue.
+  - Verificador externo: `--export-audit` y `--verify-checkpoints`, sin base de datos ni llaves.
+  - `culinaryos-restore` declara la restauración antes de arrancar el backend, para evitar una alerta falsa.
+  - Diseño, comandos y límites en `docs/ARQUITECTURA.md`.
+- Cambio respecto a la decisión del 29 de octubre: **R2 no ofrece tokens de sólo escritura**. Son de lectura y escritura por bucket. La inmutabilidad la da un bucket lock indefinido, que cubre el mismo riesgo: la credencial de la sucursal no puede sobrescribir ni borrar, y quitar el candado requiere un permiso de administración que la sucursal no tiene. El comportamiento del bloqueo sale de la documentación de Cloudflare. Los tipos de token no se confirmaron ahí: hay que revisarlos al crear el primero.
+- Pruebas (`--checkpoint-only`):
+  - Firma SigV4 contra el ejemplo publicado por Amazon.
+  - Reescritura de un registro con toda la cadena recalculada: la revisión local la da por buena y los puntos de control la detectan, también fuera de la sucursal.
+  - Bucket simulado con bloqueo, caída del bucket y aceptación tras restaurar.
+  - `test_recovery.py`: la declaración ocurre antes de arrancar el backend.
+- Falta:
+  - Crear el bucket y el token de cada sucursal. Sin `checkpoints.json` el trabajador no corre.
+  - Probar contra R2 real, incluido `If-None-Match` y el rechazo del bucket lock.
+  - Programar la verificación externa. Hoy es un comando que alguien debe correr, y sin él un root malicioso sólo deja de enviar. El verificador muestra `lastAt`, pero nada avisa todavía si deja de llegar.
+
 ### 9. Servidor único
 **Hoy.** Hay `ups.py` con NUT, salud y respaldos.
 **Acciones.** Alertas de disco (SMART), espacio, temperatura, servicios caídos y respaldo fallido visibles en la app del gerente; copia externa cifrada automática (destino en preguntas); guía de sustitución del servidor basada en el hallazgo 3.

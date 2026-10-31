@@ -120,7 +120,7 @@ public sealed record LicenseView(string State, JsonObject? Payload, JsonObject? 
         "clock" => "La fecha del equipo está atrasada; corrígela para continuar",
         "mismatch" => "La licencia no corresponde a este equipo",
         "transferred" => "La licencia de Culinary Restaurant pasó a otro equipo",
-_ => "Culinary Restaurant no tiene una licencia activada"
+        _ => "Culinary Restaurant no tiene una licencia activada"
     };
     // Public: shown before sign-in, so it carries no business data.
     public JsonObject Summary() {
@@ -151,7 +151,7 @@ _ => "Culinary Restaurant no tiene una licencia activada"
         var ends = p["expiresAt"] is JsonValue ? Time(p, "expiresAt") : DateTimeOffset.MaxValue;
         var grace = Time(p, "offlineUntil");
         var service = (hardwareRefused || now - Time(p, "validatedAt") >= TimeSpan.FromDays(1)) && grace < ends;
-var left = (service ? grace : ends) - now;
+        var left = (service ? grace : ends) - now;
         if (left > TimeSpan.FromDays(14)) return null;
         var days = (int)Math.Ceiling(left.TotalDays);
         var span = days <= 1 ? "menos de un día" : days + " días";
