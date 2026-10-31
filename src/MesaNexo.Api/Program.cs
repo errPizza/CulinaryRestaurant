@@ -33,6 +33,8 @@ public static class Program {
             if (args.Contains("--verify-store")) { var audit = await service.AuditChain(); var outbox = await store.VerifyOutbox(); var valid = audit.B("valid") && outbox.B("valid"); Console.WriteLine(J.O("valid", valid, "audit", audit, "outbox", outbox).ToJsonString()); return valid ? 0 : 4; }
             var checkpoints = ObjectBucket.From(Arg("checkpoints-config") ?? (lab ? null : Path.Combine(IntegrationConfig.Directory, "checkpoints.json")));
             var backups = ObjectBucket.From(Arg("backups-config") ?? (lab ? null : Path.Combine(IntegrationConfig.Directory, "backups.json")), 1800);
+            // The password comes on stdin: an argument would stay in the process list and the shell history.
+            if (Arg("reset-password") is string account) { Console.WriteLine((await service.ResetPassword(account, await Console.In.ReadLineAsync() ?? "")).ToJsonString()); return 0; }
             if (Arg("export-audit") is string chainFile) { await File.WriteAllTextAsync(chainFile, (await service.AuditRecords()).ToJsonString()); Console.WriteLine("Bitácora exportada a " + chainFile); return 0; }
             if (Arg("accept-checkpoints") is string accept) { Console.WriteLine((await service.AcceptCheckpoints(checkpoints ?? throw new BusinessException(409, "Sin destino de puntos de control"), accept)).ToJsonString()); return 0; }
             if (args.Contains("--upgrade-schema")) { Console.WriteLine((await service.UpgradeSchema()).ToJsonString()); return 0; }

@@ -40,6 +40,8 @@ La compilación y la prueba real dentro de Debian deben completarse en la VM; la
 
 Backend, almacén cifrado, sucursal, cuentas, credenciales del dispositivo, llavero, certificados TLS, cortafuegos y sincronización existentes. No habilita adaptadores externos. Las sesiones normales de mantenimiento y la consola TTY2 siguen disponibles. Windows conserva su ventana normal.
 
+Como el autologin no tiene contraseña que desbloquee el llavero, la sesión lo desbloquea con una clave propia en `~/.local/state/culinary-restaurant/keyring.key` (0600, cuenta `operador`). Sin ella, el llavero pediría contraseña detrás del kiosco y el equipo perdería su identidad, que el código de alta de un solo uso ya no puede reponer. Un llavero creado antes con otra contraseña no se abre con esta clave.
+
 El kiosco bloquea el cierre habitual del operador, no las acciones de un administrador del sistema ni el apagado de la máquina virtual desde Windows.
 
 ## Mantenimiento y restauración

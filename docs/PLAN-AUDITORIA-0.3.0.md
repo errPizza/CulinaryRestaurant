@@ -63,10 +63,10 @@ Estados: **Confirmado** (el riesgo existe en el código), **Parcial** (hay una p
   - Worker: 63 de 63.
   - Sucursal: 11 nuevas en `--license-only`.
   - Panel: 9 de 9.
+- Desplegado el 31 de octubre de 2026: intermedias de generación 1, secretos nuevos y `ROOT_PRIVATE_KEY` fuera del Worker.
 - Lo que falta, del proveedor:
-  - Generar las intermedias y subir los secretos nuevos.
-  - Borrar `ROOT_PRIVATE_KEY` del Worker y de `CulinaryServer/.dev.vars`.
-  - Llevar `secrets/root-private.txt` fuera de línea.
+  - Borrar `ROOT_PRIVATE_KEY` de `CulinaryServer/.dev.vars`.
+  - Llevar `secrets/root-private.txt` y `secrets/release-g1-private.txt` fuera de línea, y borrar del equipo `license-g1-private.txt`.
 
 ### 2. Outbox sin descarte silencioso · `MesaNexoNativo`, `CulinaryOS`
 **Lo que hay hoy.** `PostgresStore` ya no borra pendientes (comentario en la línea 20) y mueve los confirmados de más de 7 días a `events_archive`, sin borrarlos. La documentación técnica sigue describiendo el comportamiento del almacén SQLite. `runtime/mesanexo_ipc.py` aún tiene `PENDING_RETENTION`, que descarta pendientes sin central, y se instala en el appliance.

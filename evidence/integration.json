@@ -140,6 +140,10 @@
     "result": "passed"
   },
   {
+    "test": "native shell shows the license warning",
+    "result": "passed"
+  },
+  {
     "test": "native layout Resumen del turno at 360px fits horizontal viewport",
     "result": "passed"
   },
@@ -564,31 +568,7 @@
     "result": "passed"
   },
   {
-    "test": "provider snapshot excludes secret hashes",
-    "result": "passed"
-  },
-  {
-    "test": "permanent license cannot become usage subscription",
-    "result": "passed"
-  },
-  {
-    "test": "included support cannot be charged again",
-    "result": "passed"
-  },
-  {
-    "test": "provider retry is durably idempotent",
-    "result": "passed"
-  },
-  {
-    "test": "signed update verifies real bytes and bound recipient",
-    "result": "passed"
-  },
-  {
-    "test": "update for another branch rejected",
-    "result": "passed"
-  },
-  {
-    "test": "source-code purchase does not include provider updates",
+    "test": "certificate not registered with --provision-tenant is rejected",
     "result": "passed"
   },
   {
@@ -612,119 +592,19 @@
     "result": "passed"
   },
   {
-    "test": "provider backup action creates an authenticated encrypted snapshot",
+    "test": "central no longer serves provider route v1/entitlement",
     "result": "passed"
   },
   {
-    "test": "signed central policy applies to the correct local branch over mTLS",
+    "test": "central no longer serves provider route v1/releases/latest",
     "result": "passed"
   },
   {
-    "test": "same policy revision cannot be reapplied",
+    "test": "central no longer serves provider route api/backups/69b28932f886461c85c8101b5ca112de",
     "result": "passed"
   },
   {
-    "test": "module withdrawal reaches backend authorization through signed policy",
-    "result": "passed"
-  },
-  {
-    "test": "branch ticket projected in same transaction as central event receipt",
-    "result": "passed"
-  },
-  {
-    "test": "provider reply is pending until branch durable acceptance",
-    "result": "passed"
-  },
-  {
-    "test": "signed provider reply persisted exactly once at branch",
-    "result": "passed"
-  },
-  {
-    "test": "branch echo durably acknowledges provider support reply",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Portafolio at 360px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Planes y m\u00F3dulos at 360px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Licencias y servicios at 360px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Actualizaciones at 360px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Soporte at 360px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Respaldos at 360px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Historial at 360px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Portafolio at 834px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Planes y m\u00F3dulos at 834px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Licencias y servicios at 834px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Actualizaciones at 834px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Soporte at 834px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Respaldos at 834px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Historial at 834px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Portafolio at 1440px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Planes y m\u00F3dulos at 1440px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Licencias y servicios at 1440px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Actualizaciones at 1440px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Soporte at 1440px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Respaldos at 1440px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Historial at 1440px fits horizontal viewport",
+    "test": "central no longer serves provider route api/operations/e42949d101e140f9a60705bcaaa61d74",
     "result": "passed"
   },
   {
@@ -812,19 +692,1431 @@
     "result": "passed"
   },
   {
-    "test": "tampered commercial policy rejected before persistence",
+    "test": "the branch outbox reaches the central over mTLS and each event is acknowledged once",
     "result": "passed"
   },
   {
-    "test": "central outage preserves locally authorized branch readiness",
+    "test": "a delivered outbox sends nothing again",
     "result": "passed"
   },
   {
-    "test": "central restore validates encrypted snapshot and revokes restored sessions",
+    "test": "a central that does not answer keeps the event pending for a retry",
     "result": "passed"
   },
   {
-    "test": "central provider metadata encrypted under independent key",
+    "test": "central restore validates encrypted snapshot and returns to its content",
+    "result": "passed"
+  },
+  {
+    "test": "central refuses a snapshot sealed under another central\u0027s key",
+    "result": "passed"
+  },
+  {
+    "test": "tenant owner record encrypted under the central key",
+    "result": "passed"
+  },
+  {
+    "test": "a new branch has no license until it is activated",
+    "result": "passed"
+  },
+  {
+    "test": "sign-in shows the lock screen before any license is activated",
+    "result": "passed"
+  },
+  {
+    "test": "wrong activation code is refused by CulinaryServer",
+    "result": "passed"
+  },
+  {
+    "test": "a license for another siteId is refused before the code is spent",
+    "result": "passed"
+  },
+  {
+    "test": "the refused activation leaves the license unbound",
+    "result": "passed"
+  },
+  {
+    "test": "a license the branch cannot install is not kept",
+    "result": "passed"
+  },
+  {
+    "test": "activation binds the branch key and hardware fingerprint to the license",
+    "result": "passed"
+  },
+  {
+    "test": "retrying a code already spent by this machine recovers its license through a signed renewal",
+    "result": "passed"
+  },
+  {
+    "test": "a branch with a valid license refuses a second activation",
+    "result": "passed"
+  },
+  {
+    "test": "state reports features and license from the signed license",
+    "result": "passed"
+  },
+  {
+    "test": "table limit of the license is enforced by the branch server",
+    "result": "passed"
+  },
+  {
+    "test": "a licensed feature works",
+    "result": "passed"
+  },
+  {
+    "test": "an unlicensed feature is blocked by the branch server",
+    "result": "passed"
+  },
+  {
+    "test": "features written into the store\u0027s meta grant nothing",
+    "result": "passed"
+  },
+  {
+    "test": "a license edited after signing is rejected",
+    "result": "passed"
+  },
+  {
+    "test": "a forged license written into the store locks the branch",
+    "result": "passed"
+  },
+  {
+    "test": "a branch with a forged license serves no state",
+    "result": "passed"
+  },
+  {
+    "test": "restoring the signed license unlocks the branch",
+    "result": "passed"
+  },
+  {
+    "test": "a license copied to another branch is rejected",
+    "result": "passed"
+  },
+  {
+    "test": "the same store on a machine without the branch key is locked",
+    "result": "passed"
+  },
+  {
+    "test": "a license cannot be installed on a machine without its key",
+    "result": "passed"
+  },
+  {
+    "test": "renewal with a signed challenge refreshes validatedAt",
+    "result": "passed"
+  },
+  {
+    "test": "branch registers its central mTLS certificate fingerprint",
+    "result": "passed"
+  },
+  {
+    "test": "a local support ticket reaches CulinaryServer",
+    "result": "passed"
+  },
+  {
+    "test": "the provider\u0027s reply arrives once and nothing is sent twice",
+    "result": "passed"
+  },
+  {
+    "test": "no publication for this license answers without an update",
+    "result": "passed"
+  },
+  {
+    "test": "the branch obtains the update published to its license",
+    "result": "passed"
+  },
+  {
+    "test": "the terminal verifies the signed update and installer bytes",
+    "result": "passed"
+  },
+  {
+    "test": "an update for another branch is rejected by the terminal",
+    "result": "passed"
+  },
+  {
+    "test": "a changed installer is rejected by the terminal",
+    "result": "passed"
+  },
+  {
+    "test": "a release manifest for other bytes is rejected even with a valid authorization",
+    "result": "passed"
+  },
+  {
+    "test": "the license intermediate cannot sign a release manifest",
+    "result": "passed"
+  },
+  {
+    "test": "manifest and authorization from their own intermediates are accepted",
+    "result": "passed"
+  },
+  {
+    "test": "an older license revision cannot replace the installed one",
+    "result": "passed"
+  },
+  {
+    "test": "four days with the license service down keep the branch selling, with a countdown",
+    "result": "passed"
+  },
+  {
+    "test": "sign-in keeps working while the license service is down",
+    "result": "passed"
+  },
+  {
+    "test": "seven days without validation lock the branch",
+    "result": "passed"
+  },
+  {
+    "test": "an offline-expired license shows the lock screen at sign-in",
+    "result": "passed"
+  },
+  {
+    "test": "renewing again unlocks the branch",
+    "result": "passed"
+  },
+  {
+    "test": "ten days before the term ends only the manager is warned",
+    "result": "passed"
+  },
+  {
+    "test": "in the last three days the whole team is warned",
+    "result": "passed"
+  },
+  {
+    "test": "a certificate that can still renew raises no warning",
+    "result": "passed"
+  },
+  {
+    "test": "a certificate that did not renew warns the manager",
+    "result": "passed"
+  },
+  {
+    "test": "seven days from expiry the warning is critical",
+    "result": "passed"
+  },
+  {
+    "test": "a branch clock set behind signed time locks the branch",
+    "result": "passed"
+  },
+  {
+    "test": "a replayed notice from another request does not lock the branch",
+    "result": "passed"
+  },
+  {
+    "test": "CulinaryServer refuses to renew an expired license",
+    "result": "passed"
+  },
+  {
+    "test": "an expired notice for this request locks the branch at once, with plan and expiry for the lock screen",
+    "result": "passed"
+  },
+  {
+    "test": "the lock screen summary carries no business data",
+    "result": "passed"
+  },
+  {
+    "test": "an expired license shows only the lock screen at sign-in",
+    "result": "passed"
+  },
+  {
+    "test": "an open session exports no report once the license expired",
+    "result": "passed"
+  },
+  {
+    "test": "an open session loses the state once the license expired",
+    "result": "passed"
+  },
+  {
+    "test": "an expired license blocks client updates",
+    "result": "passed"
+  },
+  {
+    "test": "a lock leaves every record and key file as it was",
+    "result": "passed"
+  },
+  {
+    "test": "after renewal the branch unlocks with its data intact",
+    "result": "passed"
+  },
+  {
+    "test": "a Lite license without add-ons exposes no extra modules and two terminals",
+    "result": "passed"
+  },
+  {
+    "test": "reservations need Pro",
+    "result": "passed"
+  },
+  {
+    "test": "the delivery platforms need the Delivery Hub add-on",
+    "result": "passed"
+  },
+  {
+    "test": "a third fixed terminal exceeds the Lite allowance",
+    "result": "passed"
+  },
+  {
+    "test": "a phone needs the mobile order takers add-on",
+    "result": "passed"
+  },
+  {
+    "test": "Pro includes reservations and adds the contracted add-ons",
+    "result": "passed"
+  },
+  {
+    "test": "with the add-on, mobile order takers are unlimited and do not use terminal slots",
+    "result": "passed"
+  },
+  {
+    "test": "a license signed by the license intermediate installs",
+    "result": "passed"
+  },
+  {
+    "test": "the release intermediate cannot sign a license",
+    "result": "passed"
+  },
+  {
+    "test": "a license signed after its intermediate expired is rejected",
+    "result": "passed"
+  },
+  {
+    "test": "a key floor not signed by the root is ignored",
+    "result": "passed"
+  },
+  {
+    "test": "a root-signed key floor is kept with the license",
+    "result": "passed"
+  },
+  {
+    "test": "below the key floor a revoked intermediate signs nothing",
+    "result": "passed"
+  },
+  {
+    "test": "after a restart the kept floor still accepts the current generation",
+    "result": "passed"
+  },
+  {
+    "test": "after a restart the kept floor still rejects the revoked generation",
+    "result": "passed"
+  },
+  {
+    "test": "a new network card keeps the license",
+    "result": "passed"
+  },
+  {
+    "test": "a new disk later keeps the license",
+    "result": "passed"
+  },
+  {
+    "test": "two parts changed at once are refused",
+    "result": "passed"
+  },
+  {
+    "test": "refused hardware keeps selling and asks for a transfer, not for internet",
+    "result": "passed"
+  },
+  {
+    "test": "the released machine is refused",
+    "result": "passed"
+  },
+  {
+    "test": "the released machine locks on its next contact, without waiting for the grace",
+    "result": "passed"
+  },
+  {
+    "test": "a released machine shows only the lock screen",
+    "result": "passed"
+  },
+  {
+    "test": "a machine that lost its key is locked",
+    "result": "passed"
+  },
+  {
+    "test": "the provider\u0027s new code activates the repaired machine",
+    "result": "passed"
+  },
+  {
+    "test": "repairs and transfers leave the branch\u0027s data as it was",
+    "result": "passed"
+  },
+  {
+    "test": "the expiry warning at 14 days",
+    "result": "passed"
+  },
+  {
+    "test": "the expiry warning at 7 days",
+    "result": "passed"
+  },
+  {
+    "test": "the expiry warning at 3 days",
+    "result": "passed"
+  },
+  {
+    "test": "the expiry warning at 1 days",
+    "result": "passed"
+  },
+  {
+    "test": "no warning beyond 14 days or on a permanent license",
+    "result": "passed"
+  },
+  {
+    "test": "a trial warns about the trial",
+    "result": "passed"
+  },
+  {
+    "test": "a day without validation counts down the offline grace",
+    "result": "passed"
+  },
+  {
+    "test": "a failed renewal shows the term when it ends before the grace",
+    "result": "passed"
+  },
+  {
+    "test": "the offline grace never extends an expired term",
+    "result": "passed"
+  },
+  {
+    "test": "the branch locks exactly when the signed offlineUntil passes",
+    "result": "passed"
+  },
+  {
+    "test": "a clock set behind locks without a countdown",
+    "result": "passed"
+  },
+  {
+    "test": "a revocation does not wait for the grace",
+    "result": "passed"
+  },
+  {
+    "test": "requests are signed as Amazon\u0027s published example",
+    "result": "passed"
+  },
+  {
+    "test": "the first head is published",
+    "result": "passed"
+  },
+  {
+    "test": "nothing new, nothing published",
+    "result": "passed"
+  },
+  {
+    "test": "within the hour the head waits",
+    "result": "passed"
+  },
+  {
+    "test": "a cash close publishes at once",
+    "result": "passed"
+  },
+  {
+    "test": "a bucket that does not answer is an error for the worker, not for the sale",
+    "result": "passed"
+  },
+  {
+    "test": "the next head covers what the failed one would have",
+    "result": "passed"
+  },
+  {
+    "test": "an untouched branch matches what it published",
+    "result": "passed"
+  },
+  {
+    "test": "each checkpoint carries the branch\u0027s signature",
+    "result": "passed"
+  },
+  {
+    "test": "each checkpoint carries the branch\u0027s signature",
+    "result": "passed"
+  },
+  {
+    "test": "each checkpoint carries the branch\u0027s signature",
+    "result": "passed"
+  },
+  {
+    "test": "a checkpoint changed afterwards fails its signature",
+    "result": "passed"
+  },
+  {
+    "test": "the rewritten chain fools the local check",
+    "result": "passed"
+  },
+  {
+    "test": "the published heads catch the rewrite",
+    "result": "passed"
+  },
+  {
+    "test": "the evidence is left outside the machine",
+    "result": "passed"
+  },
+  {
+    "test": "the alert is written once",
+    "result": "passed"
+  },
+  {
+    "test": "the manager is told",
+    "result": "passed"
+  },
+  {
+    "test": "new authorizations stop",
+    "result": "passed"
+  },
+  {
+    "test": "the sale itself keeps working",
+    "result": "passed"
+  },
+  {
+    "test": "publishing the new heads does not erase the old ones",
+    "result": "passed"
+  },
+  {
+    "test": "the check outside the branch reaches the same verdict",
+    "result": "passed"
+  },
+  {
+    "test": "an accepted divergence is recorded and counted",
+    "result": "passed"
+  },
+  {
+    "test": "accepting clears the alert",
+    "result": "passed"
+  },
+  {
+    "test": "a change is copied outside the branch",
+    "result": "passed"
+  },
+  {
+    "test": "with no change nothing is uploaded",
+    "result": "passed"
+  },
+  {
+    "test": "the local copy does not stay on the disk",
+    "result": "passed"
+  },
+  {
+    "test": "the copy travels with the checksum culinaryos-restore asks for",
+    "result": "passed"
+  },
+  {
+    "test": "the bucket never sees the branch\u0027s data in the clear",
+    "result": "passed"
+  },
+  {
+    "test": "the copy from the bucket restores and verifies",
+    "result": "passed"
+  },
+  {
+    "test": "a failed upload leaves nothing on the disk",
+    "result": "passed"
+  },
+  {
+    "test": "one failed copy is not an alert",
+    "result": "passed"
+  },
+  {
+    "test": "an hour without copies warns, and four are critical",
+    "result": "passed"
+  },
+  {
+    "test": "the next copy clears it",
+    "result": "passed"
+  },
+  {
+    "test": "a failing disk reaches the app, and routine notices do not",
+    "result": "passed"
+  },
+  {
+    "test": "a report that stopped arriving is an alert",
+    "result": "passed"
+  },
+  {
+    "test": "an unreadable report is an alert, not a failure",
+    "result": "passed"
+  },
+  {
+    "test": "outside CulinaryOS there is no report to read",
+    "result": "passed"
+  },
+  {
+    "test": "the manager\u0027s state carries the alert",
+    "result": "passed"
+  },
+  {
+    "test": "the terminal that lost is told why",
+    "result": "passed"
+  },
+  {
+    "test": "the last unit goes to exactly one of two terminals",
+    "result": "passed"
+  },
+  {
+    "test": "the stock never goes negative",
+    "result": "passed"
+  },
+  {
+    "test": "the balance holds with a reservation open",
+    "result": "passed"
+  },
+  {
+    "test": "a retried send reserves once",
+    "result": "passed"
+  },
+  {
+    "test": "a prepared portion is waste, an unprepared one goes back",
+    "result": "passed"
+  },
+  {
+    "test": "only the prepared portion left the stock",
+    "result": "passed"
+  },
+  {
+    "test": "waste keeps its recipe version and cost",
+    "result": "passed"
+  },
+  {
+    "test": "the balance holds after a partial cancellation",
+    "result": "passed"
+  },
+  {
+    "test": "a sale keeps the recipe it was sent with, not the newer one",
+    "result": "passed"
+  },
+  {
+    "test": "a return cannot exceed the sale",
+    "result": "passed"
+  },
+  {
+    "test": "a sale cannot be returned twice",
+    "result": "passed"
+  },
+  {
+    "test": "returns add up to the sale, in units and in cost",
+    "result": "passed"
+  },
+  {
+    "test": "the sale itself is not rewritten",
+    "result": "passed"
+  },
+  {
+    "test": "purchases, sales, waste, counts, returns and an open transfer reconcile",
+    "result": "passed"
+  },
+  {
+    "test": "a stock changed outside its movements is caught",
+    "result": "passed"
+  },
+  {
+    "test": "the manager is told",
+    "result": "passed"
+  },
+  {
+    "test": "50000 random shares add up to the whole, each within a centavo of its proportion",
+    "result": "passed"
+  },
+  {
+    "test": "half a centavo rounds away from zero, and rewards round down",
+    "result": "passed"
+  },
+  {
+    "test": "account 0: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 0: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 0: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 1: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 1: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 1: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 2: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 2: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 2: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 3: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 3: 5 parts add up to total, tax, discount and gross",
+    "result": "passed"
+  },
+  {
+    "test": "account 3: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 3: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 4: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 4: 4 parts add up to total, tax, discount and gross",
+    "result": "passed"
+  },
+  {
+    "test": "account 4: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 4: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 5: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 5: 4 parts add up to total, tax, discount and gross",
+    "result": "passed"
+  },
+  {
+    "test": "account 5: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 5: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 6: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 6: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 6: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 7: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 7: 6 parts add up to total, tax, discount and gross",
+    "result": "passed"
+  },
+  {
+    "test": "account 7: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 7: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 8: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 8: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 8: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 9: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 9: 5 parts add up to total, tax, discount and gross",
+    "result": "passed"
+  },
+  {
+    "test": "account 9: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 9: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 10: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 10: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 10: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 11: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 11: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 11: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 12: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 12: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 12: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 13: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 13: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 13: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 14: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 14: 6 parts add up to total, tax, discount and gross",
+    "result": "passed"
+  },
+  {
+    "test": "account 14: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 14: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 15: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 15: 2 parts add up to total, tax, discount and gross",
+    "result": "passed"
+  },
+  {
+    "test": "account 15: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 15: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 16: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 16: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 16: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 17: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 17: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 17: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 18: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 18: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 18: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 19: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 19: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 19: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 20: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 20: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 20: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 21: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 21: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 21: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 22: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 22: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 22: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 23: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 23: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 23: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 24: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 24: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 24: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 25: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 25: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 25: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 26: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 26: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 26: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 27: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 27: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 27: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 28: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 28: 6 parts add up to total, tax, discount and gross",
+    "result": "passed"
+  },
+  {
+    "test": "account 28: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 28: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 29: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 29: 4 parts add up to total, tax, discount and gross",
+    "result": "passed"
+  },
+  {
+    "test": "account 29: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 29: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 30: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 30: 4 parts add up to total, tax, discount and gross",
+    "result": "passed"
+  },
+  {
+    "test": "account 30: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 30: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 31: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 31: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 31: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 32: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 32: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 32: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 33: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 33: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 33: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 34: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 34: 2 parts add up to total, tax, discount and gross",
+    "result": "passed"
+  },
+  {
+    "test": "account 34: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 34: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 35: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 35: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 35: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 36: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 36: 2 parts add up to total, tax, discount and gross",
+    "result": "passed"
+  },
+  {
+    "test": "account 36: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 36: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 37: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 37: 2 parts add up to total, tax, discount and gross",
+    "result": "passed"
+  },
+  {
+    "test": "account 37: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 37: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 38: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 38: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 38: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "account 39: gross, discount, total and tax agree",
+    "result": "passed"
+  },
+  {
+    "test": "account 39: 5 parts add up to total, tax, discount and gross",
+    "result": "passed"
+  },
+  {
+    "test": "account 39: mixed payments cover the total exactly",
+    "result": "passed"
+  },
+  {
+    "test": "account 39: the CFDI matches the ticket in total and tax",
+    "result": "passed"
+  },
+  {
+    "test": "a refund cannot exceed the charge",
+    "result": "passed"
+  },
+  {
+    "test": "a cash refund can be partial",
+    "result": "passed"
+  },
+  {
+    "test": "a payment cannot be refunded twice",
+    "result": "passed"
+  },
+  {
+    "test": "cash refunds leave the drawer as expenses tied to the refund",
+    "result": "passed"
+  },
+  {
+    "test": "the payment itself is not edited",
+    "result": "passed"
+  },
+  {
+    "test": "a card without a live provider is recorded for a person to return",
+    "result": "passed"
+  },
+  {
+    "test": "the drawer closes to the centavo after random sales, tips and refunds",
+    "result": "passed"
+  },
+  {
+    "test": "a sale can be followed from its units to its refunds",
+    "result": "passed"
+  },
+  {
+    "test": "a refund never goes past the charge, whichever account asks",
+    "result": "passed"
+  },
+  {
+    "test": "nobody changes their own limit \u00B7 Tu l\u00EDmite de autorizaci\u00F3n lo cambia otro gerente",
+    "result": "passed"
+  },
+  {
+    "test": "under the threshold one manager is enough",
+    "result": "passed"
+  },
+  {
+    "test": "above the threshold one manager is not enough \u00B7 Desde $1,000.00 lo autoriza otro gerente con su PIN",
+    "result": "passed"
+  },
+  {
+    "test": "nobody is their own second approval \u00B7 Desde $1,000.00 lo autoriza otro gerente con su PIN",
+    "result": "passed"
+  },
+  {
+    "test": "a supervisor cannot approve past their limit \u00B7 El l\u00EDmite de autorizaci\u00F3n de Supervisor es de $500.00",
+    "result": "passed"
+  },
+  {
+    "test": "a wrong PIN executes nothing",
+    "result": "passed"
+  },
+  {
+    "test": "the refund records who asked and who authorized",
+    "result": "passed"
+  },
+  {
+    "test": "the authorization keeps requester, approver, reason and result",
+    "result": "passed"
+  },
+  {
+    "test": "a locked PIN raises an alert",
+    "result": "passed"
+  },
+  {
+    "test": "a locked PIN stops even the right code \u00B7 PIN bloqueado por intentos fallidos; espera 5 minutos",
+    "result": "passed"
+  },
+  {
+    "test": "a manager does not approve their own expensive cancellation \u00B7 Desde $1,000.00 lo autoriza otro gerente con su PIN",
+    "result": "passed"
+  },
+  {
+    "test": "another manager can",
+    "result": "passed"
+  },
+  {
+    "test": "a waiter\u0027s request decided by a manager already has two people",
+    "result": "passed"
+  },
+  {
+    "test": "an expensive adjustment needs a second person \u00B7 Desde $1,000.00 lo autoriza otro gerente con su PIN",
+    "result": "passed"
+  },
+  {
+    "test": "with one it goes through",
+    "result": "passed"
+  },
+  {
+    "test": "an expensive shortage needs a second person \u00B7 Desde $1,000.00 lo autoriza otro gerente con su PIN",
+    "result": "passed"
+  },
+  {
+    "test": "with one the count is applied",
+    "result": "passed"
+  },
+  {
+    "test": "the threshold is never changed alone \u00B7 El umbral lo cambian dos gerentes: lo autoriza otro gerente con su PIN",
+    "result": "passed"
+  },
+  {
+    "test": "two managers change the threshold",
+    "result": "passed"
+  },
+  {
+    "test": "the new threshold applies at once \u00B7 Desde $30.00 lo autoriza otro gerente con su PIN",
+    "result": "passed"
+  },
+  {
+    "test": "a reset reports what it did",
+    "result": "passed"
+  },
+  {
+    "test": "a reset closes the user\u0027s sessions",
+    "result": "passed"
+  },
+  {
+    "test": "the old password stops working",
+    "result": "passed"
+  },
+  {
+    "test": "the new password signs in",
+    "result": "passed"
+  },
+  {
+    "test": "a spent code says so instead of asking for one \u00B7 C\u00F3digo de alta incorrecto o ya usado; genera uno nuevo desde un equipo autorizado",
+    "result": "passed"
+  },
+  {
+    "test": "a new device without a code is told to enter it \u00B7 Este equipo es nuevo: escribe el c\u00F3digo de alta",
+    "result": "passed"
+  },
+  {
+    "test": "spaces around a pasted code do not reject it",
+    "result": "passed"
+  },
+  {
+    "test": "an unknown user is refused \u00B7 No existe el usuario nadie",
+    "result": "passed"
+  },
+  {
+    "test": "a short password is refused \u00B7 Contrase\u00F1a: de 12 a 200 caracteres",
+    "result": "passed"
+  },
+  {
+    "test": "the reset is in the audit chain and the password is stored nowhere",
+    "result": "passed"
+  },
+  {
+    "test": "the audit chain still verifies",
+    "result": "passed"
+  },
+  {
+    "test": "a closed session authorizes nothing",
+    "result": "passed"
+  },
+  {
+    "test": "a failure before the commit is seen as not executed",
+    "result": "passed"
+  },
+  {
+    "test": "the retry executes it once",
+    "result": "passed"
+  },
+  {
+    "test": "a lost answer is seen as executed",
+    "result": "passed"
+  },
+  {
+    "test": "the retry returns the first result and adds nothing",
+    "result": "passed"
+  },
+  {
+    "test": "a restarted backend knows the operation ran",
+    "result": "passed"
+  },
+  {
+    "test": "and a retry after the restart adds nothing",
+    "result": "passed"
+  },
+  {
+    "test": "an operation id cannot be reused with other content",
+    "result": "passed"
+  },
+  {
+    "test": "after every fault the chain and the outbox still verify",
+    "result": "passed"
+  },
+  {
+    "test": "a rejection says it did not run",
+    "result": "passed"
+  },
+  {
+    "test": "anything else says to reconcile that operation",
+    "result": "passed"
+  },
+  {
+    "test": "a customer with an open account is not erased",
+    "result": "passed"
+  },
+  {
+    "test": "an export gathers everything tied to the person",
+    "result": "passed"
+  },
+  {
+    "test": "a customer with a wallet balance is not erased",
+    "result": "passed"
+  },
+  {
+    "test": "erasing needs a reason",
+    "result": "passed"
+  },
+  {
+    "test": "the person\u0027s name, phone and address are gone from the live records",
+    "result": "passed"
+  },
+  {
+    "test": "the records stay, anonymous",
+    "result": "passed"
+  },
+  {
+    "test": "sales, cash and the audit chain keep their numbers",
+    "result": "passed"
+  },
+  {
+    "test": "the erasure is recorded without personal data",
+    "result": "passed"
+  },
+  {
+    "test": "a customer is erased once",
+    "result": "passed"
+  },
+  {
+    "test": "a waiter cannot export a customer",
+    "result": "passed"
+  },
+  {
+    "test": "a waiter cannot erase a customer",
+    "result": "passed"
+  },
+  {
+    "test": "native lock screen \u0027Tu licencia venci\u00F3\u0027 at 360px shows plan and fits",
+    "result": "passed"
+  },
+  {
+    "test": "native lock screen \u0027Tu licencia venci\u00F3\u0027 at 1440px shows plan and fits",
+    "result": "passed"
+  },
+  {
+    "test": "native lock screen \u0027Tu periodo de prueba termin\u00F3\u0027 at 360px shows plan and fits",
+    "result": "passed"
+  },
+  {
+    "test": "native lock screen \u0027Tu periodo de prueba termin\u00F3\u0027 at 1440px shows plan and fits",
+    "result": "passed"
+  },
+  {
+    "test": "native lock screen \u0027Activa Culinary Restaurant\u0027 at 360px shows plan and fits",
+    "result": "passed"
+  },
+  {
+    "test": "native lock screen \u0027Activa Culinary Restaurant\u0027 at 1440px shows plan and fits",
     "result": "passed"
   },
   {
@@ -929,14 +2221,6 @@
   },
   {
     "test": "closed visit review can be simulated only once",
-    "result": "passed"
-  },
-  {
-    "test": "support consent allows only audited business preview",
-    "result": "passed"
-  },
-  {
-    "test": "support revocation applies immediately at branch server",
     "result": "passed"
   },
   {
@@ -1966,6 +3250,10 @@
     "transport": "synthetic HTTP handler; no external calls"
   },
   {
+    "test": "an upgrade keeps every pending event, and adds its own",
+    "result": "passed"
+  },
+  {
     "test": "explicit schema migration creates service-owned encrypted backup before commit",
     "result": "passed"
   },
@@ -1979,6 +3267,182 @@
   },
   {
     "test": "recovered original runtime retains pending outbox and branch readiness",
+    "result": "passed"
+  },
+  {
+    "test": "the current schema is ready",
+    "result": "passed"
+  },
+  {
+    "test": "a backend refuses a database newer than itself",
+    "result": "passed"
+  },
+  {
+    "test": "a transaction commits every record and its receipt together",
+    "result": "passed"
+  },
+  {
+    "test": "records keep text outside ASCII",
+    "result": "passed"
+  },
+  {
+    "test": "a repeated operation id with the same receipt answers duplicate instead of committing twice",
+    "result": "passed"
+  },
+  {
+    "test": "an operation id reused for other content is refused",
+    "result": "passed"
+  },
+  {
+    "test": "a stale version refuses the whole transaction",
+    "result": "passed"
+  },
+  {
+    "test": "a refused transaction leaves no record written",
+    "result": "passed"
+  },
+  {
+    "test": "a transaction over 56 KiB is refused before writing",
+    "result": "passed"
+  },
+  {
+    "test": "every transaction must carry the site revision",
+    "result": "passed"
+  },
+  {
+    "test": "concurrent transactions on one revision: one commits, the rest conflict",
+    "result": "passed"
+  },
+  {
+    "test": "scan pages are bounded, ordered, complete and name their revision",
+    "result": "passed"
+  },
+  {
+    "test": "an excluded kind is cut out of the scan",
+    "result": "passed"
+  },
+  {
+    "test": "recent returns the newest records of a kind, in pages",
+    "result": "passed"
+  },
+  {
+    "test": "event status tells committed and pending from unknown",
+    "result": "passed"
+  },
+  {
+    "test": "records are sealed before they reach PostgreSQL",
+    "result": "passed"
+  },
+  {
+    "test": "a store refuses to open under another keyring",
+    "result": "passed"
+  },
+  {
+    "test": "a store belongs to one site",
+    "result": "passed"
+  },
+  {
+    "test": "thirty days without a central drop no pending event",
+    "result": "passed"
+  },
+  {
+    "test": "pending events come out once each, oldest first",
+    "result": "passed"
+  },
+  {
+    "test": "an event is acknowledged once",
+    "result": "passed"
+  },
+  {
+    "test": "an old acknowledged event moves to the archive and still reads acknowledged",
+    "result": "passed"
+  },
+  {
+    "test": "a snapshot is a pg_dump in the service-owned folder",
+    "result": "passed"
+  },
+  {
+    "test": "thirty days without a central keep all 450 events pending, with no age alert while no central is configured",
+    "result": "passed"
+  },
+  {
+    "test": "an acknowledgement that skips an earlier event is refused",
+    "result": "passed"
+  },
+  {
+    "test": "with a central the month-old outbox needs no baseline and raises the age alert",
+    "result": "passed"
+  },
+  {
+    "test": "a lost answer and a refused connection each leave the event pending for a retry",
+    "result": "passed"
+  },
+  {
+    "test": "after reconnecting nothing is pending and the last confirmed sequence is the newest event",
+    "result": "passed"
+  },
+  {
+    "test": "the central commits every event exactly once and in the order the branch committed them",
+    "result": "passed"
+  },
+  {
+    "test": "events plus archive add up to every committed transaction",
+    "result": "passed"
+  },
+  {
+    "test": "no event is in both the outbox and the archive",
+    "result": "passed"
+  },
+  {
+    "test": "the origin store verifies its audit chain and outbox",
+    "result": "passed"
+  },
+  {
+    "test": "pg_restore loads the snapshot into a new database ",
+    "result": "passed"
+  },
+  {
+    "test": "every record comes back identical on the new machine",
+    "result": "passed"
+  },
+  {
+    "test": "the restored store verifies, with the same outbox as the origin",
+    "result": "passed"
+  },
+  {
+    "test": "a damaged event is counted, not skipped",
+    "result": "passed"
+  },
+  {
+    "test": "a snapshot missing an outbox event does not verify",
+    "result": "passed"
+  },
+  {
+    "test": "a snapshot only opens with the keyring of its branch",
+    "result": "passed"
+  },
+  {
+    "test": "the SQLite export moves into PostgreSQL in one pass",
+    "result": "passed"
+  },
+  {
+    "test": "every record keeps its version and content after the move",
+    "result": "passed"
+  },
+  {
+    "test": "the branch reads its state from PostgreSQL after the move",
+    "result": "passed"
+  },
+  {
+    "test": "pending events keep their order and digests after the move",
+    "result": "passed"
+  },
+  {
+    "test": "an event the old store had acknowledged stays acknowledged",
+    "result": "passed"
+  },
+  {
+    "test": "a migration never writes over a store that has data",
     "result": "passed"
   },
   {
@@ -2363,6 +3827,66 @@
   },
   {
     "test": "a BBVA charge is recorded from its voucher",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a process that dies after calling the provider leaves the claim stored",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "the next run asks again with the same key and finds the order",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "Mercado Pago after a crash: one order, one payment",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "every change of the charge stays in its trail, with the provider\u0027s answer and no card data",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a final state does not change, whoever writes it (Un cobro no pasa de \u00ABapproved\u00BB a \u00ABwaiting\u00BB)",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a provider\u0027s charge goes back whole (El proveedor devuelve el cargo completo)",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a refund queues the provider\u0027s charge",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "the provider returns the charge, and the payment keeps its history",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "Clip after a crash: nothing is sent again and the charge waits for a person",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "an uncertain charge blocks a new one on the account (Hay un cobro con terminal en curso en esta cuenta; espera su resultado o cons\u00FAltalo antes de cobrar otra vez)",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "the manager\u0027s capture applies the charge once",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "each adapter declares what it can prove after a lost answer",
     "result": "passed",
     "providers": "simulated HTTP APIs; no network"
   },

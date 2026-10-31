@@ -38,9 +38,11 @@ public sealed class DesktopVault(string? testDirectory = null): ISecureVault {
         using var p = Process.Start(start) ?? throw new IOException("Activa el almacén de credenciales de Linux");
         if (input is not null) await p.StandardInput.WriteAsync(input);
         p.StandardInput.Close();
+        var error = p.StandardError.ReadToEndAsync();
         var output = await p.StandardOutput.ReadToEndAsync();
         await p.WaitForExitAsync();
-        if (p.ExitCode != 0) { if (missingAllowed && p.ExitCode == 1) return null; throw new IOException("El almacén seguro no está disponible; desbloquea el llavero de sesión"); }
+        // Exit 1 alone also covers a keyring that failed: reading that as "missing" would mint a new device identity.
+        if (p.ExitCode != 0) { if (missingAllowed && p.ExitCode == 1 && (await error).Trim() == "") return null; throw new IOException("El almacén seguro no está disponible; desbloquea el llavero de sesión"); }
         return output.TrimEnd('\r', '\n');
 
     }

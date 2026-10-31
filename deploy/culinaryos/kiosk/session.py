@@ -68,6 +68,30 @@ def append_log(path, text):
         pass
 
 
+def keyring_key(path):
+    """Autologin has no password to unlock the keyring, so the operator account keeps its own key."""
+    if path.is_file() and (key := path.read_text(encoding="ascii").strip()):
+        return key
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    key = secrets.token_urlsafe(32)
+    pending = path.with_suffix(".tmp")
+    pending.unlink(missing_ok=True)
+    with os.fdopen(os.open(pending, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as output:
+        output.write(key)
+    pending.replace(path)
+    return key
+
+
+def unlock_keyring(path):
+    """A locked keyring would ask for a password behind the kiosk and lose the device identity.
+
+    --replace takes over a daemon PAM may have started without unlocking anything.
+    """
+    subprocess.run(["/usr/bin/gnome-keyring-daemon", "--replace", "--daemonize", "--unlock", "--components=secrets"],
+                   input=keyring_key(path).encode("ascii"), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                   timeout=15, check=True)
+
+
 def tail(path):
     try:
         with path.open("rb") as output:
@@ -148,6 +172,12 @@ class Session:
         signal.signal(signal.SIGTERM, self.stop)
         signal.signal(signal.SIGINT, self.stop)
         root.after(250, self.tick)
+
+    def unlock(self):
+        try:
+            unlock_keyring(self.log.with_name("keyring.key"))
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            append_log(self.log, f"{time.strftime('%Y-%m-%d %H:%M:%S')} Llavero sin desbloquear: {error}\n")
 
     def show_loading(self, message):
         self.message.set(message)
@@ -249,10 +279,8 @@ def main():
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     root = tk.Tk()
     session = Session(root, runtime)
-    # Start after drawing the loader. Secret Service keeps its existing encryption.
-    root.after(0, lambda: subprocess.Popen(
-        ["/usr/bin/gnome-keyring-daemon", "--start", "--components=secrets"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+    # After drawing the loader and before the first tick starts the app.
+    root.after(0, session.unlock)
     try:
         root.mainloop()
     finally:

@@ -63,6 +63,27 @@ class KioskRecovery(unittest.TestCase):
             blocked.write_text("")
             session.append_log(blocked / "kiosk.log", "sin espacio\n")
 
+    def test_keyring_key_is_private_and_survives_restarts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "state/keyring.key"
+            first = session.keyring_key(path)
+            self.assertGreaterEqual(len(first), 32)
+            self.assertEqual(session.keyring_key(path), first)
+            if os.name == "posix":
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            path.write_text("")
+            self.assertNotEqual(session.keyring_key(path), "")
+
+    def test_keyring_is_unlocked_with_the_stored_key_before_the_app_starts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "keyring.key"
+            with patch.object(session.subprocess, "run") as run:
+                session.unlock_keyring(path)
+            argv = run.call_args.args[0]
+            self.assertIn("--unlock", argv)
+            self.assertIn("--replace", argv)
+            self.assertEqual(run.call_args.kwargs["input"].decode(), path.read_text())
+
     def test_prior_process_cannot_dismiss_loading_screen(self):
         nonce = "a" * 64
         value = {"protocol": 1, "pid": 123, "nonce": nonce}

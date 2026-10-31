@@ -91,6 +91,35 @@ static class ApprovalTests {
         await Act("cash.open", J.O("initial", 0));
         var nowSmall = await Sale(cheap.S("id"));
         await Deny(() => Act("payment.refund", J.O("id", nowSmall, "reason", "Ya es caro")), "otro gerente", "the new threshold applies at once");
+        // Password reset from the server: for when no manager can sign in.
+        var resetEnroll = J.Id() + J.Id();
+        await service.RotateEnrollment(resetEnroll);
+        var resetDevice = J.O("siteId", site, "deviceId", J.Id(), "deviceSecret", J.Id(), "deviceName", "Reinicio", "username", "segunda", "password", password, "enrollmentCode", resetEnroll);
+        var resetToken = (await service.Login((JsonObject)resetDevice.DeepClone())).S("token");
+        var fresh = "Nueva-" + J.Id();
+        var reset = await service.ResetPassword("segunda", fresh);
+        Check(reset.L("sessionsClosed") == 1 && reset.S("role") == "manager", "a reset reports what it did");
+        try { await service.State(resetToken); throw new Exception("Session survived the reset"); } catch (BusinessException e) { Check(e.Status is 401 or 403, "a reset closes the user's sessions"); }
+        try { await service.Login((JsonObject)resetDevice.DeepClone()); throw new Exception("Old password accepted"); } catch (BusinessException e) { Check(e.Status == 401, "the old password stops working"); }
+        var renewed = (JsonObject)resetDevice.DeepClone();
+        renewed["password"] = fresh;
+        renewed["enrollmentCode"] = "";
+        Check((await service.Login(renewed)).S("token") != "", "the new password signs in");
+        var unknownDevice = (JsonObject)resetDevice.DeepClone();
+        unknownDevice["deviceId"] = J.Id();
+        unknownDevice["password"] = fresh;
+        await Deny(() => service.Login((JsonObject)unknownDevice.DeepClone()), "ya usado", "a spent code says so instead of asking for one");
+        unknownDevice["enrollmentCode"] = " ";
+        await Deny(() => service.Login((JsonObject)unknownDevice.DeepClone()), "escribe el código", "a new device without a code is told to enter it");
+        var pastedCode = J.Id() + J.Id();
+        await service.RotateEnrollment(pastedCode);
+        unknownDevice["enrollmentCode"] = "  " + pastedCode + " ";
+        Check((await service.Login((JsonObject)unknownDevice.DeepClone())).S("token") != "", "spaces around a pasted code do not reject it");
+        await Deny(() => service.ResetPassword("nadie", fresh), "No existe", "an unknown user is refused");
+        await Deny(() => service.ResetPassword("segunda", "corta"), "12 a 200", "a short password is refused");
+        state = await service.Load();
+        Check(state.List("audit").Any(x => x.S("operation") == "user.password.reset" && x.S("actor") == "local-maintenance") && !state.Committed.Records.Values.Any(x => x.Data.ToJsonString().Contains(fresh)), "the reset is in the audit chain and the password is stored nowhere");
+        Check((await service.AuditChain()).B("valid"), "the audit chain still verifies");
         // A session that ended.
         await Act("session.logout", new(), waiterToken);
         try { await service.State(waiterToken); throw new Exception("Revoked session served"); } catch (BusinessException e) { Check(e.Status is 401 or 403, "a closed session authorizes nothing"); }

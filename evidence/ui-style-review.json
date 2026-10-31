@@ -432,87 +432,27 @@
     "result": "passed"
   },
   {
-    "test": "provider layout Portafolio at 360px fits horizontal viewport",
+    "test": "native lock screen \u0027Tu licencia venci\u00F3\u0027 at 360px shows plan and fits",
     "result": "passed"
   },
   {
-    "test": "provider layout Planes y m\u00F3dulos at 360px fits horizontal viewport",
+    "test": "native lock screen \u0027Tu licencia venci\u00F3\u0027 at 1440px shows plan and fits",
     "result": "passed"
   },
   {
-    "test": "provider layout Licencias y servicios at 360px fits horizontal viewport",
+    "test": "native lock screen \u0027Tu periodo de prueba termin\u00F3\u0027 at 360px shows plan and fits",
     "result": "passed"
   },
   {
-    "test": "provider layout Actualizaciones at 360px fits horizontal viewport",
+    "test": "native lock screen \u0027Tu periodo de prueba termin\u00F3\u0027 at 1440px shows plan and fits",
     "result": "passed"
   },
   {
-    "test": "provider layout Soporte at 360px fits horizontal viewport",
+    "test": "native lock screen \u0027Activa Culinary Restaurant\u0027 at 360px shows plan and fits",
     "result": "passed"
   },
   {
-    "test": "provider layout Respaldos at 360px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Historial at 360px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Portafolio at 834px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Planes y m\u00F3dulos at 834px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Licencias y servicios at 834px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Actualizaciones at 834px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Soporte at 834px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Respaldos at 834px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Historial at 834px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Portafolio at 1440px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Planes y m\u00F3dulos at 1440px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Licencias y servicios at 1440px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Actualizaciones at 1440px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Soporte at 1440px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Respaldos at 1440px fits horizontal viewport",
-    "result": "passed"
-  },
-  {
-    "test": "provider layout Historial at 1440px fits horizontal viewport",
+    "test": "native lock screen \u0027Activa Culinary Restaurant\u0027 at 1440px shows plan and fits",
     "result": "passed"
   },
   {

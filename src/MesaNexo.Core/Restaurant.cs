@@ -543,8 +543,8 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
 
                 }
             case "device.enrollment":
-                Need(p.S("code").Length >= 20, "Código de alta demasiado corto");
-                s.Meta["enrollmentHash"] = J.Hash(p.S("code"));
+                Need(p.S("code").Trim().Length >= 20, "Código de alta demasiado corto");
+                s.Meta["enrollmentHash"] = J.Hash(p.S("code").Trim());
                 break;
             case "session.revoke":
                 s.Get("session", id)["revoked"] = true;
