@@ -25,7 +25,7 @@ public sealed partial class Restaurant {
         if (list is null) return product.L("price");
         var fixedPrice = list.A("prices").Objects().FirstOrDefault(x => x.S("productId") == product.S("id"));
         if (fixedPrice is not null) return fixedPrice.L("price");
-        return Math.Max(0, (long)Math.Round(product.L("price") * (10000m + list.L("adjustBps")) / 10000m, MidpointRounding.AwayFromZero));
+        return Math.Max(0, Cents.Bps(product.L("price"), 10000 + list.L("adjustBps")));
 
     }
     // Wallet and payroll settlements are payments outside the drawer; they keep the open cash id only for reporting.
@@ -41,7 +41,7 @@ public sealed partial class Restaurant {
         var loyalty = s.Meta.Obj("loyalty");
         if (!loyalty.B("enabled") || v.S("customerId") == "" || loyalty.L("cashbackBps") <= 0) return;
         var basis = s.Related("payment", "visitId", v.S("id")).Where(x => x.S("method") is not ("wallet" or "payroll")).Sum(x => x.L("amount"));
-        var earned = (long)Math.Floor(basis * loyalty.L("cashbackBps") / 10000m);
+        var earned = Cents.BpsFloor(basis, loyalty.L("cashbackBps"));
         if (earned <= 0) return;
         Add(s, "walletmove", J.O("customerId", v.S("customerId"), "type", "earn", "amount", earned, "visitId", v.S("id"), "cycle", v.L("closeCycle"), "at", J.Now()));
         v["loyaltyEarned"] = v.L("loyaltyEarned") + earned;

@@ -164,7 +164,7 @@ public sealed partial class Restaurant {
         if (order.B("live")) PlatformSync(s, order, 20, "");
         // The platform already charged the customer; the branch records what it will be paid, priced locally, minus the commission.
         var total = Totals(s, v).L("total");
-        var commission = (long)Math.Round(total * config.L("commissionBps") / 10000m, MidpointRounding.AwayFromZero);
+        var commission = Cents.Bps(total, config.L("commissionBps"));
         if (total > 0) { var pay = InternalPayment(s, u, v, total, "platform"); pay["platform"] = order.S("platform"); pay["reference"] = order.S("externalId"); }
         v["prepaid"] = true;
         order["status"] = "accepted";

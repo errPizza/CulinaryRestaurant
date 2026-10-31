@@ -168,6 +168,13 @@ static class LiveIntegrationTests {
         var refused = await service.Load();
         refused.Get("terminaltxn", crashed.S("id"))["status"] = "waiting";
         await Deny(() => { service.Domain.ChargeTransitions(refused, "test"); return Task.CompletedTask; }, "no pasa de", "a final state does not change, whoever writes it");
+        // A refund of that charge, from a closed account: the provider returns it, and the payment stays as it was.
+        foreach (var unit in (await service.Load()).Related("unit", "visitId", crashVisit).Select(x => x.S("id")).ToArray()) foreach (var status in new[] { "preparing", "ready", "delivered" }) await Act("unit.state", J.O("id", unit, "status", status));
+        await Act("visit.close", J.O("id", crashVisit));
+        await Deny(() => Act("payment.refund", J.O("id", recovered.S("paymentId"), "amount", 1, "reason", "Parcial")), "completo", "a provider's charge goes back whole");
+        var returned = await Act("payment.refund", J.O("id", recovered.S("paymentId"), "reason", "Cobrado por error"));
+        Check(returned.S("route") == "provider" && (await Get("terminaltxn", crashed.S("id"))).S("status") == "refund-queued", "a refund queues the provider's charge");
+        Check(await RefundTerminal() && (await Get("terminaltxn", crashed.S("id"))).S("status") == "refunded" && await Paid(crashVisit) == 3000, "the provider returns the charge, and the payment keeps its history");
         var posts = clip.Calls.Count(c => c.Request.Method == HttpMethod.Post);
         var clipCrashVisit = await Account();
         var clipCrash = await Act("terminal.charge", J.O("visitId", clipCrashVisit, "amount", 3000, "terminalId", "barra"));

@@ -136,7 +136,7 @@ Estados: **Confirmado** (el riesgo existe en el código), **Parcial** (hay una p
   - Clip: no se reenvía nada, queda incierto, bloquea otro cobro y la captura del gerente aplica un solo pago.
   - BBVA no pasa por esta ruta: se registra desde el voucher.
 - Falta:
-  - Reverso de un cobro aprobado. La transición existe (`approved → refund-queued`), pero no hay acción que la use: el dominio no tiene cómo revertir un `payment`. Depende de la trazabilidad del hallazgo 11 y de la segunda aprobación del hallazgo 12.
+  - Reverso de un cobro aprobado: el dominio ya lo hace con `payment.refund` (hallazgo 11). Falta su pantalla y la segunda aprobación del hallazgo 12.
   - Validar contra los sandbox reales (hallazgo 15). Las capacidades de Clip y Mercado Pago salen de su documentación, no de una prueba real.
 
 ## Fase 2 · Resiliencia de la sucursal
@@ -272,6 +272,21 @@ Estados: **Confirmado** (el riesgo existe en el código), **Parcial** (hay una p
 ### 11. Política monetaria y fiscal
 **Acciones.** Documento único de redondeo (centavos enteros, IVA incluido, reparto de residuos en divisiones y descuentos); funciones centralizadas; trazabilidad venta → pago → devolución → CFDI.
 **Comprobación.** Pruebas de propiedades (FsCheck o generador propio): la suma de partes siempre es igual al total, en divisiones, descuentos, propinas y pagos mixtos.
+
+**Estado (30 de octubre de 2026): código hecho, falta la nota de crédito y la revisión contable.**
+- Hecho:
+  - `docs/POLITICA-MONETARIA.md`, documento único, y `src/MesaNexo.Core/Cents.cs`, funciones centralizadas. Los importes de venta, descuentos, promociones, comisiones, recompensas y CFDI ya no redondean por su cuenta. El comportamiento no cambió. El costo de inventario sigue en sus propias funciones, porque no es un importe de venta.
+  - `payment.refund`: devolución como registro inmutable que apunta al pago. En efectivo sale de la caja y puede ser parcial. Con un proveedor en vivo devuelve el cargo completo por la ruta que ya existía. Lo demás sólo se registra. Esto cierra el reverso pendiente del hallazgo 4.
+  - `visit.trail`: una venta completa, de unidades a pagos, cargos, devoluciones y CFDI.
+  - El corte muestra las devoluciones del periodo.
+- Pruebas (`--money-only`, semilla fija, generador propio):
+  - 50,000 repartos aleatorios: suman el total y cada parte queda a menos de un centavo de su proporción.
+  - 40 cuentas aleatorias en la app real, con IVA de 0, 8 y 16 %, descuentos, divisiones, propinas y pagos mixtos: partes, saldo y CFDI coinciden con el ticket, y la caja cierra al centavo con devoluciones.
+  - `--live-only`: devolución real por el simulador de Mercado Pago.
+- Falta:
+  - **No hay botón.** La devolución y el rastro son acciones del dominio sin pantalla. La interfaz va con la segunda aprobación del hallazgo 12, que debe protegerlas.
+  - **Nota de crédito (CFDI de egreso).** Una devolución sobre una venta timbrada queda marcada `creditNote: pending`, pero el sistema no la emite.
+  - Revisión de un contador, incluido el IVA del envío, que hoy sale con tasa 0.
 
 ### 12. Separación de funciones del gerente
 **Acciones.** Perfiles de autorización (supervisor con límites) y segunda aprobación arriba de un importe para reembolsos, cancelaciones y ajustes (umbral en preguntas). Registro de quién solicita, quién autoriza, motivo y resultado. Bloqueo de PIN por intentos y alertas.

@@ -12,7 +12,7 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
 
         var gross = s.Related("unit", "visitId", v.S("id")).Where(x => !new[] { "cancelled", "unavailable" }.Contains(x.S("status"))).Sum(x => x.L("price")) + v.L("deliveryFee");
         var d = v.Obj("discount");
-        var discount = d.S("kind") == "percent" ? (long)Math.Round(gross * (d["value"]?.GetValue<decimal>() ?? 0) / 100m, MidpointRounding.AwayFromZero) : Math.Min(gross, d.L("value"));
+        var discount = d.S("kind") == "percent" ? Cents.Percent(gross, d["value"]?.GetValue<decimal>() ?? 0) : Math.Min(gross, d.L("value"));
         var paid = s.Related("payment", "visitId", v.S("id")).Sum(x => x.L("amount"));
         return J.O("gross", gross, "discount", discount, "total", gross - discount, "paid", paid, "balance", gross - discount - paid, "tax", IncludedTax(s, v, gross - discount));
 
@@ -229,7 +229,7 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
                             var tz = TimeZoneInfo.FindSystemTimeZoneById("America/Mexico_City");
                             var hour = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, tz).Hour;
                             var promo = s.List("promotion").FirstOrDefault(x => x.B("active") && x.S("coupon") == "" && x.A("productIds").Strings().Contains(prod.S("id")) && hour >= x.I("startHour") && hour < x.I("endHour") && (!x.B("combo") || x.A("productIds").Strings().All(pid => items.Objects().Any(z => z.S("productId") == pid))));
-                            if (promo is not null) { price = (long)Math.Round(price * (100m - promo.L("percent")) / 100m, MidpointRounding.AwayFromZero); promoId = promo.S("id"); }
+                            if (promo is not null) { price = Cents.Percent(price, 100m - promo.L("percent")); promoId = promo.S("id"); }
 
                         }
                         if (item.B("held")) Module(s, "courses");

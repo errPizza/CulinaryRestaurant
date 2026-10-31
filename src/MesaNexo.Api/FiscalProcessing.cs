@@ -16,7 +16,7 @@ public sealed partial class BranchService {
         Need(visit.S("status") == "closed", "Ticket fiscal no liquidado");
         var units = s.Related("unit", "visitId", visit.S("id")).Where(x => x.S("status") == "delivered").OrderBy(x => x.S("id"), StringComparer.Ordinal).ToArray();
         var weights = units.Select(x => x.L("price")).Append(visit.L("deliveryFee")).ToArray();
-        var amounts = Restaurant.Allocate(fiscal.Obj("totals").L("total"), weights);
+        var amounts = Cents.Allocate(fiscal.Obj("totals").L("total"), weights);
         var items = new JsonArray();
         for (int i = 0; i < weights.Length; i++) {
 
@@ -31,7 +31,7 @@ public sealed partial class BranchService {
             // A key that names a rate must match the rate frozen in the sold unit; the default follows each unit's own rate.
             if (map.ContainsKey("rateBps")) Need(map.L("rateBps") == bps, "Tasa fiscal distinta del precio histórico");
             Need(taxObject == "02" || bps == 0, "Tratamiento fiscal incompatible");
-            var tax = (long)Math.Round(amounts[i] * (decimal)bps / (10000 + bps), MidpointRounding.AwayFromZero);
+            var tax = Cents.IncludedTax(amounts[i], bps);
             var subtotal = amounts[i] - tax;
             var item = J.O("ProductCode", code, "IdentificationNumber", unit?.S("id") ?? "delivery", "Description", unit?.S("name") ?? "Servicio de entrega", "UnitCode", unitCode, "Quantity", 1, "UnitPrice", subtotal / 100m, "Subtotal", subtotal / 100m, "TaxObject", taxObject, "Total", amounts[i] / 100m);
             if (taxObject == "02") item["Taxes"] = J.N(new[] { J.O("Name", "IVA", "Rate", bps / 10000m, "Base", subtotal / 100m, "Total", tax / 100m, "IsRetention", false) });

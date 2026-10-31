@@ -3,26 +3,14 @@ using static MesaNexo.Core.Rules;
 namespace MesaNexo.Core;
 
 public sealed partial class Restaurant {
-    static readonly string[] EcosystemKinds = ["call", "cloudproposal", "folio", "printjob", "customer", "address", "delivery", "courier", "zone", "warehouse", "ingredient", "recipe", "recipeversion", "stock", "stocklayer", "stockmovement", "stockjob", "unitstock", "transfer", "ownernotice", "cashadjustment", "fiscal", "invoicetoken", "station", "supplier", "purchase", "payable", "payablepayment", "stockcount", "expenseaccount", "expense", "pettymove", "pinauth", "pricelist", "walletmove", "staffcharge", "zreport", "integration", "integrationlog", "terminaltxn", "paylink", "message", "aggregatororder", "pmspost"];
+    static readonly string[] EcosystemKinds = ["refund", "call", "cloudproposal", "folio", "printjob", "customer", "address", "delivery", "courier", "zone", "warehouse", "ingredient", "recipe", "recipeversion", "stock", "stocklayer", "stockmovement", "stockjob", "unitstock", "transfer", "ownernotice", "cashadjustment", "fiscal", "invoicetoken", "station", "supplier", "purchase", "payable", "payablepayment", "stockcount", "expenseaccount", "expense", "pettymove", "pinauth", "pricelist", "walletmove", "staffcharge", "zreport", "integration", "integrationlog", "terminaltxn", "paylink", "message", "aggregatororder", "pmspost"];
     // Largest remainder, stable index tie-break. All values are minor units; no binary float.
-    public static long[] Allocate(long amount, IReadOnlyList<long> weights) {
-
-        Need(amount >= 0 && weights.Count > 0 && weights.All(x => x >= 0), "Distribución inválida");
-        var sum = weights.Aggregate(0m, (a, b) => a + b);
-        if (sum == 0) { Need(amount == 0, "Distribución sin base"); return new long[weights.Count]; }
-        var raw = weights.Select(x => amount * (decimal)x / sum).ToArray();
-        var result = raw.Select(x => (long)decimal.Floor(x)).ToArray();
-        var left = amount - result.Sum();
-        foreach (var i in Enumerable.Range(0, weights.Count).OrderByDescending(i => raw[i] - result[i]).ThenBy(i => i).Take(checked((int)left))) result[i]++;
-        return result;
-
-    }
     long IncludedTax(BranchState s, JsonObject v, long total) {
 
         var units = s.Related("unit", "visitId", v.S("id")).Where(x => !new[] { "cancelled", "unavailable" }.Contains(x.S("status"))).OrderBy(x => x.S("id"), StringComparer.Ordinal).ToArray();
         if (units.Length == 0) return 0;
-        var net = Allocate(total, units.Select(x => x.L("price")).Append(v.L("deliveryFee")).ToArray());
-        return units.Select((x, i) => (long)Math.Round(net[i] * (decimal)x.L("taxBps") / (10000 + x.L("taxBps")), MidpointRounding.AwayFromZero)).Sum();
+        var net = Cents.Allocate(total, units.Select(x => x.L("price")).Append(v.L("deliveryFee")).ToArray());
+        return units.Select((x, i) => Cents.IncludedTax(net[i], x.L("taxBps"))).Sum();
 
     }
     void GuardEcosystem(BranchState s, JsonObject u, string type, JsonObject p) {
@@ -102,9 +90,9 @@ public sealed partial class Restaurant {
                     var n = Amount(p, "parts", 2, 100);
                     var totals = Totals(s, v);
                     var weights = Enumerable.Repeat(1L, (int)n).ToArray();
-                    var amounts = Allocate(totals.L("total"), weights);
-                    var taxes = Allocate(totals.L("tax"), amounts);
-                    var discounts = Allocate(totals.L("discount"), weights);
+                    var amounts = Cents.Allocate(totals.L("total"), weights);
+                    var taxes = Cents.Allocate(totals.L("tax"), amounts);
+                    var discounts = Cents.Allocate(totals.L("discount"), weights);
                     var ids = new List<string>();
                     for (int i = 0; i < n; i++) ids.Add(Add(s, "folio", J.O("visitId", id, "number", i + 1, "total", amounts[i], "tax", taxes[i], "discount", discounts[i], "gross", amounts[i] + discounts[i], "at", J.Now())).S("id"));
                     result = J.O("folioIds", ids, "total", totals.L("total"));
@@ -185,7 +173,7 @@ public sealed partial class Restaurant {
 
         var prefixes = new[] { "inventory.", "stock.", "recipe.", "transfer.", "delivery.", "customer.", "address.", "courier.", "zone.", "station.", "commerce.", "fiscal.", "print.", "drawer.", "cash.blind.", "cash.adjust", "visit.quick", "visit.divide", "visit.undivide", "visit.split.person", "visit.reopen", "visit.issueBill", "visit.unlock", "supplier.", "purchase.", "payable.", "expense.", "petty.", "cash.limit", "cash.withdraw", "user.pin", "authorize.pin", "pricelist.", "visit.pricelist", "visit.customer", "loyalty.", "wallet.", "staff.", "report.x", "report.z", "report.abc", "qr.", "table.qr", "integration.", "pac.", "terminal.", "paylink.", "pms.", "geo.", "callerid.", "call.", "message.", "aggregator." };
         if (prefixes.Any(type.StartsWith)) Need(s.Meta.L("schemaVersion", 1) >= 2, "Requiere migración DEVMap con respaldo desde mantenimiento", 503);
-        return TryFront(s, u, type, p, out result) || TryBackoffice(s, u, type, p, out result) || TryLoyalty(s, u, type, p, out result) || TryClosings(s, u, type, p, out result) || TryTableQr(s, u, type, p, out result) || TryIntegrations(s, u, type, p, out result) || TryCloudProposal(s, u, type, p, out result) || TryPos(s, u, type, p, out result) || TryInventory(s, u, type, p, out result) || TryCash(s, u, type, p, out result) || TryDelivery(s, u, type, p, out result) || TryFiscal(s, u, type, p, out result);
+        return TryRefunds(s, u, type, p, out result) || TryFront(s, u, type, p, out result) || TryBackoffice(s, u, type, p, out result) || TryLoyalty(s, u, type, p, out result) || TryClosings(s, u, type, p, out result) || TryTableQr(s, u, type, p, out result) || TryIntegrations(s, u, type, p, out result) || TryCloudProposal(s, u, type, p, out result) || TryPos(s, u, type, p, out result) || TryInventory(s, u, type, p, out result) || TryCash(s, u, type, p, out result) || TryDelivery(s, u, type, p, out result) || TryFiscal(s, u, type, p, out result);
 
     }
     void AfterEcosystem(BranchState s, JsonObject u, string type, JsonObject p, JsonObject result) { InventoryAfterAction(s, u, type, p, result); FrontAfterAction(s, u, type, p, result); BackofficeAfterAction(s, type, p); IntegrationAfterAction(s, u, type, p, result); }
@@ -199,7 +187,7 @@ public sealed partial class Restaurant {
             var variant = kind;
             if (u.S("role") != "manager") {
 
-                if (new[] { "cloudproposal", "printjob", "warehouse", "ingredient", "recipe", "recipeversion", "stock", "stocklayer", "stockmovement", "stockjob", "unitstock", "transfer", "ownernotice", "cashadjustment", "fiscal", "invoicetoken", "supplier", "purchase", "payable", "payablepayment", "stockcount", "expenseaccount", "expense", "pettymove", "pinauth", "staffcharge", "zreport" }.Contains(kind)) {
+                if (new[] { "refund", "cloudproposal", "printjob", "warehouse", "ingredient", "recipe", "recipeversion", "stock", "stocklayer", "stockmovement", "stockjob", "unitstock", "transfer", "ownernotice", "cashadjustment", "fiscal", "invoicetoken", "supplier", "purchase", "payable", "payablepayment", "stockcount", "expenseaccount", "expense", "pettymove", "pinauth", "staffcharge", "zreport" }.Contains(kind)) {
 
                     if (kind == "cloudproposal" && u.S("role") == "mesero") { values = values.Where(x => x.Obj("command").S("type") == "table" && x.S("status") == "pending-review" && x.S("visitId") != "" && s.Get("visit", x.S("visitId")).S("waiterId") == u.S("id")); variant = "cloudproposal:mesero"; build = x => J.O("id", x.S("id"), "visitId", x.S("visitId"), "tableId", x.S("tableId"), "status", x.S("status"), "command", J.O("type", "table", "payload", J.O("kind", "order", "items", x.Obj("command").Obj("payload").A("items").DeepClone(), "notes", x.Obj("command").Obj("payload").S("notes"))), "receivedAt", x.S("receivedAt")); } else values = [];
 
