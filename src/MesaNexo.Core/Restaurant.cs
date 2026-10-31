@@ -12,7 +12,7 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
 
         var gross = s.Related("unit", "visitId", v.S("id")).Where(x => !new[] { "cancelled", "unavailable" }.Contains(x.S("status"))).Sum(x => x.L("price")) + v.L("deliveryFee");
         var d = v.Obj("discount");
-        var discount = d.S("kind") == "percent" ? (long)Math.Round(gross * (d["value"]?.GetValue<decimal>() ?? 0) / 100m, MidpointRounding.AwayFromZero) : Math.Min(gross, d.L("value"));
+        var discount = d.S("kind") == "percent" ? Cents.Percent(gross, d["value"]?.GetValue<decimal>() ?? 0) : Math.Min(gross, d.L("value"));
         var paid = s.Related("payment", "visitId", v.S("id")).Sum(x => x.L("amount"));
         return J.O("gross", gross, "discount", discount, "total", gross - discount, "paid", paid, "balance", gross - discount - paid, "tax", IncludedTax(s, v, gross - discount));
 
@@ -102,6 +102,8 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
         meta["maxUsers"] = license.MaxUsers;
         meta["maxTables"] = license.MaxTables;
         meta["license"] = license.Summary();
+        // Renewing is the manager's job; the rest of the team hears about it only when the branch is days from locking.
+        if (role != "manager" && meta.Obj("license").Obj("warning").S("level") != "critical") meta.Obj("license").Remove("warning");
         var outp = new StateParts();
         outp["user"] = SafeUser(u);
         outp["sessionId"] = session;
@@ -227,7 +229,7 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
                             var tz = TimeZoneInfo.FindSystemTimeZoneById("America/Mexico_City");
                             var hour = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, tz).Hour;
                             var promo = s.List("promotion").FirstOrDefault(x => x.B("active") && x.S("coupon") == "" && x.A("productIds").Strings().Contains(prod.S("id")) && hour >= x.I("startHour") && hour < x.I("endHour") && (!x.B("combo") || x.A("productIds").Strings().All(pid => items.Objects().Any(z => z.S("productId") == pid))));
-                            if (promo is not null) { price = (long)Math.Round(price * (100m - promo.L("percent")) / 100m, MidpointRounding.AwayFromZero); promoId = promo.S("id"); }
+                            if (promo is not null) { price = Cents.Percent(price, 100m - promo.L("percent")); promoId = promo.S("id"); }
 
                         }
                         if (item.B("held")) Module(s, "courses");
@@ -360,11 +362,14 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
                     Need(v.S("status") == "open", "Cuenta cerrada");
                     if (p.B("approve")) {
 
+                        var gross = Totals(s, v).L("gross");
+                        var at = r.Obj("discount");
+                        DualControl(s, u, r.S("type") switch { "cancel" => s.Get("unit", r.S("unitId")).L("price"), "comp" => gross, "discount" => at.S("kind") == "percent" ? Cents.Percent(gross, at["value"]?.GetValue<decimal>() ?? 0) : at.L("value"), _ => 0 }, r.S("actor"));
+
                         if (r.S("type") is "discount" or "comp") {
 
                             var d = r.S("type") == "comp" ? J.O("kind", "percent", "value", 100) : r.Obj("discount");
                             ValidateDiscount(d);
-                            var gross = Totals(s, v).L("gross");
                             var value = d["value"]!.GetValue<decimal>();
                             var percentage = d.S("kind") == "percent" ? value : gross == 0 ? (value == 0 ? 0 : decimal.MaxValue) : value * 100 / gross;
                             Need(r.S("type") == "comp" || percentage <= s.Meta.L("discountLimit", 30), "Supera el límite de descuento");
@@ -525,6 +530,7 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
                     user["username"] = username;
                     user["role"] = role;
                     user["active"] = p.B("active", true);
+                    if (p["approvalLimit"] is not null && p.L("approvalLimit") != user.L("approvalLimit")) { Need(user.S("id") != u.S("id"), "Tu límite de autorización lo cambia otro gerente", 403); user["approvalLimit"] = Amount(p, "approvalLimit"); }
                     var permissions = new JsonObject();
                     foreach (var key in UserPermissions) permissions[key] = p.Obj("permissions").B(key, true);
                     user["permissions"] = permissions;

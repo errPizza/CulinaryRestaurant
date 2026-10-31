@@ -12,7 +12,7 @@ namespace MesaNexo.Api;
 
 public sealed record ApiOptions(string SiteId, int Port = 8443, string Bind = "0.0.0.0", string Socket = "/run/culinaryos-data/store.sock", string? Credentials = null, string? LabPython = null, string? LabScript = null, string? LabDirectory = null, string? ReadySocket = "/run/culinaryos-app/ready.sock", string? SetupCode = null);
 public static class ApiHost {
-    public static WebApplication Build(ApiOptions options, IBranchStore store, X509Certificate2 cert, LicenseOptions? licensing = null, CloudOptions? cloud = null, IPrintDriver? printer = null, FiscalOptions? fiscal = null, IntegrationConfig? integrations = null) {
+    public static WebApplication Build(ApiOptions options, IBranchStore store, X509Certificate2 cert, LicenseOptions? licensing = null, CloudOptions? cloud = null, IPrintDriver? printer = null, FiscalOptions? fiscal = null, IntegrationConfig? integrations = null, ObjectBucket? checkpoints = null, ObjectBucket? backups = null) {
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions{ Args = [], ContentRootPath = AppContext.BaseDirectory });
         builder.Logging.ClearProviders();
@@ -27,8 +27,10 @@ public static class ApiHost {
         if (cloud is not null) builder.Services.AddSingleton<IHostedService>(sp => new CloudPull(sp.GetRequiredService<BranchService> (), cloud));
         if (licensing?.ServerUrl is not null) builder.Services.AddSingleton<IHostedService>(sp => new LicenseWorker(sp.GetRequiredService<BranchService> (), sp.GetRequiredService<ILogger<LicenseWorker>> ()));
        
+        if (checkpoints is not null && licensing is not null) builder.Services.AddSingleton<IHostedService>(sp => new CheckpointWorker(sp.GetRequiredService<BranchService> (), checkpoints, sp.GetRequiredService<ILogger<CheckpointWorker>> ()));
+        if (backups is not null && store is PostgresBranchStore offsite) builder.Services.AddSingleton<IHostedService>(sp => new OffsiteBackupWorker(sp.GetRequiredService<BranchService> (), offsite, backups, options.LabDirectory ?? "/var/lib/culinaryos-app", sp.GetRequiredService<ILogger<OffsiteBackupWorker>> ()));
         builder.Services.AddSignalR(o => { o.MaximumReceiveMessageSize = 16 * 1024; o.EnableDetailedErrors = false; });
-        builder.Services.AddHostedService<InventoryWorker> (); builder.Services.AddHostedService<OutboxWorker> ();
+        builder.Services.AddHostedService<InventoryWorker> (); builder.Services.AddHostedService<InventoryBalanceWorker> (); builder.Services.AddHostedService<OutboxWorker> ();
         if (store is PostgresBranchStore branchStore && options.Credentials is not null) builder.Services.AddSingleton<IHostedService> (sp => new CentralSyncWorker(branchStore, "/etc/culinaryos/branch.json", options.Credentials, sp.GetRequiredService<ILogger<CentralSyncWorker>> ()));
         
         if (printer is not null) builder.Services.AddSingleton<IHostedService> (sp => new PrintWorker(sp.GetRequiredService<BranchService> (), printer, sp.GetRequiredService<ILogger<PrintWorker>> ()));
@@ -43,6 +45,8 @@ public static class ApiHost {
         var app = builder.Build();
         var service = app.Services.GetRequiredService<BranchService> ();
         service.UseIntegrations(integrations, terminals);
+        service.UseCertificate(cert.NotAfter);
+        if (options.Credentials is not null) service.UseServerHealth("/run/culinaryos/status.json");
         if (licensing is not null) service.UseLicensing(licensing);
 
         app.Use(async(ctx, next) => {
@@ -50,7 +54,7 @@ public static class ApiHost {
             ctx.Response.Headers.CacheControl = "no-store"; 
             ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
 
-            try{ await next(); } catch(BusinessException e){ await Error(ctx,e.Status,e.Message); } catch(StoreException e){ await Error(ctx, e.Code == "COS-DATA-CONFLICT" || e.Code == "COS-DATA-IDEMPOTENCY" ? 409: e.Code == "COS-DATA-INVALID" ? 413: e.Code == "COS-DATA-FULL" ? 507: 503, e.Code == "COS-DATA-INVALID" ? "Carga demasiado grande o inválida; divide la comanda o reduce el tamaño de la imagen.": e.Code); } catch(Exception e) when(e is JsonException or FormatException or InvalidOperationException or OverflowException){ await Error(ctx, 400, "Solicitud o formato inválido"); } catch(Exception){ await Error(ctx, 503, "Servicio local no disponible; conserva la operación y reconcilia"); }
+            try{ await next(); } catch(BusinessException e){ await Error(ctx,e.Status,e.Message); } catch(StoreException e){ await Error(ctx, e.Code == "COS-DATA-CONFLICT" || e.Code == "COS-DATA-IDEMPOTENCY" ? 409: e.Code == "COS-DATA-INVALID" ? 413: e.Code == "COS-DATA-FULL" ? 507: 503, e.Code == "COS-DATA-INVALID" ? "Carga demasiado grande o inválida; divide la comanda o reduce el tamaño de la imagen.": e.Code, e.Code); } catch(Exception e) when(e is JsonException or FormatException or InvalidOperationException or OverflowException){ await Error(ctx, 400, "Solicitud o formato inválido"); } catch(Exception){ await Error(ctx, 503, "Servicio local no disponible; conserva la operación y reconcilia"); }
         
         });
 
@@ -58,7 +62,7 @@ public static class ApiHost {
         app.MapHub<LiveHub>("/live");
         var hub = app.Services.GetRequiredService<Microsoft.AspNetCore.SignalR.IHubContext<LiveHub>> ();
         service.RevisionChanged += revision => { _ = hub.Clients.Group(LiveHub.SiteGroup(service.SiteId)).SendCoreAsync("revision", new object?[]{ revision }); };
-        app.MapGet("/api/identity", () => J.O("name", "Culinary Restaurant", "siteId", options.SiteId, "protocol", 1));
+        app.MapGet("/api/identity", () => J.O("name", "Culinary Restaurant", "siteId", options.SiteId, "protocol", Contract.Api, "schema", Contract.Schema, "events", Contract.Events));
         app.MapGet("/api/health", async(CancellationToken ct) => await service.Ready(ct) ? Results.Json(J.O("ready", true, "site_id", options.SiteId)): Results.StatusCode(503));
         app.MapPost("/api/login", async(HttpContext c, CancellationToken ct) => { var p = await Body(c, ct); Rules.Need(p.S("siteId") == options.SiteId, "Sucursal equivocada", 403); return await service.Login(p, ct); }).RequireRateLimiting("login");
         // Before sign-in: the lock screen reads the license state, and a locked branch accepts a new activation.
@@ -73,7 +77,7 @@ public static class ApiHost {
         app.MapGet("/api/reports", async(HttpContext c, CancellationToken ct) => await service.Report(Token(c), c.Request.Query["from"], c.Request.Query["until"], c.Request.Query["after"], ct));
         app.MapGet("/api/audit/verify", async(HttpContext c, CancellationToken ct) => await service.VerifyAudit(Token(c), ct));
         app.MapGet("/api/state", async(HttpContext c, CancellationToken ct) => await service.State(Token(c), ct, c.Request.Query.TryGetValue("since", out var since) ? since.ToString(): null));
-        app.MapPost("/api/action", async(HttpContext c, CancellationToken ct) => await service.Action(Token(c), await Body(c, ct), ct));
+        app.MapPost("/api/action", async(HttpContext c, CancellationToken ct) => { var body = await Body(c, ct); c.Items["operationId"] = body.S("operationId"); return await service.Action(Token(c), body, ct); });
         app.MapGet("/api/operations/{id}", async(string id, HttpContext c, CancellationToken ct) => await service.OperationStatus(Token(c), id, ct));
 
         if (options.ReadySocket is not null){ 
@@ -89,7 +93,18 @@ public static class ApiHost {
 
     static string Token(HttpContext c){ var h = c.Request.Headers.Authorization.ToString(); Rules.Need(h.StartsWith("Bearer ") && h.Length is > 10 and < 200, "Autenticación requerida", 401); return h[7..]; }
     static async Task<JsonObject> Body(HttpContext c, CancellationToken ct) => (await JsonNode.ParseAsync(c.Request.Body, cancellationToken: ct)) as JsonObject ?? throw new BusinessException(400, "Objeto JSON requerido");
-    static async Task Error(HttpContext c, int status, string message){ if (c.Response.HasStarted) return; c.Response.StatusCode = status; await c.Response.WriteAsJsonAsync(J.O("error", message, "status", status)); }
+    // The operation id runs from the client through this API to the store's receipt, so it is what support asks for. Outcome tells the
+    // client what it may assume: a rejection did not run; a conflict or a failure may have, and only reconciling says which.
+    public static JsonObject Failure(int status, string message, string? code, string? operationId) => J.O("error", message, "status", status, "code", code ?? status switch { 401 => "unauthorized", 403 => "forbidden", 404 => "not-found", 409 => "conflict", 423 => "locked", 429 => "throttled", >= 500 => "unavailable", _ => "rejected" }, "outcome", status is >= 400 and < 500 and not 409 ? "not-executed" : "unknown", "operationId", operationId);
+    static async Task Error(HttpContext c, int status, string message, string? code = null){
+
+        var operation = c.Items["operationId"] as string;
+        if (status >= 500) Console.Error.WriteLine($"COS-API {status} {c.Request.Path} op={operation ?? "-"} {code ?? message}");
+        if (c.Response.HasStarted) return;
+        c.Response.StatusCode = status;
+        await c.Response.WriteAsJsonAsync(Failure(status, message, code, operation));
+
+    }
 
 }
 public sealed class Readiness(BranchService service, string path, bool setupMode = false): IDisposable {

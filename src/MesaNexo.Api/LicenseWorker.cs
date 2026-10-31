@@ -5,7 +5,7 @@ using MesaNexo.Core;
 using static MesaNexo.Core.Rules;
 namespace MesaNexo.Api;
 
-// Renews at least daily while CulinaryServer is reachable (the license itself allows 3 days offline), carries
+// Renews at least daily while CulinaryServer is reachable (the license itself allows 7 days offline), carries
 // support tickets both ways and keeps the multi-company central's certificate registered.
 public sealed class LicenseWorker(BranchService branch, ILogger<LicenseWorker> log): BackgroundService {
     protected override async Task ExecuteAsync(CancellationToken ct) {
@@ -34,6 +34,17 @@ public sealed class LicenseWorker(BranchService branch, ILogger<LicenseWorker> l
     }
 }
 public sealed partial class BranchService {
+    DateTimeOffset? certificateExpires;
+    public void UseCertificate(DateTimeOffset notAfter) => certificateExpires = notAfter;
+    // Renewal runs daily from 35 days out and restarts this process, so 30 days left on the certificate in use means it failed.
+    JsonObject? CertificateWarning(string role) {
+
+        if (certificateExpires is not { } ends) return null;
+        var days = (int)Math.Ceiling((ends - DateTimeOffset.UtcNow).TotalDays);
+        if (days > 30 || role != "manager" && days > 7) return null;
+        return J.O("days", days, "level", days <= 7 ? "critical" : "notice", "message", days <= 0 ? "El certificado de este servidor venció. Reinicia el servidor y llama a soporte." : $"El certificado de este servidor vence en {days} {(days == 1 ? "día" : "días")} y no se renovó solo. Reinicia el servidor; si el aviso sigue, llama a soporte.");
+
+    }
     // The certificate this branch presents to MesaNexo.Central; the panel lists it for --provision-tenant.
     public async Task<bool> RegisterCentral(CancellationToken ct = default) {
 
@@ -108,10 +119,10 @@ public sealed partial class BranchService {
         Need(System.Text.RegularExpressions.Regex.IsMatch(p.S("currentVersion"), "^\\d{1,5}\\.\\d{1,5}\\.\\d{1,5}$"), "Versión actual inválida");
         var reply = await Call(HttpMethod.Post, "/branch/v1/updates/check", J.O("platform", platform, "currentVersion", p.S("currentVersion")), ct);
         if (reply["update"] is not JsonValue) return J.O("update", null);
-        var update = Jws.Verify(reply.S("update"), Jws.Update);
+        var update = Jws.VerifyUpdate(reply, floor);
         Need(update.S("siteId") == siteId && update.S("platform") == platform, "La actualización no es para esta sucursal", 403);
         lock (downloads) downloads[update.S("releaseId")] = reply.Obj("download");
-        return J.O("update", reply.S("update"), "version", update.S("version"), "notes", update.S("notes"), "bytes", update.L("bytes"));
+        return J.O("update", reply.S("update"), "release", reply.S("release"), "keyFloor", reply.S("keyFloor"), "version", update.S("version"), "notes", update.S("notes"), "bytes", update.L("bytes"));
 
     }
     public async Task<HttpResponseMessage> DownloadUpdate(JsonObject p, CancellationToken ct = default) {

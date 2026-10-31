@@ -219,7 +219,7 @@ public sealed class BridgeHost(ISecureVault vault): IDisposable {
                     if (session is not null || preparedPackage is null || preparedManifest is null) throw new InvalidOperationException("Primero valida el paquete con la sesión cerrada");
                     var p = await Profile() ?? throw new InvalidOperationException("Configura la conexión");
                     await CheckInstallPermission(p);
-                    Updates.Signed(preparedManifest.S("update"), p.SiteId, "win-x64");
+                    Updates.Signed(preparedManifest, p.SiteId, "win-x64");
                     await Updates.Verify(preparedManifest, preparedPackage, "win-x64");
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(preparedPackage) { UseShellExecute = true });
                     preparedPackage = null;

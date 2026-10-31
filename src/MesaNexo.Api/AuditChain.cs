@@ -14,7 +14,7 @@ public sealed partial class BranchService {
     }
     void AppendAudit(BranchState s, string eventId, string actor, string fingerprint, string type) {
 
-        var immutable = new[] { "audit", "recipeversion", "stockmovement", "cashadjustment" };
+        var immutable = new[] { "audit", "recipeversion", "stockmovement", "cashadjustment", "refund" };
         var all = s.Changes().ToArray();
         // Records cannot be removed, so a historical record is altered only if it appears among the changes.
         foreach (var c in all) if (s.Original.TryGetValue(c.S("record_id"), out var prior)) { var d = prior.Data; Need(!immutable.Contains(d.S("kind")) && !(d.S("kind") == "cash" && d.S("status") == "closed"), "Registro histórico inalterable por la aplicación", 409); }
@@ -33,13 +33,17 @@ public sealed partial class BranchService {
         // Memory keeps only the newest audit records; the chain is verified against every record in the store.
         var view = await View(ct);
         Role(Authenticate(view, token, out _), "manager");
+        return await AuditChain(ct);
+
+    }
+    // Reads every record, so a record this keyring cannot open fails here too.
+    public async Task<JsonObject> AuditChain(CancellationToken ct = default) {
+
         var s = new BranchState(await Read(ct, bounded: false), true);
-        string previous = "";
-        long seq = 0;
-        var valid = true;
-        foreach (var a in s.List("audit").Where(x => x.ContainsKey("sequence")).OrderBy(x => x.L("sequence"))) { var copy = (JsonObject)a.DeepClone(); copy.Remove("hash"); copy.Remove("kind"); valid &= a.L("sequence") == ++seq && a.S("previousHash") == previous && a.S("hash") == J.Hash(J.Canonical(copy)); previous = a.S("hash"); }
-        valid &= seq == s.Meta.L("auditSequence") && previous == s.Meta.S("auditHead");
-        return J.O("valid", valid, "chainedRecords", seq, "legacyRecords", s.List("audit").Count(x => !x.ContainsKey("sequence")), "scope", "Detección local; conservar anclas y respaldos fuera del equipo");
+        var heads = Checkpoints.Heads(s.List("audit"), out var valid);
+        long seq = heads.Count;
+        valid &= seq == s.Meta.L("auditSequence") && heads.GetValueOrDefault(seq, "") == s.Meta.S("auditHead");
+        return J.O("valid", valid, "chainedRecords", seq, "legacyRecords", s.List("audit").Count(x => !x.ContainsKey("sequence")), "scope", "Detección local; la comparación con los puntos de control externos es la que detecta una reescritura");
 
     }
 }

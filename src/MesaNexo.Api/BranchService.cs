@@ -23,6 +23,8 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
         var c = await store.CallAsync(J.O("op", "capabilities_v1"), ct);
         if (!new[] { "transaction_v1", "scan_v1", "recent_v1", "event_status_v1", "outbox_status_v1", "outbox_maintain_v1" }.All(c!.A("extensions").Strings().Contains)) return false;
         var m = await store.CallAsync(J.O("op", "get", "record_id", "mn_meta_site"), ct);
+        // After reverting only the program: this build does not know how to read a newer database.
+        if (m is not null && m.Obj("data").L("schemaVersion", 1) > Contract.Schema) { Console.Error.WriteLine($"COS-SCHEMA-NEWER: base {m.Obj("data").L("schemaVersion")}, programa {Contract.Schema}; carga la copia anterior o actualiza"); return false; }
         return m?.Obj("data").S("siteId") == siteId && m.Obj("data").S("status") == "active";
 
     }
@@ -132,6 +134,7 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
 
             // Same rule as the store's per-record versions, checked first in memory: a state built before another commit is stale.
             if (Volatile.Read(ref committed) is not { } current || current.Version != s.Committed.Version) throw new StoreException("COS-DATA-CONFLICT");
+            Domain.ChargeTransitions(s, actor);
             AppendAudit(s, eventId, actor, fingerprint, type);
             s.Meta["revision"] = revision = s.Meta.L("revision") + 1;
             // The newest time this branch has committed: a clock set back later reads as tampering (see Clock).
@@ -238,11 +241,14 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
         // of health, whose integrity check reads the whole file and stalls the single-threaded store as it grows.
         var cached = Volatile.Read(ref health);
         if (cached is null || DateTimeOffset.UtcNow - cached.Item1 > TimeSpan.FromSeconds(2)) Volatile.Write(ref health, cached = Tuple.Create(DateTimeOffset.UtcNow, (await store.CallAsync(J.O("op", "outbox_status_v1"), ct))!));
-        var connection = J.O("local", "available", "outboxPending", cached.Item2.L("pending"), "central", CentralState, "internet", "unverified", "cloudOrders", CloudState);
+        var connection = J.O("local", "available", "outboxPending", cached.Item2.L("pending"), "outboxAlert", cached.Item2["alert"]?.DeepClone(), "central", CentralState, "internet", "unverified", "cloudOrders", CloudState);
         if (PrinterState != "") connection["printer"] = PrinterState;
         if (FiscalState != "") connection["fiscal"] = FiscalState;
         connection["integrations"] = IntegrationConnection();
         connection["terminals"] = Domain.LiveCatalog.A("terminals").DeepClone();
+        if (CertificateWarning(u.S("role")) is { } certificate) connection["certificate"] = certificate;
+        if (auditAlert is { } alert && u.S("role") == "manager") connection["auditAlert"] = alert.DeepClone();
+        if (u.S("role") == "manager") connection["server"] = ServerAlerts();
         result["connection"] = connection;
         return result;
 
@@ -251,6 +257,7 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
 
         var eventId = Operation(request.S("operationId"));
         var type = Text(request, "type", 100);
+        Need(auditAlert is null || type != "authorize.pin" && !Restaurant.PinActions.Contains(type), "Autorizaciones detenidas: la bitácora no coincide con los puntos de control externos", 409);
         var p = request.Obj("payload");
         Need(!p.Any(x => new[] { "cvv", "pin", "pan", "cardNumber" }.Contains(x.Key, StringComparer.OrdinalIgnoreCase)), "No se admiten datos bancarios sensibles");
         return await Exclusive(async () => {

@@ -26,12 +26,14 @@ public sealed partial class MainView: UserControl {
         shell.Children.Add(content);
         shell.Children.Add(status);
         SizeChanged += (_, e) => { var width = e.NewSize.Width; var bucket = width < 381 ? 0 : width < 651 ? 1 : width < 901 ? 2 : width < 1201 ? 3 : width < 1300 ? 4 : width < 1360 ? 5 : width < 1551 ? 6 : 7; if (bucket != layoutBucket) { layoutBucket = bucket; narrow = width <= 650; if (state is not null) Render(); else if (lockedLicense is not null) RenderLicenseLock(lockedLicense); else ShowLogin(); } };
-        timer.Tick += async (_, _) => { if (session is null || busy || polling || modal is not null) return; foreach (var refresh in clockRefresh.ToArray()) refresh(); polling = true; try { var next = await session.State(); if (state is null || next.Obj("restaurant").L("revision") != state.Obj("restaurant").L("revision")) { state = next; Render(); } Status(); } catch (Exception e) { status.Text = e.Message; status.Foreground = Brushes.DarkRed; } finally { polling = false; } };
+        timer.Tick += async (_, _) => { if (session is null || busy || polling || modal is not null) return; foreach (var refresh in clockRefresh.ToArray()) refresh(); polling = true; try { var next = await session.State(); if (state is null || next.Obj("restaurant").L("revision") != state.Obj("restaurant").L("revision") || !Warnings(next).Select(x => x.S("message")).SequenceEqual(Warnings(state).Select(x => x.S("message")))) { state = next; Render(); } Status(); } catch (Exception e) { status.Text = e.Message; status.Foreground = Brushes.DarkRed; } finally { polling = false; } };
         DetachedFromVisualTree += (_, _) => timer.Stop();
         _ = RestoreMotion();
         ShowLogin();
 
     }
+    // These change with the calendar, not with a commit, so the revision alone would not redraw them.
+    static IEnumerable<JsonObject> Warnings(JsonObject state) => new[] { state.Obj("connection").Obj("auditAlert"), state.Obj("restaurant").Obj("license").Obj("warning"), state.Obj("connection").Obj("certificate") }.Concat(state.Obj("connection").A("server").Objects()).Where(x => x.Count > 0);
     async Task RestoreMotion() { try { PrototypeMotion.ReduceMotion = await vault.Read("motion.reduced") == "true"; } catch { } }
     async Task RefreshLive() { if (session is null || busy || polling || modal is not null) return; polling = true; try { state = await session.State(); Render(); Status(); } catch (ApiFailure e) when (e.Status == 423) { await ShowLicenseLock(); } finally { polling = false; } }
     static TextBlock Text(string text, double size = 14, IBrush? color = null, bool bold = false) => new() { Text = text, FontFamily = Brand.InterfaceFont, FontSize = size, Foreground = color ?? Graphite, FontWeight = bold ? (size >= 24 ? FontWeight.Bold : FontWeight.SemiBold) : FontWeight.Normal, TextWrapping = TextWrapping.Wrap };
@@ -50,12 +52,25 @@ public sealed partial class MainView: UserControl {
         if (locked) await ShowLicenseLock();
 
     }
-    void Status() { status.Foreground = Graphite; if (session is null) { status.Text = error == "" ? "HTTPS · confianza local aprovisionada · sin navegador" : error; return; } var connection = state?.Obj("connection"); if (user?.S("role") == "dueno") { status.Text = "Central disponible · Espejo de sucursal · Origen " + DateLabel(state?.Obj("analytics").S("sourceAt") ?? "") + " · No es una conexión LAN operativa"; return; } status.Text = $"Servidor local disponible · {session.OperationState}   ·   {connection?.L("outboxPending") ?? 0} eventos pendientes   ·   Internet: sin comprobar · Central: {connection?.S("central", "unverified")}"; }
+    void Status() { status.Foreground = Graphite; if (session is null) { status.Text = error == "" ? "HTTPS · confianza local aprovisionada · sin navegador" : error; return; } var connection = state?.Obj("connection"); if (user?.S("role") == "dueno") { status.Text = "Central disponible · Espejo de sucursal · Origen " + DateLabel(state?.Obj("analytics").S("sourceAt") ?? "") + " · No es una conexión LAN operativa"; return; } status.Text = $"Servidor local disponible · {session.OperationState}   ·   {connection?.L("outboxPending") ?? 0} eventos pendientes{connection?.S("outboxAlert") switch { "size" => " (outbox grande: revisar la central)", "age" => " (más de un día sin confirmar)", _ => "" }}   ·   Internet: sin comprobar · Central: {connection?.S("central", "unverified")}"; }
     IEnumerable<JsonObject> Items(string key) => state?.A(key + "s").Objects() ?? [];
     JsonObject Item(string kind, string id) => Items(kind).FirstOrDefault(x => x.S("id") == id) ?? new JsonObject();
     string EntityName(string kind, string id) => id == "" && kind == "table" ? "Servicio rápido" : Item(kind, id).S("name", id);
     static string Money(long cents) => (cents / 100m).ToString("C", CultureInfo.GetCultureInfo("es-MX"));
     TextBox Input(string caption, string initial = "", bool password = false) { var input = new TextBox { Text = initial, MinHeight = 44, PlaceholderText = caption, PasswordChar = password ? '●' : '\0', HorizontalAlignment = HorizontalAlignment.Stretch }; AutomationProperties.SetName(input, caption); return input; }
+    // Money above the threshold: the second manager types their own PIN in the same form.
+    Field[] ApprovalFields => [new("approverId", "Gerente que autoriza", "select", "", [new("", "Sin segunda autorización"), .. Items("user").Where(x => x.S("role") == "manager" && x.B("active") && x.B("hasPin") && x.S("id") != user?.S("id")).Select(x => new Option(x.S("id"), x.S("name")))]), new("passcode", "PIN del gerente que autoriza", "password")];
+    async Task Authorized(string type, JsonObject p) {
+
+        var approver = p.S("approverId");
+        var passcode = p.S("passcode");
+        p.Remove("approverId");
+        p.Remove("passcode");
+        if (approver == "") { await Act(type, p); return; }
+        var reply = await Act("authorize.pin", J.O("approverId", approver, "passcode", passcode, "action", J.O("type", type, "payload", p)));
+        if (reply["ok"] is not null && !reply.B("ok")) throw new InvalidOperationException(reply.S("error"));
+
+    }
     async Task<JsonObject> Act(string type, JsonObject p) { var r = await session!.Execute(type, p); state = await session.State(); Render(); return r.Obj("result"); }
     async Task OpenVisit(string id) { visit = id; draft = await session!.LoadDraft(id); page = "Mesas y cuentas"; Render(); }
     static void Preparation(StackPanel panel, JsonObject unit, bool dark = false) {

@@ -22,6 +22,29 @@ public sealed partial class BranchService {
 
     }
 }
+public sealed partial class BranchService {
+    volatile JsonObject? inventoryAlert;
+    public async Task<JsonObject> CheckInventory(CancellationToken ct = default) {
+
+        var result = Restaurant.InventoryBalance(await View(ct));
+        inventoryAlert = result.B("balanced") ? null : J.O("level", "critical", "message", "Las existencias no cuadran con sus movimientos. Llama a soporte antes de hacer un conteo o un ajuste.");
+        return result;
+
+    }
+}
+public sealed class InventoryBalanceWorker(BranchService branch, ILogger<InventoryBalanceWorker> log): BackgroundService {
+    protected override async Task ExecuteAsync(CancellationToken ct) {
+
+        await Task.Yield();
+        while (!ct.IsCancellationRequested) {
+
+            try { var result = await branch.CheckInventory(ct); if (!result.B("balanced")) log.LogCritical("COS-INVENTORY-BALANCE: {Result}", result.ToJsonString()); } catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; } catch (Exception e) when (e is BusinessException or StoreException) { log.LogWarning("COS-INVENTORY-BALANCE: {Message}", e.Message); }
+            try { await Task.Delay(TimeSpan.FromHours(6), ct); } catch (OperationCanceledException) { break; }
+
+        }
+
+    }
+}
 public sealed class InventoryWorker(BranchService branch, ILogger<InventoryWorker> log): BackgroundService {
     protected override async Task ExecuteAsync(CancellationToken ct) {
 

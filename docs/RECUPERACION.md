@@ -2,7 +2,7 @@
 
 ## Sucursal
 
-Usar snapshots y procedimientos de CulinaryOS existentes; conservar el llavero requerido y su identidad aparte del disco de datos. El paquete no contiene una clave maestra ni implementa un cifrado alternativo. `vendor/culinaryos` es referencia inmutable de laboratorio, no un segundo servicio de producción.
+Restaurar en otro equipo: `culinaryos-recovery-kit` y `culinaryos-restore`, en `CulinaryOS/docs/SIMULACRO-RESTAURACION.md`. Para lo demás, usar snapshots y procedimientos de CulinaryOS existentes; conservar el llavero requerido y su identidad aparte del disco de datos. El paquete no contiene una clave maestra ni implementa un cifrado alternativo. `vendor/culinaryos` es referencia inmutable de laboratorio, no un segundo servicio de producción.
 
 Antes de mantenimiento: detener el acceso operativo, conciliar caja, comprobar snapshot consistente y posibilidad de recuperar sus llaves. Usar el servicio original `culinaryos-snapshot.service` y las instrucciones RECUPERACION/CIFRADO-V1 del proyecto CulinaryOS para ubicar y restaurar la copia real. No intercambiar snapshots de distintas identidades. Restaurar con servicios detenidos y usuario/permisos originales; validar salud, recibos, outbox y cuentas antes de reabrir. La extensión de código debe corresponder al esquema almacenado.
 

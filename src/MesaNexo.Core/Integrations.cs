@@ -164,7 +164,7 @@ public sealed partial class Restaurant {
         if (order.B("live")) PlatformSync(s, order, 20, "");
         // The platform already charged the customer; the branch records what it will be paid, priced locally, minus the commission.
         var total = Totals(s, v).L("total");
-        var commission = (long)Math.Round(total * config.L("commissionBps") / 10000m, MidpointRounding.AwayFromZero);
+        var commission = Cents.Bps(total, config.L("commissionBps"));
         if (total > 0) { var pay = InternalPayment(s, u, v, total, "platform"); pay["platform"] = order.S("platform"); pay["reference"] = order.S("externalId"); }
         v["prepaid"] = true;
         order["status"] = "accepted";
@@ -485,7 +485,7 @@ public sealed partial class Restaurant {
         output["integrations"] = new JsonArray(s.List("integration").Select(x => (JsonNode)J.O("id", x.S("id"), "mode", x.S("mode"))).ToArray());
         foreach (var kind in new[] { "integrationlog", "message", "pmspost" }) output[kind + "s"] = new JsonArray();
         var mine = s.Related("visit", "waiterId", u.S("id")).Select(v => v.S("id")).ToHashSet();
-        foreach (var kind in new[] { "terminaltxn", "paylink" }) output[kind + "s"] = new JsonArray(role == "mesero" ? s.List(kind).Where(x => mine.Contains(x.S("visitId"))).TakeLast(200).Select(x => (JsonNode)x.DeepClone()).ToArray() : []);
+        foreach (var kind in new[] { "terminaltxn", "paylink" }) output[kind + "s"] = new JsonArray(role == "mesero" ? s.List(kind).Where(x => mine.Contains(x.S("visitId"))).TakeLast(200).Select(x => { var copy = x.DeepClone(); copy.AsObject().Remove("trail"); return (JsonNode)copy; }).ToArray() : []);
         if (role != "mesero") output["aggregatororders"] = new JsonArray();
 
     }

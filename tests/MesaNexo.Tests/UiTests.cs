@@ -32,6 +32,14 @@ public static class UiTests {
             Set("state", state);
             Set("user", state.Obj("user"));
             Set("session", client);
+            var warned = (JsonObject)state.DeepClone();
+            warned.Obj("restaurant")["license"] = J.O("state", "active", "warning", J.O("level", "critical", "message", "La licencia vence en 2 días."));
+            Set("state", warned);
+            Set("page", "Resumen del turno");
+            Call("Render");
+            Dispatcher.UIThread.RunJobs();
+            Check(view.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "La licencia vence en 2 días."), "native shell shows the license warning");
+            Set("state", state);
             foreach (var width in new[] { 360, 834, 1440 }) {
 
                 window.Width = width;

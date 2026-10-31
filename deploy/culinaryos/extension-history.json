@@ -1,6 +1,18 @@
 {
-  "note": "Earlier runtime/mesanexo_ipc.py versions this package may replace, by the exact SHA256 of the bytes as delivered. Same content in CRLF (cd, r2, r3) and LF (r4).",
+  "note": "Earlier runtime/mesanexo_ipc.py versions this package may replace, by the exact SHA256 of the bytes as delivered. Same content in CRLF (cd, r2, r3) and LF (r4). The 0.3.0 appliance inputs (r13, r14) shipped the version that dropped pending events without a central.",
   "releases": [
-    {"release": "culinaryos-cd-r4 (and cd, r2, r3)", "sha256": ["a5a3baebe25733c08883aa893a355417ee3d95324943390c857d72b5b83f28e0", "e74f69aad26367983af5b874833804070c5bcec88369ad08e0d32eb0c9247614"]}
+    {
+      "release": "culinaryos-cd-r4 (and cd, r2, r3)",
+      "sha256": [
+        "a5a3baebe25733c08883aa893a355417ee3d95324943390c857d72b5b83f28e0",
+        "e74f69aad26367983af5b874833804070c5bcec88369ad08e0d32eb0c9247614"
+      ]
+    },
+    {
+      "release": "CulinaryOS appliance-input r13, r14",
+      "sha256": [
+        "da3b010814bde9fae874ecfd7ecbe47b779e8ac272e127026dfb680d344d978c"
+      ]
+    }
   ]
 }

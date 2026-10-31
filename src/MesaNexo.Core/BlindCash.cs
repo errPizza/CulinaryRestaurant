@@ -27,6 +27,7 @@ public sealed partial class Restaurant {
             Role(u, "manager");
             var cash = s.Get("cash", id);
             Need(cash.S("status") == "closed", "Ajusta sólo un cierre confirmado");
+            DualControl(s, u, Amount(p, "amount", 1));
             result = Add(s, "cashadjustment", J.O("cashId", id, "method", Choice(p, "method", "cash", "card", "transfer"), "direction", Choice(p, "direction", "increase", "decrease"), "amount", Amount(p, "amount", 1), "reason", Text(p, "reason"), "authorizer", u.S("id"), "actor", u.S("id"), "at", J.Now()));
             return true;
 

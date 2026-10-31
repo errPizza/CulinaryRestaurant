@@ -10,7 +10,9 @@ namespace MesaNexo.Api;
 // deviceId is the Mercado Pago terminal id (from /terminals/v1/list, in PDV mode) or the Clip reader's serial number. BBVA has no
 // public API: its terminals are charged on the device and recorded with the voucher's authorization (terminal.manual).
 public sealed class TerminalService(MercadoPagoPoint? mercadoPago, ClipPinpad? clip, Dictionary<string, JsonObject> devices) {
-    public JsonArray Catalog => new(devices.Values.Select(t => (JsonNode)J.O("id", t.S("id"), "name", t.S("name"), "provider", t.S("provider"), "manual", t.S("provider") == "bbva")).ToArray());
+    public JsonArray Catalog => new(devices.Values.Select(t => { var c = Capabilities(t.S("provider")); return (JsonNode)J.O("id", t.S("id"), "name", t.S("name"), "provider", t.S("provider"), "manual", t.S("provider") == "bbva", "capabilities", J.O("idempotent", c.Idempotent, "lookup", c.Lookup, "reverse", c.Reverse)); }).ToArray());
+    // BBVA is charged on the device: nothing can be asked of it, and the voucher is the evidence.
+    public static TerminalCapabilities Capabilities(string provider) => provider switch { "mercadopago" => MercadoPagoPoint.Capabilities, "clip" => ClipPinpad.Capabilities, _ => new(false, false, false) };
     public bool Connected => devices.Values.Any(t => t.S("provider") != "bbva");
     public static TerminalService From(JsonObject o) {
 
@@ -44,6 +46,8 @@ public sealed class TerminalService(MercadoPagoPoint? mercadoPago, ClipPinpad? c
         if (a.Last4 != "") fields.Add(("last4", a.Last4));
         if (a.Auth != "") fields.Add(("authCode", a.Auth));
         status ??= a.Status;
+        // Only an outcome is stored: while a charge waits, its polls add nothing.
+        if (a.Raw != "" && status != "waiting" && status != "cancel-requested") fields.Add(("raw", a.Raw));
         return JobResult.Of(status, Final.Contains(status) || status == "uncertain" ? txn.S("terminalName") + " · " + a.Message : "", txn.S("reference"), fields.ToArray());
 
     }
@@ -61,7 +65,7 @@ public sealed class TerminalService(MercadoPagoPoint? mercadoPago, ClipPinpad? c
     }
     // Mercado Pago keys the creation by the charge's id, so asking again returns the order that was created, if any. Clip has no
     // such key: without its request id the charge stays uncertain until someone checks the terminal.
-    public async Task<JobResult?> Recover(BranchState s, JsonObject txn, CancellationToken ct) => txn.S("provider") == "mercadopago" ? await Send(s, txn, ct) : null;
+    public async Task<JobResult?> Recover(BranchState s, JsonObject txn, CancellationToken ct) => Capabilities(txn.S("provider")).Idempotent ? await Send(s, txn, ct) : null;
     // A charge on the device is asked about until it ends; a cancellation asked from the POS is sent once, then followed.
     public async Task<JobResult?> Consult(BranchState s, JsonObject txn, CancellationToken ct) {
 
@@ -76,7 +80,7 @@ public sealed class TerminalService(MercadoPagoPoint? mercadoPago, ClipPinpad? c
         return result;
 
     }
-    public async Task<JobResult> Refund(BranchState s, JsonObject txn, CancellationToken ct) => txn.S("provider") == "mercadopago" && txn.S("providerRef") != ""
+    public async Task<JobResult> Refund(BranchState s, JsonObject txn, CancellationToken ct) => Capabilities(txn.S("provider")).Reverse && txn.S("providerRef") != ""
         ? Result(txn, await mercadoPago!.Refund(txn.S("providerRef"), txn.S("id"), ct))
         : Result(txn, new("refund-manual", Message: "Devuelve el cargo desde el portal de " + (txn.S("provider") == "clip" ? "Clip" : "BBVA") + ": la cuenta ya estaba cubierta"));
 }

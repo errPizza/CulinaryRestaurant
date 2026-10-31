@@ -5,7 +5,7 @@ using MesaNexo.Core;
 namespace MesaNexo.Client;
 
 // Terminal updates come from CulinaryServer through the branch server, which asks with its license. The terminal
-// trusts neither of them: it checks the root-signed update itself before keeping the installer.
+// trusts neither of them: it checks the signed update and the release manifest itself before keeping the installer.
 public static class Updates {
     public static Version Current => typeof(Updates).Assembly.GetName().Version ?? new Version(0, 0, 0);
     public static async Task<JsonObject?> Fetch(ConnectionProfile profile, JsonObject device, string platform, string directory, CancellationToken ct = default) {
@@ -19,7 +19,7 @@ public static class Updates {
         var reply = JsonNode.Parse(await check.Content.ReadAsStringAsync(ct)) as JsonObject ?? new();
         if (!check.IsSuccessStatusCode) throw new ApiFailure((int)check.StatusCode, reply.S("error", "No se pudo consultar la actualización"));
         if (reply["update"] is not JsonValue) return null;
-        var update = Signed(reply.S("update"), profile.SiteId, platform);
+        var update = Signed(reply, profile.SiteId, platform);
         Directory.CreateDirectory(directory);
         var target = Path.Combine(directory, Path.GetFileName(update.S("filename")));
         request.Remove("currentVersion");
@@ -35,12 +35,14 @@ public static class Updates {
         }
         await Verify(update, target, platform);
         update["update"] = reply.S("update");
+        update["release"] = reply.S("release");
+        update["keyFloor"] = reply.S("keyFloor");
         return update;
 
     }
-    public static JsonObject Signed(string jws, string siteId, string platform) {
+    public static JsonObject Signed(JsonObject offer, string siteId, string platform) {
 
-        var update = Jws.Verify(jws, Jws.Update);
+        var update = Jws.VerifyUpdate(offer);
         Rules.Need(update.S("siteId") == siteId && update.S("platform") == platform, "La actualización no autoriza esta sucursal o plataforma", 403);
         Rules.Need(DateTimeOffset.TryParse(update.S("exp"), out var expires) && expires > DateTimeOffset.UtcNow, "Autorización de actualización vencida", 403);
         Rules.Need(Version.TryParse(update.S("version"), out var version) && version > Current, "La versión debe ser más reciente que el cliente actual");

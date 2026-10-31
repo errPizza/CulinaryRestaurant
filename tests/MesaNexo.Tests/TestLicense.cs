@@ -24,17 +24,33 @@ static class TestLicense {
         throw new FileNotFoundException("tests/keys/root-private.pem");
 
     });
-    public static string Sign(string type, JsonObject payload) {
+    public static string Sign(string type, JsonObject payload) => Sign(Seed.Value, J.O("alg", "EdDSA", "typ", type, "kid", Jws.RootKid), payload);
+    static string Sign(byte[] seed, JsonObject header, JsonObject payload) {
 
-        var header = Base64Url.EncodeToString(Encoding.UTF8.GetBytes(J.O("alg", "EdDSA", "typ", type, "kid", Jws.RootKid).ToJsonString()));
+        var head = Base64Url.EncodeToString(Encoding.UTF8.GetBytes(header.ToJsonString()));
         var body = Base64Url.EncodeToString(Encoding.UTF8.GetBytes(payload.ToJsonString()));
         var signer = new Ed25519Signer();
-        signer.Init(true, new Ed25519PrivateKeyParameters(Seed.Value));
-        var input = Encoding.ASCII.GetBytes(header + "." + body);
+        signer.Init(true, new Ed25519PrivateKeyParameters(seed));
+        var input = Encoding.ASCII.GetBytes(head + "." + body);
         signer.BlockUpdate(input, 0, input.Length);
-        return header + "." + body + "." + Base64Url.EncodeToString(signer.GenerateSignature());
+        return head + "." + body + "." + Base64Url.EncodeToString(signer.GenerateSignature());
 
     }
+    // Intermediates as the offline station issues them: the test root certifies a new key for some document types.
+    public sealed record Key(string Chain, byte[] Seed, string Kid);
+    public static readonly string[] LicenseUses = [Jws.License, Jws.Status, Jws.Update], ReleaseUses = [Jws.Release];
+    public static Key Intermediate(string[] uses, long generation = 1, DateTimeOffset? notBefore = null, DateTimeOffset? expires = null) {
+
+        var seed = RandomNumberGenerator.GetBytes(32);
+        var raw = new Ed25519PrivateKeyParameters(seed).GeneratePublicKey().GetEncoded();
+        var kid = Base64Url.EncodeToString(SHA256.HashData(raw))[..16];
+        var now = DateTimeOffset.UtcNow;
+        var chain = Sign(Jws.Intermediate, J.O("v", 1, "kid", kid, "key", Base64Url.EncodeToString(raw), "uses", uses, "generation", generation, "nbf", (notBefore ?? now.AddMinutes(-5)).ToString("O"), "exp", (expires ?? now.AddDays(30)).ToString("O"), "iat", now.ToString("O")));
+        return new(chain, seed, kid);
+
+    }
+    public static string SignWith(Key key, string type, JsonObject payload) => Sign(key.Seed, J.O("alg", "EdDSA", "typ", type, "kid", key.Kid, "chain", key.Chain), payload);
+    public static string Floor(long license, long release) => Sign(Jws.Floor, J.O("v", 1, "license", license, "release", release, "iat", J.Now()));
     public static string Folder(string site) => Path.Combine(Path.GetTempPath(), "culinary-test-license", site);
     public static string LicenseId(string site) => new Guid(MD5.HashData(Encoding.UTF8.GetBytes("license:" + site))).ToString("D");
     // A machine without TPM: the fingerprint parts come from a file, as the root step writes them on CulinaryOS.
@@ -51,7 +67,7 @@ static class TestLicense {
 
         var now = validated ?? DateTimeOffset.UtcNow;
         string Iso(DateTimeOffset t) => t.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'");
-        return J.O("v", 1, "licenseId", LicenseId(branch.SiteId), "revision", revision, "tenantId", "tenant-" + branch.SiteId, "siteId", site ?? branch.SiteId, "customer", "Restaurante de prueba", "branchName", "Centro", "plan", plan, "tier", tier, "addons", addons ?? ["mobileOrdering", "deliveryHub", "webOrdering"], "status", "active", "features", features, "limits", J.O("maxUsers", maxUsers, "maxTables", maxTables, "maxTerminals", maxTerminals), "activatedAt", Iso(now.AddDays(-1)), "expiresAt", plan == "permanent" ? null : Iso(expires ?? now.AddYears(1)), "validatedAt", Iso(now), "offlineUntil", Iso(now.AddDays(3)), "key", J.O("alg", "ES256", "spki", spki ?? branch.LicenseKey().S("spki")), "binding", "fingerprint", "iat", Iso(now));
+        return J.O("v", 1, "licenseId", LicenseId(branch.SiteId), "revision", revision, "tenantId", "tenant-" + branch.SiteId, "siteId", site ?? branch.SiteId, "customer", "Restaurante de prueba", "branchName", "Centro", "plan", plan, "tier", tier, "addons", addons ?? ["mobileOrdering", "deliveryHub", "webOrdering"], "status", "active", "features", features, "limits", J.O("maxUsers", maxUsers, "maxTables", maxTables, "maxTerminals", maxTerminals), "activatedAt", Iso(now.AddDays(-1)), "expiresAt", plan == "permanent" ? null : Iso(expires ?? now.AddYears(1)), "validatedAt", Iso(now), "offlineUntil", Iso(now.AddDays(7)), "key", J.O("alg", "ES256", "spki", spki ?? branch.LicenseKey().S("spki")), "binding", "fingerprint", "iat", Iso(now));
 
     }
     // The license a test branch was configured with before licenses existed: its modules and plan limits.

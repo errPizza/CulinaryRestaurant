@@ -43,6 +43,32 @@ def pointer_click(x, y):
         x11.XCloseDisplay(display)
 
 
+def press_shortcuts():
+    # Real key events, as a keyboard sends them. Ctrl+C is only a key here, never SIGINT.
+    x11 = ctypes.CDLL(ctypes.util.find_library("X11"))
+    xtst = ctypes.CDLL(ctypes.util.find_library("Xtst"))
+    x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    x11.XOpenDisplay.restype = ctypes.c_void_p
+    x11.XFlush.argtypes = [ctypes.c_void_p]
+    x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+    x11.XKeysymToKeycode.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+    x11.XKeysymToKeycode.restype = ctypes.c_ubyte
+    xtst.XTestFakeKeyEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int, ctypes.c_ulong]
+    display = x11.XOpenDisplay(None)
+    if not display:
+        raise RuntimeError("No se pudo conectar a la pantalla de prueba")
+    try:
+        control = x11.XKeysymToKeycode(display, 0xffe3)
+        for letter in "acv":
+            key = x11.XKeysymToKeycode(display, ord(letter))
+            for code, pressed in ((control, 1), (key, 1), (key, 0), (control, 0)):
+                xtst.XTestFakeKeyEvent(display, code, pressed, 0)
+            x11.XFlush(display)
+            time.sleep(.5)
+    finally:
+        x11.XCloseDisplay(display)
+
+
 def verify_click_focus(window):
     # Reproduce losing focus to a second native window, then an actual mouse click.
     # Do not activate the app with wmctrl: that would conceal a broken mouse config.
@@ -108,6 +134,10 @@ def main():
         if "_NET_WM_STATE_FULLSCREEN" not in state:
             raise RuntimeError("La ventana no esta a pantalla completa")
         verify_click_focus(window)
+        press_shortcuts()
+        time.sleep(1)
+        if child.poll() is not None:
+            raise RuntimeError("Ctrl+A, Ctrl+C o Ctrl+V cerraron la interfaz")
         subprocess.run(["wmctrl", "-i", "-c", window], check=True)
         time.sleep(1)
         if child.poll() is not None:
@@ -116,7 +146,7 @@ def main():
         reply = json.loads(listener.recv(1024))
         if reply != {"protocol": 1, "pid": child.pid, "nonce": nonce}:
             raise RuntimeError("La interfaz dejo de responder tras intentar cerrarla")
-        print("Comprobacion grafica Linux: interfaz visible, fullscreen, foco por clic, cierre bloqueado y heartbeat correctos.")
+        print("Comprobacion grafica Linux: interfaz visible, fullscreen, foco por clic, atajos, cierre bloqueado y heartbeat correctos.")
     finally:
         if child is not None:
             try:

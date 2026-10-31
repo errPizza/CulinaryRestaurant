@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Culinary Restaurant — Resumen general del sistema</title>
+<style>
+@page {
+  size: A4; margin: 16mm 15mm 18mm 15mm;
+  @bottom-left { content: "Culinary Restaurant · Resumen general del sistema"; font: 8pt "Segoe UI", sans-serif; color: #6b7280; }
+  @bottom-right { content: "Página " counter(page) " de " counter(pages); font: 8pt "Segoe UI", sans-serif; color: #6b7280; }
+}
+@page :first { margin: 0; @bottom-left { content: none; } @bottom-right { content: none; } }
+:root { --ink:#1f2937; --muted:#6b7280; --amber:#e0a526; --amber-soft:#fdf3dc; --navy:#222733; --line:#e5e7eb; --green:#1f8a5b; --green-soft:#e6f6ee; --red:#c2410c; --red-soft:#fdecec; }
+* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "Segoe UI", "Noto Sans", Arial, sans-serif; color: var(--ink); font-size: 9.6pt; line-height: 1.55; margin: 0; background: #fff; }
+.cover { position: relative; overflow: hidden; height: 297mm; background: #222733; color: #fff; padding: 52mm 18mm 18mm; display: flex; flex-direction: column; page-break-after: always; }
+.glow { position: absolute; right: -60mm; top: -60mm; width: 150mm; height: 150mm; border-radius: 50%; background: radial-gradient(closest-side, #8a6a2a, #5a4a2e 40%, #222733); }
+.cover > * { position: relative; }
+.eyebrow { color: var(--amber); font-weight: 700; letter-spacing: .22em; font-size: 9.5pt; }
+.cover h1 { font-size: 30pt; line-height: 1.12; margin: 26px 0 12px; max-width: 150mm; }
+.cover .sub { font-size: 12pt; color: #c8ccd4; max-width: 140mm; }
+.pills { margin-top: 26px; display: flex; gap: 8px; flex-wrap: wrap; }
+.pill { display: inline-block; border-radius: 999px; padding: 3px 11px; font-size: 8pt; font-weight: 600; }
+.pill.ok { background: var(--green-soft); color: var(--green); }
+.pill.warn { background: var(--amber-soft); color: #9a5b00; }
+.pill.bad { background: var(--red-soft); color: var(--red); }
+.pill.grey { background: #eef0f3; color: #374151; }
+.cover .meta { margin-top: auto; border-top: 1px solid rgba(255,255,255,.18); padding-top: 14px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.cover .meta small { display: block; color: #9ca3af; font-size: 7.5pt; letter-spacing: .08em; text-transform: uppercase; }
+.cover .meta b { font-size: 9.5pt; }
+h2 { font-size: 16pt; margin: 0 0 12px; padding-bottom: 7px; border-bottom: 2px solid var(--amber); page-break-after: avoid; }
+section.chapter { page-break-before: always; }
+section.chapter.cont { page-break-before: auto; margin-top: 26px; }
+h3 { font-size: 11pt; margin: 16px 0 5px; page-break-after: avoid; }
+p { margin: 4px 0 8px; }
+ul { margin: 3px 0 8px; padding-left: 18px; }
+li { margin: 2px 0; }
+table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 8.6pt; }
+th { background: var(--navy); color: #fff; text-align: left; padding: 7px 8px; font-weight: 600; }
+td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td:first-child { font-weight: 600; }
+tr { page-break-inside: avoid; }
+code { font-family: Consolas, monospace; font-size: 8pt; background: #f1f2f4; padding: 1px 4px; border-radius: 3px; }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+.kpi { border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; }
+.kpi b { display: block; font-size: 16pt; }
+.kpi span { color: var(--muted); font-size: 8pt; }
+.callout { background: #f6f7f9; border-left: 4px solid var(--green); border-radius: 4px; padding: 9px 13px; margin: 12px 0; page-break-inside: avoid; }
+.callout.warn { border-left-color: var(--amber); background: #fffaf0; }
+.callout.bad { border-left-color: var(--red); background: #fff6f4; }
+.callout b.t { display: block; margin-bottom: 2px; }
+.steps { list-style: none; padding: 0; counter-reset: s; }
+.steps li { counter-increment: s; position: relative; padding-left: 28px; margin: 7px 0; }
+.steps li::before { content: counter(s); position: absolute; left: 0; top: 1px; width: 18px; height: 18px; border-radius: 50%; background: var(--amber); color: #fff; font-size: 8pt; font-weight: 700; text-align: center; line-height: 18px; }
+.flow { background: var(--navy); color: #e5e7eb; border-radius: 6px; padding: 10px 13px; font-family: Consolas, monospace; font-size: 8.2pt; line-height: 1.6; }
+.toc { columns: 2; padding-left: 18px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="glow" style="position:absolute"></div>
+  <div class="eyebrow">CULINARY RESTAURANT</div>
+  <h1>Resumen general del sistema: funciones, seguridad e infraestructura</h1>
+  <div class="sub">Todo lo que hace Culinary Restaurant, módulo por módulo, cómo protege la información y el dinero, en qué infraestructura corre, cómo se opera y qué falta para producción.</div>
+  <div class="pills">
+    <span class="pill ok">Implementado y probado localmente</span>
+    <span class="pill warn">Pendiente: pruebas con hardware y cuentas reales</span>
+  </div>
+  <div class="meta">
+    <div><small>Fecha</small><b>27 de octubre de 2026</b></div>
+    <div><small>Rama</small><b>integraciones-produccion</b></div>
+    <div><small>Versión</small><b>Culinary Restaurant 0.3.0</b></div>
+  </div>
+</div>
+
+<section>
+<h2>1. Resumen ejecutivo</h2>
+<p>Culinary Restaurant es un sistema de punto de venta y administración para restaurantes. Cubre el servicio en comedor, mostrador, para llevar y domicilio; cocina; caja; inventario con recetas; compras; lealtad; facturación CFDI 4.0; reportes; y un ecosistema en la nube con pedidos web, QR en mesa y analítica para el dueño.</p>
+<p>Cada sucursal funciona <strong>sola en su red local, sin necesitar Internet</strong>. Un servidor por sucursal es la única autoridad sobre los datos y los guarda cifrados. Las computadoras, tabletas y teléfonos sólo muestran la pantalla y envían solicitudes por una conexión segura.</p>
+<div class="kpis">
+  <div class="kpi"><b>27</b><span>módulos en el menú</span></div>
+  <div class="kpi"><b>13</b><span>conexiones con proveedores</span></div>
+  <div class="kpi"><b>598/598</b><span>comprobaciones de integración</span></div>
+  <div class="kpi"><b>20/20</b><span>pruebas de interfaz (Edge)</span></div>
+</div>
+<table>
+<tr><th style="width:22%">Área</th><th style="width:38%">Módulos</th><th>Para qué sirve</th></tr>
+<tr><td>Servicio</td><td>Resumen, Mesas y cuentas, Mostrador, Notificaciones</td><td>Tomar órdenes, cobrar y atender el turno.</td></tr>
+<tr><td>Operación del turno</td><td>Cocina en vivo, Historial, Caja, Delivery</td><td>Preparar comandas, controlar el efectivo y el reparto.</td></tr>
+<tr><td>Menú e insumos</td><td>Catálogo, Inventario, Compras, Promociones</td><td>Productos, recetas, existencias, proveedores y ofertas.</td></tr>
+<tr><td>Control y equipo</td><td>Gastos, Reportes, Equipo, Fiscal, Impresión</td><td>Resultados, cortes, personal, facturas y tickets.</td></tr>
+<tr><td>Restaurante</td><td>Reservaciones, Evaluaciones, Lealtad, Integraciones, Configuración, Soporte</td><td>Clientes, proveedores externos y reglas del negocio.</td></tr>
+<tr><td>Nube</td><td>Central, vista del dueño, pedidos web, QR en mesa</td><td>Vender en línea y ver todas las sucursales.</td></tr>
+</table>
+<div class="callout"><b class="t">Estado</b>Todas las funciones están programadas y probadas con pruebas automáticas contra el servidor real en laboratorio. Lo pendiente es probar con impresoras, terminales y cuentas reales de proveedores, e instalar en equipos físicos.</div>
+<h3>Contenido</h3>
+<ol class="toc">
+<li>Resumen ejecutivo</li><li>Arquitectura</li><li>Servicio (punto de venta)</li><li>Operación del turno</li><li>Menú e insumos</li><li>Control y equipo</li><li>Restaurante y clientes</li><li>Nube y portal público</li><li>Integraciones con proveedores</li><li>Licencias y planes</li><li>Roles y permisos</li><li>Seguridad</li><li>Confiabilidad y recuperación</li><li>Especificaciones técnicas</li><li>Plataformas y paquetes</li><li>Infraestructura</li><li>Cómo se maneja todo (operación)</li><li>Pruebas y evidencia</li><li>Pendientes y límites</li>
+</ol>
+</section>
+
+<section class="chapter">
+<h2>2. Arquitectura</h2>
+<p>El sistema está dividido en piezas independientes. Ninguna computadora de mesero o caja guarda las llaves de los datos: todo pasa por el servidor de la sucursal.</p>
+<table>
+<tr><th style="width:22%">Pieza</th><th style="width:26%">Proyecto</th><th>Qué hace</th></tr>
+<tr><td>Reglas de negocio</td><td><code>MesaNexo.Core</code></td><td>Mesas, cuentas, pagos, inventario, delivery, fiscal, lealtad, cortes y licencias. No toca red ni disco.</td></tr>
+<tr><td>Servidor de sucursal</td><td><code>MesaNexo.Api</code></td><td>API HTTPS y avisos en vivo (SignalR), inicio de sesión, procesos de inventario, envío a la central, impresión, facturación, integraciones y licencias.</td></tr>
+<tr><td>Almacén cifrado</td><td>CulinaryOS + <code>runtime/mesanexo_ipc.py</code></td><td>Base SQLite cifrada; cada operación se guarda completa o no se guarda.</td></tr>
+<tr><td>Aplicación de escritorio</td><td><code>MesaNexo.Web</code> (React + Tauri)</td><td>Pantallas en Windows sobre WebView2.</td></tr>
+<tr><td>Puente seguro</td><td><code>MesaNexo.Bridge</code>, <code>.Transport</code></td><td>Guarda la sesión y los secretos fuera de la pantalla y verifica la conexión.</td></tr>
+<tr><td>Aplicación nativa</td><td><code>MesaNexo.Client</code>, <code>.Desktop</code>, <code>.Android</code>, <code>.iOS</code></td><td>Versión Avalonia para compatibilidad y teléfonos.</td></tr>
+<tr><td>Central multiempresa</td><td><code>MesaNexo.Central</code></td><td>Recibe los eventos de las sucursales, analítica del dueño y pedidos de la nube.</td></tr>
+<tr><td>Portal público</td><td><code>MesaNexo.Public</code></td><td>Pedidos web, QR en mesa, autofacturación y webhook de Deliverect.</td></tr>
+<tr><td>Proveedores</td><td><code>MesaNexo.Integrations</code></td><td>Conexiones con Facturama, Stripe, Mercado Pago, Clip, Meta, Google, Cloudbeds, OHIP y Deliverect.</td></tr>
+<tr><td>Licencias</td><td>CulinaryServer + CulinaryAdmin</td><td>El proveedor emite y renueva licencias; la sucursal sólo las verifica.</td></tr>
+</table>
+<h3>Recorrido de una operación</h3>
+<div class="flow">Pantalla → HTTPS autenticado → reglas de negocio → transacción en el almacén cifrado<br>
+&nbsp;&nbsp;└─ en un solo guardado: registro + revisión + recibo + bitácora + evento para la central<br>
+→ respuesta al equipo → aviso en vivo a los demás equipos → envío posterior a la central (con acuse)</div>
+</section>
+
+<section class="chapter">
+<h2>3. Servicio (punto de venta)</h2>
+<h3>Resumen del turno</h3>
+<ul><li>Ventas, mesas ocupadas, comandas en cocina e incidencias del turno.</li><li>Accesos rápidos a mesas, mostrador y pendientes.</li></ul>
+<h3>Mesas y cuentas</h3>
+<table>
+<tr><th style="width:26%">Función</th><th>Subfunciones</th></tr>
+<tr><td>Plano de mesas</td><td>Zonas; estados libre, ocupada, impresa y sucia; filtros y búsqueda.</td></tr>
+<tr><td>Abrir cuenta</td><td>Comensales, mesero responsable, zona, prioridad, cliente y lista de precios.</td></tr>
+<tr><td>Ordenar</td><td>Modificadores obligatorios y opcionales (hasta 10 grupos, 1–20 opciones, «elegir hasta N», precio por opción), punto de cocción, extras y notas de cocina.</td></tr>
+<tr><td>Cocina</td><td>Enviar a cocina (aparta los insumos), cambiar producto o notas, cancelar con motivo (sólo se libera lo no preparado).</td></tr>
+<tr><td>Descuentos</td><td>Por porcentaje o importe, con autorización y motivo.</td></tr>
+<tr><td>Imprimir y reabrir</td><td>La cuenta impresa queda bloqueada; reabrirla requiere autorización y motivo.</td></tr>
+<tr><td>Dividir</td><td>Manual, por persona o en N partes, con impuestos exactos; tablero de arrastrar y soltar de hasta 6 cuentas.</td></tr>
+<tr><td>Unir y mover</td><td>Unir varias mesas en una cuenta, cambiar de mesa, pasar las cuentas de una zona a otro mesero.</td></tr>
+<tr><td>Cobrar</td><td>Efectivo con cambio, tarjeta, transferencia, monedero, terminal bancaria, liga de pago y cargo a habitación; propinas y pagos por parte.</td></tr>
+</table>
+<h3>Mostrador (venta rápida)</h3>
+<ul>
+<li>Catálogo primero, búsqueda y carrito; comer aquí o para llevar; nombre del cliente.</li>
+<li>Venta, comanda y pago en un solo paso; atajos $50 / $100 / $200 / $500 / Exacto y cálculo de cambio.</li>
+<li>Pantalla para el cliente en un segundo monitor: productos, total, cambio y mensajes.</li>
+<li>El cajón se abre sólo con pagos en efectivo.</li>
+<li>Para llevar con hora programada (hasta 7 días), aviso amarillo al acercarse y rojo al pasarse; etiquetas PARA LLEVAR y A DOMICILIO en la comanda.</li>
+</ul>
+<h3>Notificaciones</h3>
+<ul><li>Solicitudes de autorización, llamadas de mesa por QR y pedidos de la nube y de plataformas por revisar.</li></ul>
+</section>
+
+<section class="chapter">
+<h2>4. Operación del turno</h2>
+<table>
+<tr><th style="width:22%">Módulo</th><th>Subfunciones</th></tr>
+<tr><td>Cocina en vivo</td><td>Comandas por estación y por platillo, semáforos de tiempo configurables, reloj, marcar preparado y entregado; las comandas pendientes se recuperan si se reinicia el servidor. Cocina no ve precios.</td></tr>
+<tr><td>Historial</td><td>Tiempos de preparación por comanda y por estación.</td></tr>
+<tr><td>Caja</td><td>Apertura, entradas y salidas, pagos, denominaciones; límite de efectivo con aviso y bloqueo opcional; retiros parciales con sobre.</td></tr>
+<tr><td>Arqueo ciego</td><td>El cajero cuenta sin ver lo esperado; el cierre ya no se puede cambiar; sólo gerencia ve diferencias; ajustes aparte con motivo; aviso al dueño.</td></tr>
+<tr><td>Delivery y clientes</td><td>Fichas de cliente con historial y varias direcciones, zonas y tarifas de reparto, asignación de repartidor y lo que debe entregar, conciliación, recoger en tienda, llamada entrante con «Tomar pedido» o «Registrar cliente».</td></tr>
+</table>
+
+<section class="chapter cont">
+<h2>5. Menú e insumos</h2>
+<table>
+<tr><th style="width:22%">Módulo</th><th>Subfunciones</th></tr>
+<tr><td>Catálogo</td><td>Productos y categorías, precio, impuesto incluido por producto, estación, punto de cocción, grupos de modificadores, extras e información alimentaria.</td></tr>
+<tr><td>Inventario</td><td>Insumos y varios almacenes; recetas y subrecetas con versiones, rendimiento y conversión de unidades; apartado al enviar y consumo al cobrar; mermas; costo promedio o PEPS; recepción confirmada por otra persona; mínimos y máximos; conteo físico; costo teórico contra real.</td></tr>
+<tr><td>Compras y proveedores</td><td>Proveedores con RFC y días de crédito; órdenes de compra (OC-0001); recepción de lo que realmente llegó; compra directa; cancelación con motivo; sugerencia de compra por mínimo/máximo; cuentas por pagar con vencimiento, pagos parciales y antigüedad de saldos.</td></tr>
+<tr><td>Promociones</td><td>Promociones por horario, combos y cupones.</td></tr>
+</table>
+</section>
+
+<section class="chapter cont">
+<h2>6. Control y equipo</h2>
+<table>
+<tr><th style="width:22%">Módulo</th><th>Subfunciones</th></tr>
+<tr><td>Gastos y caja chica</td><td>Cuentas de gasto con presupuesto mensual; gastos desde caja chica, caja o banco; fondo fijo y reposición; la caja chica nunca queda negativa.</td></tr>
+<tr><td>Reportes</td><td>Resultados por periodo; <strong>corte X</strong> (sólo lectura); <strong>corte Z</strong> con folio, totales por forma de pago, categoría y mesero, cancelaciones, descuentos e impuestos; <strong>análisis ABC</strong> por venta y cantidad con margen.</td></tr>
+<tr><td>Equipo y dispositivos</td><td>Usuarios y roles, permisos por mesero, PIN por usuario, sesiones activas y su cierre, alta de equipos con código de un solo uso, límite de terminales según la licencia.</td></tr>
+<tr><td>Fiscal</td><td>Solicitudes CFDI 4.0, validación de RFC, régimen y uso; QR de autofacturación con vigencia; timbrado; reintento seguro; cancelación con motivo SAT; envío de PDF y XML.</td></tr>
+<tr><td>Impresión</td><td>Cola de tickets, cortes y aperturas de cajón; estado de la impresora; revisión de trabajos dudosos y reimpresión.</td></tr>
+</table>
+</section>
+</section>
+
+<section class="chapter">
+<h2>7. Restaurante y clientes</h2>
+<table>
+<tr><th style="width:22%">Módulo</th><th>Subfunciones</th></tr>
+<tr><td>Reservaciones</td><td>Agenda y solicitudes de reservación (incluido en el plan Pro).</td></tr>
+<tr><td>Evaluaciones</td><td>Opiniones privadas de los clientes por visita.</td></tr>
+<tr><td>Lealtad y monedero</td><td>Cashback configurable sobre lo pagado; recargas en efectivo, tarjeta o transferencia; pago con monedero; ajustes con motivo; saldo nunca negativo.</td></tr>
+<tr><td>Listas de precios</td><td>Ajuste general de −90 % a +100 %, precios fijos, canales, horario y prioridad; automáticas o elegidas a mano.</td></tr>
+<tr><td>Consumo de empleados</td><td>Descuento de empleado, tope mensual por nómina, cuenta con etiqueta EMPLEADO y liquidación mensual.</td></tr>
+<tr><td>Integraciones</td><td>Una tarjeta por proveedor con modo Apagada / Simulación / Real, estado de credenciales, bitácora y bandeja de mensajes enviados.</td></tr>
+<tr><td>Configuración</td><td>Datos del restaurante, mesas y zonas, impuestos, semáforos, pantalla del cliente, reducir animaciones.</td></tr>
+<tr><td>Soporte</td><td>Solicitudes a Culinary y permiso temporal de acceso para soporte (1 a 24 horas), revocable.</td></tr>
+<tr><td>QR en mesa</td><td>Código por mesa (se puede regenerar); el cliente ve el menú, llama al mesero, pide la cuenta u ordena, y el mesero confirma.</td></tr>
+<tr><td>Primer arranque</td><td>Asistente que pide restaurante, usuario y contraseña propios; sin cuentas de demostración.</td></tr>
+<tr><td>Actualizaciones</td><td>Revisa firma, versión y huella del archivo antes de instalar; exige cuentas y sesiones cerradas.</td></tr>
+</table>
+
+<section class="chapter cont">
+<h2>8. Nube y portal público</h2>
+<ul>
+<li><strong>Central multiempresa:</strong> empresas, sucursales, miembros y equipos; copia de los eventos de cada sucursal, cifrada por empresa y sucursal.</li>
+<li><strong>Vista del dueño:</strong> ventas, mesas, incidencias y cortes de todas sus sucursales, con la hora y el retraso del dato.</li>
+<li><strong>Pedidos web:</strong> catálogo, carrito, extras, cocción, cupón, entrega o recoger. El precio se calcula en el servidor; el pedido llega como <em>propuesta</em> que el gerente acepta o rechaza, revalidando precio, cupón y existencias.</li>
+<li><strong>Canal seguro:</strong> la sucursal se conecta hacia afuera; no se abre ningún puerto de entrada en el restaurante.</li>
+<li><strong>Autofacturación</strong> por código del ticket y pedidos de plataformas de reparto mediante Deliverect.</li>
+</ul>
+</section>
+</section>
+
+<section class="chapter">
+<h2>9. Integraciones con proveedores</h2>
+<p>Cada integración tiene tres modos: <span class="pill grey">Apagada</span> <span class="pill warn">Simulación</span> <span class="pill ok">Real</span>. «Real» sólo se habilita cuando el servidor tiene un archivo de credenciales válido en <code>/etc/culinaryos/integrations/</code> (dueño <code>root</code>, grupo <code>culinaryos-app</code>, permisos <code>0640</code>).</p>
+<table>
+<tr><th style="width:20%">Área</th><th style="width:28%">Proveedor</th><th>Qué hace en modo real</th></tr>
+<tr><td>Facturación CFDI 4.0</td><td>Facturama (sandbox o producción)</td><td>Timbra, consulta y cancela; envía PDF y XML. Nunca timbra dos veces.</td></tr>
+<tr><td>Terminal bancaria</td><td>Mercado Pago Point · Clip · BBVA</td><td>Envía el cobro a la terminal y sigue el resultado; cancela y devuelve. BBVA con el voucher.</td></tr>
+<tr><td>Pagos en línea</td><td>Stripe Checkout</td><td>Crea ligas de pago, las manda por WhatsApp, aplica el pago y reembolsa si ya estaba pagado.</td></tr>
+<tr><td>Mensajería</td><td>WhatsApp Cloud API · SMTP</td><td>Pedido en camino, listo para recoger, ligas de pago, facturas y avisos al dueño.</td></tr>
+<tr><td>Plataformas de reparto</td><td>Uber Eats · Rappi · DiDi vía Deliverect</td><td>Recibe pedidos, los manda a cocina, devuelve estados y publica el menú.</td></tr>
+<tr><td>Hotel</td><td>Cloudbeds · Oracle OPERA (OHIP)</td><td>Valida al huésped y su crédito y carga el consumo a la habitación.</td></tr>
+<tr><td>Mapas</td><td>Google Geocoding y Routes</td><td>Ubica direcciones y calcula distancia y tiempo.</td></tr>
+<tr><td>Llamadas</td><td>Conmutador Asterisk</td><td>Muestra quién llama y lo liga a su ficha de cliente.</td></tr>
+<tr><td>Impresora y cajón</td><td>ESC/POS (red o USB)</td><td>Imprime cuentas y cortes; abre el cajón al cobrar en efectivo.</td></tr>
+</table>
+<div class="callout warn"><b class="t">Reglas de dinero</b>Cada operación se envía una sola vez con una llave única. Si se pierde la respuesta, primero se pregunta al proveedor qué pasó; si no se puede saber, queda «sin respuesta» para que una persona decida. El dinero sólo se mueve cuando el proveedor confirma.</div>
+
+<section class="chapter cont">
+<h2>10. Licencias y planes</h2>
+<ol class="steps">
+<li><strong>Emisión:</strong> CulinaryServer (Cloudflare) firma la licencia con la llave raíz del proveedor (Ed25519). La sucursal sólo trae la llave pública, incrustada al compilar.</li>
+<li><strong>Ligada al equipo:</strong> llave no exportable en el chip TPM 2.0; si no hay, huella del hardware (placa, disco y tarjeta de red).</li>
+<li><strong>Renovación:</strong> con reto firmado; hasta <strong>7 días</strong> sin conexión; se detecta un reloj atrasado.</li>
+<li><strong>Bloqueo:</strong> vencida, cancelada, sin validar o de otro equipo muestra sólo la pantalla de bloqueo, sin exportar datos.</li>
+</ol>
+<table>
+<tr><th style="width:22%">Plan</th><th>Incluye</th></tr>
+<tr><td>Lite</td><td>Funciones contratadas, 2 terminales fijas.</td></tr>
+<tr><td>Pro</td><td>Lo de Lite más reservaciones, 10 terminales fijas.</td></tr>
+<tr><td>Add-ons</td><td>Pedidos móviles, Delivery Hub y pedidos web. Los teléfonos de toma de órdenes no cuentan como terminal.</td></tr>
+</table>
+</section>
+</section>
+
+<section class="chapter">
+<h2>11. Roles y permisos</h2>
+<table>
+<tr><th style="width:22%">Rol</th><th>Qué puede hacer</th></tr>
+<tr><td>Gerente</td><td>Todo: administración, reportes, compras, gastos, bitácoras, autorizaciones e integraciones.</td></tr>
+<tr><td>Mesero</td><td>Sus mesas; permisos opcionales para cobrar, ver resultados, vender en mostrador, unir y transferir mesas.</td></tr>
+<tr><td>Cajero</td><td>Caja, cobros y arqueo ciego.</td></tr>
+<tr><td>Cocina</td><td>Cocina en vivo e historial, sin precios.</td></tr>
+<tr><td>Dueño</td><td>Analítica de todas sus sucursales.</td></tr>
+</table>
+<p>El servidor aplica los permisos; la pantalla sólo esconde lo no permitido. Un gerente puede autorizar con su PIN en el equipo del mesero una lista cerrada de operaciones: decidir solicitudes, reabrir, desbloquear, abrir cajón y retirar efectivo.</p>
+
+<section class="chapter cont">
+<h2>12. Seguridad</h2>
+<div class="two">
+<div>
+<h3>Datos guardados</h3>
+<ul>
+<li>Base de la sucursal cifrada con <strong>XChaCha20-Poly1305</strong>; llaves e identidad guardadas aparte.</li>
+<li>Central con llave AES de 32 bytes propia, cifrado por empresa y sucursal.</li>
+<li>Secretos de cada equipo en el almacén del sistema: DPAPI (Windows), Secret Service (Linux), Keystore (Android), Keychain (iOS). Nunca en texto plano.</li>
+</ul>
+<h3>Conexiones</h3>
+<ul>
+<li>HTTPS con certificado propio verificado (cadena, nombre, vigencia); no hay forma de aceptar cualquier certificado.</li>
+<li>Sucursal ↔ central con <strong>mTLS</strong>; propuestas firmadas <strong>RSA-PSS</strong>; webhooks con <strong>HMAC</strong>.</li>
+<li>Descubrir el servidor en la red no da confianza ni acceso.</li>
+<li>La pantalla no tiene acceso directo a red ni a archivos: todo pasa por el puente.</li>
+</ul>
+</div>
+<div>
+<h3>Acceso</h3>
+<ul>
+<li>Contraseñas y PIN con <strong>Argon2id</strong>; el PIN nunca sale del servidor.</li>
+<li>5 intentos fallidos bloquean el PIN 5 minutos; cada intento queda registrado.</li>
+<li>Equipos dados de alta con código de un solo uso; sesiones con caducidad y revocables.</li>
+<li>Soporte del proveedor sólo con permiso temporal del restaurante.</li>
+</ul>
+<h3>Integridad</h3>
+<ul>
+<li>Bitácora encadenada con <strong>SHA-256</strong> que detecta alteraciones; no guarda PIN ni contraseñas.</li>
+<li>Cada operación lleva identificador único; no se puede repetir con otro contenido.</li>
+<li>Actualizaciones con firma, versión y huella SHA-512 verificadas.</li>
+<li>Nunca se reciben datos de tarjeta; los textos se limpian y limitan.</li>
+</ul>
+</div>
+</div>
+</section>
+</section>
+
+<section class="chapter">
+<h2>13. Confiabilidad y recuperación</h2>
+<table>
+<tr><th style="width:24%">Garantía</th><th>Cómo se logra</th></tr>
+<tr><td>Nada a medias</td><td>Registro, recibo, bitácora y evento se guardan en una sola transacción.</td></tr>
+<tr><td>Nada duplicado</td><td>El equipo guarda la solicitud antes de enviarla; si pierde la respuesta, pregunta por el recibo antes de seguir. Un resultado dudoso nunca se muestra como éxito.</td></tr>
+<tr><td>Sin Internet</td><td>La sucursal sigue operando; red local, servidor e Internet se muestran por separado.</td></tr>
+<tr><td>Crecimiento controlado</td><td>Los eventos confirmados se borran a los 7 días; sin central, los pendientes también, y al conectar una central se envía una copia completa.</td></tr>
+<tr><td>Reinicios</td><td>Inventario, impresión, facturas e integraciones continúan donde se quedaron; lo dudoso lo revisa una persona.</td></tr>
+<tr><td>Respaldos</td><td>Copias cifradas de la sucursal y de la central, verificadas por huella; las sesiones se cierran al restaurar.</td></tr>
+</table>
+
+<section class="chapter cont">
+<h2>14. Especificaciones técnicas</h2>
+<table>
+<tr><th style="width:24%">Elemento</th><th>Especificación</th></tr>
+<tr><td>Plataforma</td><td>.NET 10 LTS (SDK 10.0.301, runtime 10.0.13), ASP.NET Core, SignalR</td></tr>
+<tr><td>Escritorio</td><td>React + CSS, Tauri (Rust), WebView2</td></tr>
+<tr><td>Nativo y móvil</td><td>Avalonia 12.1.4 (escritorio, Android, iOS)</td></tr>
+<tr><td>Almacén</td><td>SQLite 3.50 cifrado de CulinaryOS, Python 3.13 + PyNaCl 1.6</td></tr>
+<tr><td>Criptografía</td><td>XChaCha20-Poly1305, AES-256, Argon2id, SHA-256/512, Ed25519, RSA-PSS, HMAC, TLS y mTLS</td></tr>
+<tr><td>Sistema de sucursal</td><td>CulinaryOS sobre Debian 13 amd64, servicios systemd, usuario <code>culinaryos-app</code></td></tr>
+<tr><td>Límites por operación</td><td>56 KiB y 256 cambios por transacción; páginas de 32 registros; registros importados de hasta 40 KiB</td></tr>
+<tr><td>Datos en pantalla</td><td>Cuentas abiertas y hasta 500 cerradas recientes; históricos de 100 en 100; sólo se envía lo que cambió</td></tr>
+<tr><td>Dinero</td><td>Centavos enteros, MXN; IVA incluido por producto con la tasa congelada en la venta</td></tr>
+<tr><td>Interfaz</td><td>Probada a 360, 834, 1360 y 1440 px; modo claro y oscuro; teclado y foco accesibles</td></tr>
+</table>
+</section>
+</section>
+
+<section class="chapter">
+<h2>15. Plataformas y paquetes</h2>
+<table>
+<tr><th style="width:22%">Plataforma</th><th style="width:20%">Estado</th><th>Detalle</th></tr>
+<tr><td>Windows x64</td><td><span class="pill ok">Funcionando</span></td><td><code>CulinaryRestaurant.exe</code> + <code>culinary-bridge.exe</code>; arranque verificado. Falta firma del editor.</td></tr>
+<tr><td>CulinaryOS / Debian 13</td><td><span class="pill warn">Por validar</span></td><td>Paquete <code>.deb</code>, instalador de la extensión con verificación de huellas, modo kiosco.</td></tr>
+<tr><td>Android</td><td><span class="pill warn">Por validar</span></td><td>APK de prueba compilado; falta probar en teléfono y firma de publicación.</td></tr>
+<tr><td>iOS</td><td><span class="pill bad">Sólo código</span></td><td>Sin compilar ni paquete IPA.</td></tr>
+<tr><td>Central y portal</td><td><span class="pill warn">Por desplegar</span></td><td>Publicaciones Linux x64; falta hosting en Internet.</td></tr>
+</table>
+
+</section>
+
+<section class="chapter">
+<h2>16. Infraestructura</h2>
+<p>Cada restaurante tiene un <strong>servidor propio</strong> con CulinaryOS. Las terminales se conectan a él por la red local. Internet sólo se usa para la central, las licencias y los proveedores externos; si falla, el restaurante sigue operando.</p>
+<h3>Red de la sucursal (referencia)</h3>
+<div class="flow">Internet (opcional) ── Router 10.77.0.1 ── Switch de la red operativa<br>
+&nbsp;&nbsp;├─ Servidor CulinaryOS 10.77.0.10 · Ethernet · puerto 8443 (HTTPS)<br>
+&nbsp;&nbsp;├─ Cocina .121–.139 · Ethernet<br>
+&nbsp;&nbsp;├─ Gerencia .141–.159 · Ethernet o Wi-Fi<br>
+&nbsp;&nbsp;├─ Impresora térmica (IP fija, puerto 9100) y cajón RJ11<br>
+&nbsp;&nbsp;└─ Punto de acceso 10.77.0.2 ── Meseros .101–.119 · Wi-Fi</div>
+<ul>
+<li>El servidor va por cable y no hace de router, DHCP ni punto de acceso; no tiene NAT ni reenvío.</li>
+<li>El punto de acceso debe funcionar sin la nube, sin portal cautivo y sin aislar a los clientes de la red operativa; los invitados van en una red aparte.</li>
+<li>El servidor se anuncia por mDNS/DNS-SD, pero sólo se confía en él con la CA y la huella aprovisionadas. También se puede escribir la dirección a mano.</li>
+<li>El cortafuegos nftables sólo abre el puerto de la aplicación registrada. La red local y el acceso a Internet se muestran por separado.</li>
+</ul>
+<h3>Componentes y dónde corren</h3>
+<table>
+<tr><th style="width:21%">Componente</th><th style="width:25%">Dónde</th><th>Especificación</th></tr>
+<tr><td>Servidor de sucursal</td><td>CulinaryOS (Debian 13 amd64), en el restaurante</td><td>Backend .NET autocontenido en <code>/opt/culinaryos-app</code>, HTTPS en 8443, usuario sin privilegios <code>culinaryos-app</code>, almacén por socket Unix <code>/run/culinaryos-data/store.sock</code>.</td></tr>
+<tr><td>Terminales</td><td>PC Windows, CulinaryOS terminal, Android 12+, iOS 18+</td><td>Sólo interfaz; sin base de datos ni llaves de datos. CulinaryOS puede arrancar en modo kiosco.</td></tr>
+<tr><td>Central multiempresa</td><td>Servidor Linux x64 en Internet</td><td>Servicio <code>mesanexo-central</code>; puerto 9443 (administración HTTPS) y 9444 (receptor de sucursales con mTLS obligatorio).</td></tr>
+<tr><td>Portal público</td><td>Junto a la central</td><td>Escucha sólo en loopback; se publica detrás de un proxy HTTPS administrado.</td></tr>
+<tr><td>CulinaryServer</td><td>Cloudflare Workers</td><td>Licencias, renovaciones, actualizaciones y soporte. Guarda la llave raíz privada.</td></tr>
+<tr><td>CulinaryAdmin</td><td>Panel web del proveedor</td><td>Clientes, planes, add-ons, licencias, pruebas y versiones.</td></tr>
+<tr><td>Proveedores externos</td><td>Nube de cada proveedor</td><td>La sucursal sólo hace conexiones de salida; ningún proveedor entra al restaurante.</td></tr>
+</table>
+<h3>Servicios del servidor (systemd, en orden de arranque)</h3>
+<table>
+<tr><th style="width:30%">Servicio</th><th>Función</th></tr>
+<tr><td><code>culinaryos-firstboot</code></td><td>Crea las cuentas del sistema en el primer arranque.</td></tr>
+<tr><td><code>culinaryos-data</code></td><td>Almacén SQLite cifrado (WAL, <code>synchronous=FULL</code>) con transacciones y outbox.</td></tr>
+<tr><td><code>culinaryos-backend</code></td><td>Culinary Restaurant. Antes de iniciar, un paso root lee la identidad de hardware para la licencia. Avisa que está listo sólo con almacén, identidad y HTTPS válidos.</td></tr>
+<tr><td><code>culinaryos-sync</code> (timer)</td><td>Único emisor del outbox hacia la central; independiente de la operación local.</td></tr>
+<tr><td><code>culinaryos-publish</code></td><td>Anuncia el servidor en la red sólo cuando el backend está disponible.</td></tr>
+<tr><td><code>culinaryos-snapshot</code></td><td>Copias consistentes y cifradas del almacén.</td></tr>
+<tr><td>LightDM + sesión</td><td>Abre la aplicación (o el kiosco) en la pantalla del servidor; cerrarla no detiene el backend.</td></tr>
+</table>
+<h3>Endurecimiento</h3>
+<ul>
+<li>Servicios con usuario propio, <code>ProtectSystem=strict</code>, <code>ProtectHome</code>, <code>PrivateTmp</code>, <code>PrivateDevices</code>, <code>NoNewPrivileges</code> y <code>UMask=0077</code>.</li>
+<li>Llaves TLS y de datos entregadas con <code>LoadCredential</code> de systemd, nunca en la línea de comandos ni en el código.</li>
+<li>Credenciales de proveedores en <code>/etc/culinaryos/integrations</code> (<code>root:culinaryos-app</code>, carpeta 0750, archivos 0640).</li>
+<li>Root bloqueado; el usuario operador no tiene sudo ni grupos administrativos. El mantenimiento se hace con una cuenta administradora aparte.</li>
+<li>La CA de cada sitio la genera el instalador en el propio servidor, con su llave en <code>/etc/culinaryos/secrets</code> (0600); el certificado se renueva solo con ella y las terminales sólo reciben la CA pública. Certificado de servidor por 365 días.</li>
+</ul>
+
+<section class="chapter cont">
+<h2>17. Cómo se maneja todo (operación)</h2>
+<h3>Instalación de una sucursal</h3>
+<ol class="steps">
+<li>Instalar CulinaryOS con escritorio y configurar la red y el sitio de la sucursal.</li>
+<li>Montar el CD de Culinary Restaurant y ejecutar <code>instalar.sh</code>. El instalador verifica las huellas del runtime y se detiene si algo no coincide.</li>
+<li>El instalador respalda la configuración, agrega la extensión transaccional y compila la interfaz Tauri.</li>
+<li>Pide nombre del restaurante, gerente, usuario y contraseña propios y muestra el código de alta <strong>una sola vez</strong>.</li>
+<li>Activar la licencia con CulinaryServer (queda ligada al TPM o a la huella del equipo).</li>
+<li>Dar de alta cada terminal con la CA pública, su huella y un código de un solo uso.</li>
+</ol>
+<h3>Día a día</h3>
+<table>
+<tr><th style="width:24%">Tarea</th><th>Cómo se hace</th></tr>
+<tr><td>Arranque</td><td>Al encender, el backend inicia como servicio y la aplicación se abre sola; el kiosco la reabre si se cierra o deja de responder 45 s.</td></tr>
+<tr><td>Turno</td><td>Abrir caja, operar, arqueo ciego y corte Z al cierre (exige caja y cuentas cerradas).</td></tr>
+<tr><td>Usuarios y equipos</td><td>El gerente crea usuarios, permisos y PIN, da de alta equipos y revoca sesiones desde Equipo.</td></tr>
+<tr><td>Integraciones</td><td>Se copia el archivo de credenciales al servidor, se reinicia el backend y el gerente elige «Real».</td></tr>
+<tr><td>Pendientes dudosos</td><td>Impresión, cobro o timbre sin respuesta quedan marcados para que una persona los revise; nunca se repiten solos.</td></tr>
+<tr><td>Supervisión</td><td>Estado de impresora, facturación, integraciones, LAN, central y licencia en la aplicación; <code>systemctl</code>, <code>journalctl</code> y <code>dataio.py health</code> para el técnico.</td></tr>
+<tr><td>Soporte remoto</td><td>El restaurante concede un permiso temporal (1–24 h) y lo puede revocar; el proveedor no entra sin permiso.</td></tr>
+</table>
+<h3>Mantenimiento</h3>
+<table>
+<tr><th style="width:24%">Tarea</th><th>Cómo se hace</th></tr>
+<tr><td>Actualizar la aplicación</td><td>Paquete firmado; se verifica firma, destinatario, versión y SHA-512, con cuentas y sesiones cerradas.</td></tr>
+<tr><td>Actualizar la extensión</td><td><code>install-runtime-extension.py --upgrade</code>: snapshot previo, respaldo y vuelta atrás automática si la verificación de salud falla.</td></tr>
+<tr><td>Respaldos</td><td>Snapshot cifrado y su huella, con la identidad y las llaves guardadas aparte y bajo custodia separada. La central tiene su propio snapshot y restauración.</td></tr>
+<tr><td>Restaurar</td><td>Con los servicios detenidos, primero en un entorno aislado; revisar cuentas, pagos, caja, bitácora, recibos y outbox antes de reabrir.</td></tr>
+<tr><td>Certificados</td><td>Renovar el certificado del servidor antes de los 365 días desde la estación de la CA.</td></tr>
+<tr><td>Cortes de luz</td><td>UPS USB con NUT (preparado, por configurar con el modelo real); copia externa de la configuración, el snapshot y las llaves cifradas.</td></tr>
+<tr><td>Consola de emergencia</td><td><code>Ctrl+Alt+F2</code> abre el inicio de sesión administrativo; el kiosco se puede revertir con su respaldo.</td></tr>
+</table>
+<h3>Licencia en operación</h3>
+<ul>
+<li>El backend renueva la licencia con CulinaryServer; sin conexión sigue trabajando hasta 7 días.</li>
+<li>Al vencer, ser revocada o cambiar de equipo, sólo se ve la pantalla de bloqueo; los datos se conservan pero no se exportan.</li>
+<li>El plan (Lite o Pro), los add-ons y los límites de terminales, usuarios y mesas se aplican en el servidor.</li>
+</ul>
+</section>
+</section>
+
+<section class="chapter">
+<h2>18. Pruebas y evidencia</h2>
+<div class="kpis">
+  <div class="kpi"><b>598/598</b><span>integración</span></div>
+  <div class="kpi"><b>27/27</b><span>almacén (runtime)</span></div>
+  <div class="kpi"><b>44/44</b><span>instalador</span></div>
+  <div class="kpi"><b>20/20</b><span>interfaz con Edge</span></div>
+</div>
+<ul>
+<li>Las pruebas usan el servidor HTTPS real, la base cifrada, reinicios, conflictos y respuestas perdidas.</li>
+<li>Por módulo: punto de venta, administración (48), lealtad (33), integraciones simuladas (61), integraciones reales sin red (52), multiempresa, impresión, facturación, esquema, puente y carga.</li>
+<li>Capturas de todas las pantallas en <code>evidence/</code>, en varios tamaños y en claro y oscuro.</li>
+<li>Para repetirlas: <code>tools/Test.ps1</code>, <code>tools/Test-Hybrid.ps1</code> y <code>tools/Test-Load.ps1</code>.</li>
+</ul>
+</section>
+
+<section class="chapter cont">
+<h2>19. Pendientes y límites</h2>
+<div class="callout bad"><b class="t">No listo para producción todavía</b>Las pruebas automáticas no sustituyen probar con equipos, impresoras, terminales y cuentas reales.</div>
+<ul>
+<li>Probar cada integración con cuentas reales (Facturama con CSD, Stripe, Mercado Pago, Clip, Meta, Google, Cloudbeds/OHIP, Deliverect).</li>
+<li>Probar impresora, cajón, terminal y conmutador físicos; la huella digital se sustituye por PIN.</li>
+<li>Notificaciones push (FCM/APNs) y pago en línea dentro de los pedidos web aún no habilitados.</li>
+<li>En CulinaryOS: restauración real, permisos, corte de luz, renovación de certificados y varias terminales a la vez.</li>
+<li>Sin renovación automática de certificados ni auditoría de seguridad externa.</li>
+<li>La bitácora detecta alteraciones, pero contra un administrador con todas las llaves requiere copias independientes.</li>
+<li>Firma del editor (Windows y tiendas móviles), ciclo real de actualización y medición con grandes volúmenes.</li>
+<li>Android e iOS siguen con la aplicación Avalonia hasta adaptar el puente móvil.</li>
+</ul>
+</section>
+</section>
+
+</body>
+</html>

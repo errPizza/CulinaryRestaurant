@@ -31,7 +31,12 @@ def validate_site(site):
 DATABASE = 'culinaryos'
 DATA_ROLE = 'culinaryos-app'
 KEYRING = CONFIG / 'secrets/branch.keys.json'
+# Only with all three in place: LoadCredential stops the backend from starting when a file is missing.
+CENTRAL_CREDENTIALS = {'central-ca': 'central-ca.crt', 'central-cert': 'central-client.crt', 'central-key': 'central-client.key'}
 SQLITE_STORE = Path('/var/lib/culinaryos-data/store.sqlite')
+SYSTEMD = Path('/etc/systemd/system')
+SYNC_TIMER, SYNC_SERVICE = 'culinaryos-sync.timer', 'culinaryos-sync.service'
+TLS_TIMER, TLS_SERVICE = 'culinaryos-renew-tls.timer', 'culinaryos-renew-tls.service'
 def known_extensions(bundle):
     # Earlier MesaNexo extensions this package may replace. Without the list nothing is replaced.
     path = bundle / 'deploy/culinaryos/extension-history.json'
@@ -199,14 +204,14 @@ def certificates(site, temporary_root="/run"):
     run('openssl', 'x509', '-in', cert, '-noout', '-checkend', '604800', stdout=subprocess.DEVNULL)
     return ca, cert, key
 
-def app_command(*args, stdin=None):
+def app_command(*args, stdin=None, keys=KEYRING):
     # The backend as the service account, with the keyring the way systemd hands it over to the service.
     account = pwd.getpwnam(DATA_ROLE)
     with tempfile.TemporaryDirectory(prefix='culinary-credentials-', dir='/run') as tmp:
         tmp = Path(tmp)
         os.chown(tmp, account.pw_uid, account.pw_gid)
         keyring = tmp / 'keyring'
-        keyring.write_bytes(KEYRING.read_bytes())
+        keyring.write_bytes(Path(keys).read_bytes())
         keyring.chmod(0o400)
         os.chown(keyring, account.pw_uid, account.pw_gid)
         return subprocess.run(['runuser', '-u', DATA_ROLE, '--', 'env', 'CREDENTIALS_DIRECTORY=' + str(tmp), 'DOTNET_BUNDLE_EXTRACT_BASE_DIR=/var/lib/culinaryos-app/dotnet-bundle', str(APP / 'backend/MesaNexo.Api'), *[str(a) for a in args]], stdin=stdin, stdout=subprocess.PIPE, check=False)
@@ -341,7 +346,26 @@ def backend_dropin():
         tpm = False
     if tpm:
         lines += ['BindPaths=/dev/tpmrm0', 'DeviceAllow=/dev/tpmrm0 rw', 'SupplementaryGroups=tss']
+    secrets = KEYRING.parent
+    if all((secrets / name).is_file() for name in CENTRAL_CREDENTIALS.values()):
+        lines += ['LoadCredential=' + key + ':' + str(secrets / name) for key, name in CENTRAL_CREDENTIALS.items()]
     return ('\n'.join(lines) + '\n').encode()
+
+def single_outbox_sender():
+    # The outbox lives in PostgreSQL and the backend is its only sender; the old timer would resend the SQLite file.
+    # Masking needs the unit files gone, and a masked timer is one culinaryos-runtime leaves alone.
+    subprocess.run(['systemctl', 'disable', '--now', SYNC_TIMER], check=False, stderr=subprocess.DEVNULL)
+    for name in (SYNC_TIMER, SYNC_SERVICE):
+        (SYSTEMD / name).unlink(missing_ok=True)
+    run('systemctl', 'mask', SYNC_TIMER, SYNC_SERVICE)
+    run('systemctl', 'daemon-reload')
+
+def tls_renewal():
+    # Persistent: a machine that was off at that hour renews when it next starts.
+    write_new(SYSTEMD / TLS_SERVICE, ('[Unit]\nDescription=Renovacion del certificado TLS de la sucursal\n[Service]\nType=oneshot\nExecStart=/usr/bin/python3 ' + str(APP / 'renew-tls.py') + '\n').encode())
+    write_new(SYSTEMD / TLS_TIMER, b'[Unit]\nDescription=Renovacion diaria del certificado TLS\n[Timer]\nOnCalendar=*-*-* 04:00:00\nRandomizedDelaySec=30m\nPersistent=true\n[Install]\nWantedBy=timers.target\n')
+    run('systemctl', 'daemon-reload')
+    run('systemctl', 'enable', '--now', TLS_TIMER)
 
 def install(bundle, client, server):
     server = license_server(server)
@@ -355,6 +379,7 @@ def install(bundle, client, server):
     APP.mkdir(mode=0o755, exist_ok=True)
     write_new(APP / 'culinary-restaurant-installing.json', b'{"version":"0.3.0"}\n')
     write_new(APP / 'hardware-identity.py', (bundle / 'deploy/culinaryos/hardware-identity.py').read_bytes(), 0o755)
+    write_new(APP / 'renew-tls.py', (bundle / 'deploy/culinaryos/renew-tls.py').read_bytes(), 0o755)
     copy_files(bundle / 'payload/backend', APP / 'backend')
     copy_files(bundle / 'payload/bridge', APP / 'client')
     write_new(APP / 'client/culinary-restaurant', binary, 0o755)
@@ -366,11 +391,13 @@ def install(bundle, client, server):
     initialize_branch(site)
     ca, cert, key = certificates(site)
     write_new(CONFIG / 'restaurant-connection.json', (json.dumps(connection(site, ca), indent=2) + '\n').encode())
+    tls_renewal()
     integrations_directory()
     manifest = {'version': 1, 'mode': 'server', 'ui_argv': [ENTRY], 'backend_argv': [str(APP / 'backend/MesaNexo.Api'), '--site', site['site_id'], '--port', '8443', '--license-server', server], 'port': 8443, 'readiness_socket': '/run/culinaryos-app/ready.sock', 'tls_ca_file': str(ca), 'credentials': {'tls-key': str(key), 'tls-cert': str(cert)}}
     file = APP / 'application.json'
     write_new(file, (json.dumps(manifest, indent=2) + '\n').encode())
     write_new(Path('/etc/systemd/system/culinaryos-backend.service.d/restaurant.conf'), backend_dropin())
+    single_outbox_sender()
     run('culinaryos-runtime', 'register-app', file)
     # Reuse the existing autostart ID. OS authentication policy remains unchanged.
     autostart = Path('/etc/xdg/autostart/culinaryos.desktop')

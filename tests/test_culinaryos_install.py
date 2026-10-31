@@ -1,4 +1,4 @@
-import hashlib, importlib.util, json, os, ssl, struct, sys, tempfile, unittest
+import hashlib, importlib.util, json, os, ssl, struct, subprocess, sys, tempfile, time, unittest
 from pathlib import Path
 from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
@@ -132,6 +132,70 @@ class CulinaryInstallation(unittest.TestCase):
             cert.unlink()
             with self.assertRaises(ValueError):
                 i.certificates(self.site(), tmp)
+    def renewal(self):
+        spec = importlib.util.spec_from_file_location('culinary_renew', ROOT / 'deploy/culinaryos/renew-tls.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    def test_tls_renewal(self):
+        openssl = str(Path('C:/Program Files/Git/usr/bin/openssl.exe') if os.name == 'nt' else Path('/usr/bin/openssl'))
+        original, renew = i.run, self.renewal().renew
+        def command(*args, **kwargs): return original(openssl if args[0] == 'openssl' else args[0], *args[1:], **kwargs)
+        def tool(*args, **kwargs): return subprocess.run([openssl, *map(str, args)], capture_output=True, text=True, **kwargs)
+        site = self.site()
+        with tempfile.TemporaryDirectory() as tmp, patch.object(i, 'run', side_effect=command), patch.object(os, 'chown', create=True):
+            config, other = Path(tmp) / 'config', Path(tmp) / 'other'
+            config.mkdir()
+            other.mkdir()
+            with patch.object(i, 'CONFIG', config):
+                ca, cert, key = i.certificates(site, tmp)
+            with patch.object(i, 'CONFIG', other):
+                foreign = i.certificates(site, tmp)[0]
+            (config / 'restaurant-connection.json').write_text(json.dumps(i.connection(site, ca)))
+            restarts = []
+            run = lambda: renew(config, openssl, lambda: restarts.append(1))
+            self.assertFalse(run(), 'a year away from expiry nothing happens')
+            self.assertEqual(restarts, [])
+            # A certificate with 20 days left, from the same key and CA, the way the clock would reach it.
+            names = tool('x509', '-in', cert, '-noout', '-ext', 'subjectAltName', check=True).stdout
+            tool('req', '-new', '-key', key, '-subj', '/CN=' + site['server_name'], '-out', Path(tmp) / 'old.csr', check=True)
+            (Path(tmp) / 'ext').write_text('subjectAltName=DNS:' + site['server_name'] + ',IP:' + site['server_address'] + '\n')
+            tool('x509', '-req', '-in', Path(tmp) / 'old.csr', '-CA', ca, '-CAkey', config / 'secrets/restaurant-ca.key', '-set_serial', 5, '-days', 20, '-extfile', Path(tmp) / 'ext', '-out', cert, check=True)
+            old = cert.read_bytes()
+            (Path(tmp) / 'old.crt').write_bytes(old)
+            # With a broken CA key nothing changes and the backend is not touched.
+            secret = config / 'secrets/restaurant-ca.key'
+            kept = secret.read_bytes()
+            secret.write_bytes(b'not a key')
+            with self.assertRaises(subprocess.CalledProcessError):
+                run()
+            self.assertEqual((cert.read_bytes(), restarts), (old, []))
+            secret.write_bytes(kept)
+            before = i.digest(ca), i.digest(key)
+            self.assertTrue(run())
+            self.assertEqual(restarts, [1])
+            self.assertEqual(before, (i.digest(ca), i.digest(key)), 'terminals keep trusting the same CA')
+            self.assertEqual(names, tool('x509', '-in', cert, '-noout', '-ext', 'subjectAltName', check=True).stdout)
+            self.assertFalse(list((config / 'secrets').glob('culinary-tls-*')), 'nothing temporary stays beside the keys')
+            # Terminals, with the clock moved 300 days ahead.
+            later = int(time.time()) + 300 * 86400
+            verify = lambda authority, leaf: tool('verify', '-attime', later, '-purpose', 'sslserver', '-verify_hostname', site['server_name'], '-CAfile', authority, leaf).returncode
+            self.assertEqual(verify(ca, cert), 0)
+            self.assertNotEqual(verify(ca, Path(tmp) / 'old.crt'), 0)
+            self.assertNotEqual(verify(foreign, cert), 0)
+            self.assertFalse(run(), 'the renewed certificate is left alone')
+            self.assertEqual(restarts, [1])
+            # A CA that ends before the certificate can be extended fails, and that failure is what the app warns about.
+            tool('req', '-x509', '-key', secret, '-days', 10, '-subj', '/CN=corta', '-out', ca, check=True)
+            cert.write_bytes(old)
+            with self.assertRaises(ValueError):
+                run()
+    def test_tls_timer_units(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(i, 'SYSTEMD', Path(tmp)), patch.object(i, 'run') as run, patch.object(os, 'chown', create=True):
+            i.tls_renewal()
+            run.assert_called_with('systemctl', 'enable', '--now', i.TLS_TIMER)
+            self.assertIn('ExecStart=/usr/bin/python3 ' + str(i.APP / 'renew-tls.py'), (Path(tmp) / i.TLS_SERVICE).read_text())
+            self.assertIn('Persistent=true', (Path(tmp) / i.TLS_TIMER).read_text())
     def historical_runtime(self, root):
         bundle, runtime = self.runtime(root)
         archived = ROOT / 'vendor/culinaryos/compat/store-0.2.0-installed.py'
@@ -229,7 +293,7 @@ class CulinaryInstallation(unittest.TestCase):
         return bundle, build_root, work, binary
     def test_resume_reuses_matching_client_without_running_compiler(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(i, 'run') as command:
-            bundle, build_root, work, binary = self.compiled_fixture(Path(tmp))
+            bundle, build_root, work, binary = self.compiled_fixture(Path(tmp).resolve())
             before = binary.read_bytes()
             self.assertEqual(i.find_compiled_client(bundle, build_root, work.stat().st_uid), binary)
             command.assert_not_called()
@@ -314,17 +378,17 @@ class CulinaryInstallation(unittest.TestCase):
         (bundle / 'runtime/mesanexo_ipc.py').write_bytes((ROOT / 'runtime/mesanexo_ipc.py').read_bytes())
         (bundle / 'deploy/culinaryos').mkdir(parents=True)
         (bundle / 'deploy/culinaryos/extension-history.json').write_bytes((ROOT / 'deploy/culinaryos/extension-history.json').read_bytes())
-        legacy = (ROOT / 'artifacts/culinaryos-cd-r3/runtime/mesanexo_ipc.py').read_bytes()
+        legacy = (ROOT / 'tests/fixtures/delivered-extensions/r1-r2-lf.py').read_bytes()
         (runtime / 'mesanexo_ipc.py').write_bytes(legacy)
         return bundle, runtime, legacy
     def test_every_delivered_extension_is_known_for_upgrade(self):
         payload = (ROOT / 'runtime/mesanexo_ipc.py').read_bytes()
         self.assertNotIn(b'\r\n', payload)
         known = i.known_extensions(ROOT)
-        delivered = list((ROOT / 'artifacts').glob('*/runtime/mesanexo_ipc.py'))
+        delivered = list((ROOT / 'tests/fixtures/delivered-extensions').glob('*.py'))
         self.assertTrue(delivered)
         for path in delivered:
-            with self.subTest(release=path.parts[-3]):
+            with self.subTest(release=path.name):
                 self.assertIn(i.digest(path), known)
         self.assertNotIn(hashlib.sha256(payload).hexdigest(), known)
     def test_known_earlier_extension_reported_for_upgrade_unchanged(self):
@@ -429,5 +493,35 @@ class CulinaryInstallation(unittest.TestCase):
         self.assertEqual(cfg['build']['frontendDist'], '../dist')
         linux = json.loads((ROOT / 'src/MesaNexo.Web/src-tauri/tauri.linux.conf.json').read_text())
         self.assertTrue(linux['app']['windows'][0]['maximized'])
+    def test_install_leaves_the_backend_as_only_outbox_sender(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            units = Path(tmp)
+            for name in (i.SYNC_TIMER, i.SYNC_SERVICE):
+                (units / name).write_text('[Unit]')
+            seen = []
+            def systemctl(args, **kwargs):
+                seen.append((args[1], (units / i.SYNC_TIMER).exists()))
+                return subprocess.CompletedProcess(args, 0)
+            with patch.object(i, 'SYSTEMD', units), patch.object(i.subprocess, 'run', side_effect=systemctl):
+                i.single_outbox_sender()
+                self.assertEqual(seen, [('disable', True), ('mask', False), ('daemon-reload', False)])
+                # A resumed install finds the units already gone.
+                i.single_outbox_sender()
+        install_source = Path(i.__file__).read_text(encoding='utf-8')
+        install_source = install_source[install_source.index('def install('):]
+        self.assertLess(install_source.index('single_outbox_sender()'), install_source.index("'register-app'"))
+    def test_backend_gets_central_credentials_only_when_all_three_exist(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            secrets = Path(tmp)
+            names = list(i.CENTRAL_CREDENTIALS.values())
+            with patch.object(i, 'KEYRING', secrets / 'branch.keys.json'), patch.object(i, 'grp', create=True) as groups:
+                groups.getgrnam.side_effect = KeyError
+                for name in names[:2]:
+                    (secrets / name).write_text('x')
+                self.assertNotIn(b'central-', i.backend_dropin())
+                (secrets / names[2]).write_text('x')
+                text = i.backend_dropin().decode()
+            for key, name in i.CENTRAL_CREDENTIALS.items():
+                self.assertIn('LoadCredential=' + key + ':' + str(secrets / name) + '\n', text)
 if __name__ == '__main__':
     unittest.main(verbosity=2)

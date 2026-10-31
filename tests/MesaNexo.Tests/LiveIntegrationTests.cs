@@ -143,6 +143,49 @@ static class LiveIntegrationTests {
         var bbva = await Act("terminal.manual", J.O("visitId", silentVisit, "amount", 3000, "terminalId", "bbva", "authCode", "a1b2c3", "last4", "4321", "brand", "Mastercard"));
         Check(bbva.S("status") == "approved" && (await Get("payment", bbva.S("paymentId"))).Obj("terminal").S("authCode") == "A1B2C3", "a BBVA charge is recorded from its voucher");
 
+        // ---------- A charge across a crash ----------
+        // The provider takes the charge, its answer is lost and the process dies with the claim stored. Each adapter's next
+        // run is one charge and one payment, or a person's capture. The claim lives in the store, so this is what a restart finds.
+        async Task Crash() {
+
+            using var crash = new CancellationTokenSource();
+            try { await service.SendNext("terminaltxn", "terminal-service", x => x.S("status") == "queued", async (s, x, c) => { await terminals.Send(s, x, default); crash.Cancel(); c.ThrowIfCancellationRequested(); throw new InvalidOperationException(); }, terminals.Recover, crash.Token, "sending", TimeSpan.Zero); } catch (OperationCanceledException) { }
+
+        }
+        async Task<long> Paid(string v) => (await service.Load()).Related("payment", "visitId", v).Sum(x => x.L("amount"));
+        mpStatus = "at_terminal";
+        var crashVisit = await Account();
+        var crashed = await Act("terminal.charge", J.O("visitId", crashVisit, "amount", 3000, "terminalId", "caja-1"));
+        await Crash();
+        Check((await Get("terminaltxn", crashed.S("id"))).S("status") == "sending", "a process that dies after calling the provider leaves the claim stored");
+        await SendTerminal();
+        Check((await Get("terminaltxn", crashed.S("id"))).S("status") == "waiting", "the next run asks again with the same key and finds the order");
+        mpStatus = "processed";
+        await PollTerminal();
+        var recovered = await Get("terminaltxn", crashed.S("id"));
+        Check(recovered.S("status") == "approved" && await Paid(crashVisit) == 3000 && mpOrders.Keys.Count(k => k == crashed.S("id")) == 1, "Mercado Pago after a crash: one order, one payment");
+        Check(recovered.A("trail").Objects().Select(x => x.S("to")).SequenceEqual(["queued", "sending", "waiting", "approved"]) && recovered.A("trail").Objects().Last().S("providerRef") != "" && recovered.A("trail").Objects().Last().S("currency") == "MXN" && recovered.A("trail").Objects().Last().S("raw").Contains("processed") && !(await Get("terminaltxn", clipCharge.S("id"))).A("trail").Objects().Last().S("raw").Contains("8356"), "every change of the charge stays in its trail, with the provider's answer and no card data");
+        var refused = await service.Load();
+        refused.Get("terminaltxn", crashed.S("id"))["status"] = "waiting";
+        await Deny(() => { service.Domain.ChargeTransitions(refused, "test"); return Task.CompletedTask; }, "no pasa de", "a final state does not change, whoever writes it");
+        // A refund of that charge, from a closed account: the provider returns it, and the payment stays as it was.
+        foreach (var unit in (await service.Load()).Related("unit", "visitId", crashVisit).Select(x => x.S("id")).ToArray()) foreach (var status in new[] { "preparing", "ready", "delivered" }) await Act("unit.state", J.O("id", unit, "status", status));
+        await Act("visit.close", J.O("id", crashVisit));
+        await Deny(() => Act("payment.refund", J.O("id", recovered.S("paymentId"), "amount", 1, "reason", "Parcial")), "completo", "a provider's charge goes back whole");
+        var returned = await Act("payment.refund", J.O("id", recovered.S("paymentId"), "reason", "Cobrado por error"));
+        Check(returned.S("route") == "provider" && (await Get("terminaltxn", crashed.S("id"))).S("status") == "refund-queued", "a refund queues the provider's charge");
+        Check(await RefundTerminal() && (await Get("terminaltxn", crashed.S("id"))).S("status") == "refunded" && await Paid(crashVisit) == 3000, "the provider returns the charge, and the payment keeps its history");
+        var posts = clip.Calls.Count(c => c.Request.Method == HttpMethod.Post);
+        var clipCrashVisit = await Account();
+        var clipCrash = await Act("terminal.charge", J.O("visitId", clipCrashVisit, "amount", 3000, "terminalId", "barra"));
+        await Crash();
+        await SendTerminal();
+        Check((await Get("terminaltxn", clipCrash.S("id"))).S("status") == "uncertain" && clip.Calls.Count(c => c.Request.Method == HttpMethod.Post) == posts + 1 && await Paid(clipCrashVisit) == 0, "Clip after a crash: nothing is sent again and the charge waits for a person");
+        await Deny(() => Act("terminal.charge", J.O("visitId", clipCrashVisit, "amount", 3000, "terminalId", "barra")), "en curso", "an uncertain charge blocks a new one on the account");
+        await Act("terminal.reconcile", J.O("id", clipCrash.S("id"), "outcome", "charged", "authCode", "ab12", "last4", "8356", "brand", "Visa"));
+        Check((await Get("terminaltxn", clipCrash.S("id"))).S("status") == "approved" && await Paid(clipCrashVisit) == 3000, "the manager's capture applies the charge once");
+        Check(TerminalService.Capabilities("mercadopago") is { Idempotent: true, Lookup: true, Reverse: true } && TerminalService.Capabilities("clip") is { Idempotent: false, Lookup: true, Reverse: false } && TerminalService.Capabilities("bbva") is { Idempotent: false, Lookup: false, Reverse: false } && StripeCheckout.Capabilities.Idempotent, "each adapter declares what it can prove after a lost answer");
+
         // ---------- Stripe Checkout + WhatsApp ----------
         var customer = await Act("customer.save", J.O("name", "Mario", "phone", "55 1234 5678"));
         var linkVisit = await Account();

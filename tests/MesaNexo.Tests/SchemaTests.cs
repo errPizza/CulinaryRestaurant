@@ -15,7 +15,9 @@ static class SchemaTests {
         old.Meta["schemaVersion"] = 1;
         old.Meta["revision"] = old.Meta.L("revision") + 1;
         await runtime.CallAsync(J.O("op", "transaction_v1", "protocol", 1, "event_id", J.Id(), "receipt", J.O("actor", "legacy-schema-fixture", "fingerprint", J.Id(), "result", new JsonObject()), "changes", new JsonArray(old.Changes().Select(x => (JsonNode)x).ToArray())));
+        var pendingBefore = (await runtime.CallAsync(J.O("op", "outbox_status_v1")))!.L("pending");
         var migrated = await service.UpgradeSchema();
+        Check((await runtime.CallAsync(J.O("op", "outbox_status_v1")))!.L("pending") == pendingBefore + 1, "an upgrade keeps every pending event, and adds its own");
         Check(migrated.L("schemaVersion") == 2 && migrated.Obj("backup").B("encrypted"), "explicit schema migration creates service-owned encrypted backup before commit");
         Check((await service.UpgradeSchema()).B("alreadyApplied"), "schema migration is idempotent without resetting records");
         var restored = Path.Combine(folder, "recovery");
@@ -29,6 +31,13 @@ static class SchemaTests {
         Check(state.Meta.L("schemaVersion") == 1 && state.List("user").Count() == 1, "encrypted backup restores prior schema and users into isolated staging");
         var originalHealth = (await recovered.CallAsync(J.O("op", "health")))!;
         Check(originalHealth.L("pending") >= 2 && await recovery.Ready(), "recovered original runtime retains pending outbox and branch readiness");
+        // Reverting only the program: a backend does not start on a database newer than itself.
+        var future = await service.Load();
+        future.Meta["schemaVersion"] = Contract.Schema + 1;
+        future.Meta["revision"] = future.Meta.L("revision") + 1;
+        Check(await service.Ready(), "the current schema is ready");
+        await runtime.CallAsync(J.O("op", "transaction_v1", "protocol", 1, "event_id", J.Id(), "receipt", J.O("actor", "future-schema-fixture", "fingerprint", J.Id(), "result", new JsonObject()), "changes", new JsonArray(future.Changes().Select(x => (JsonNode)x).ToArray())));
+        Check(!await service.Ready(), "a backend refuses a database newer than itself");
 
     }
 }

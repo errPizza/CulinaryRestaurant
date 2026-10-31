@@ -10,7 +10,8 @@ function copy(l: License): [string, string] {
     switch (l.state) {
         case 'expired': return l.plan === 'trial' ? ['Tu periodo de prueba terminó', 'Tus datos siguen guardados en este equipo. Para entrar de nuevo al panel de administración y a la operación, contrata un plan con tu proveedor. Al activarlo, el acceso vuelve solo.'] : ['Tu licencia venció', 'Tus datos siguen guardados en este equipo. Para entrar de nuevo al panel de administración y a la operación, contrata otra vez tu plan con tu proveedor. Al renovarlo, el acceso vuelve solo.'];
         case 'revoked': return ['Tu licencia fue cancelada', 'Tus datos siguen guardados en este equipo. Comunícate con tu proveedor para contratar una licencia nueva y activarla aquí.'];
-        case 'offline': return ['No pudimos validar tu licencia', 'Culinary Restaurant necesita conectarse a internet al menos una vez cada 3 días. Revisa la conexión del servidor de la sucursal y reintenta.'];
+        case 'transferred': return ['Esta licencia pasó a otro equipo', 'Tus datos siguen guardados en este equipo. Si este servidor debe seguir en uso, pide a tu proveedor que libere la licencia y actívala aquí.'];
+        case 'offline': return ['No pudimos validar tu licencia', 'Culinary Restaurant necesita conectarse a internet al menos una vez cada 7 días. Revisa la conexión del servidor de la sucursal y reintenta.'];
         case 'clock': return ['La fecha del equipo está atrasada', 'Corrige la fecha y la hora del servidor de la sucursal y reintenta.'];
         case 'mismatch': return ['Esta licencia es de otro equipo', 'Pide a tu proveedor que libere la licencia y actívala de nuevo en este servidor.'];
         case 'missing': return ['Activa Culinary Restaurant', 'Escribe el identificador de licencia y el código de activación que te dio tu proveedor.'];
@@ -19,7 +20,7 @@ function copy(l: License): [string, string] {
 
 }
 // Replaces the whole application while the branch server answers 423. It holds no business data.
-export function LicenseLock({ license, onRetry }: { license: License; onRetry: () => Promise<void> }) {
+export function LicenseLock({ license, onRetry, onBack }: { license: License; onRetry: () => Promise<void>; onBack?: () => void }) {
 
     const [title, body] = copy(license), [busy, setBusy] = useState(false), [error, setError] = useState(''), [activating, setActivating] = useState(license.state === 'missing');
     const [licenseId, setLicenseId] = useState(''), [activationCode, setActivationCode] = useState('');
@@ -33,7 +34,7 @@ export function LicenseLock({ license, onRetry }: { license: License; onRetry: (
             {error && <div className="alert error" role="alert">{error}</div>}
             {activating ? <form onSubmit={activate} className="license-activate"><label>Identificador de licencia<input value={licenseId} onChange={e => setLicenseId(e.target.value)} required autoComplete="off" spellCheck={false} placeholder="0b6c5c1e-3f0a-4d39-9f5e-1d2a8f3c7b10" /></label><label>Código de activación<input value={activationCode} onChange={e => setActivationCode(e.target.value)} required autoComplete="off" spellCheck={false} placeholder="K7Q2M-9XWZT-4HPLA-R3VNE" /></label><Button className="primary wide lg" icon="key" disabled={busy}>{busy ? 'Activando…' : 'Activar licencia'}</Button></form>
                 : <Button className="primary wide lg" icon="refresh" disabled={busy} onClick={() => perform(onRetry)}>{busy ? 'Comprobando…' : 'Reintentar'}</Button>}
-            <div className="login-links">{activating ? license.state !== 'missing' && <Button className="text-button" icon="arrow" onClick={() => setActivating(false)}>Volver</Button> : <Button className="text-button" icon="key" onClick={() => setActivating(true)}>Activar otra licencia</Button>}</div>
+            <div className="login-links">{onBack && <Button className="text-button" icon="arrow" onClick={onBack}>Volver al inicio de sesión</Button>}{activating ? license.state !== 'missing' && <Button className="text-button" icon="arrow" onClick={() => setActivating(false)}>Volver</Button> : <Button className="text-button" icon="key" onClick={() => setActivating(true)}>Activar otra licencia</Button>}</div>
         </div></section>
     </div>;
 

@@ -57,6 +57,31 @@ test('original CSS, supplied logos, responsive layout and click pop', async ({ p
     expect(errors).toEqual([]);
 
 });
+test('figures count up to their value and the theme swap grows from its switch', async ({ page }) => {
+
+    await login(page, 'manager');
+    const figure = page.locator('.kpi .count-up').first();
+    await expect(figure).toBeVisible();
+    const samples: string[] = [];
+    for (let i = 0; i < 8; i++) { samples.push(await figure.innerText()); await page.waitForTimeout(60); }
+    await page.waitForTimeout(1200);
+    const final = await figure.innerText();
+    expect(final).toMatch(/\d/);
+    expect(samples.at(-1) === final || samples.some(x => x !== final)).toBe(true);
+    await page.evaluate(() => { const d = document as any, original = d.startViewTransition?.bind(d); (window as any).swaps = 0; if (original) d.startViewTransition = (update: () => void) => { (window as any).swaps++; return original(update); }; });
+    const supported = await page.evaluate(() => 'startViewTransition' in document);
+    await page.getByRole('button', { name: /^Menú de/ }).click();
+    await page.getByRole('button', { name: 'Oscuro' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    if (supported) expect(await page.evaluate(() => (window as any).swaps)).toBe(1);
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: path.join(evidence, 'hybrid-theme-dark.png') });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.getByRole('button', { name: 'Claro' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    expect(await page.evaluate(() => (window as any).swaps)).toBe(supported ? 1 : 0);
+
+});
 test('real HTTPS POS: open table, protected draft, kitchen, delivery, cash and close', async ({ page }) => {
 
     await login(page, 'pos');
@@ -531,7 +556,8 @@ test('integrations run in simulation: terminal, platform order, PAC stamp, outbo
     await login(page, 'integrations');
     const dialog = () => page.getByRole('dialog');
     const save = async () => { await dialog().getByRole('button', { name: 'Guardar', exact: true }).click(); await expect(dialog()).toHaveCount(0); };
-    const exec = async (type: string, payload: any) => { const r = await call('integrations', 'execute', { type, payload }); if (r.ok) await call('integrations', 'ack', { operationId: r.data.operationId }); return r; };
+    // The page's own last operation may still be waiting for its receipt; until then the client refuses another one.
+    const exec = async (type: string, payload: any) => { let r: any; await expect.poll(async () => { r = await call('integrations', 'execute', { type, payload }); return r.ok || !/incierta/.test(r.error || ''); }, { timeout: 15000 }).toBe(true); if (r.ok) await call('integrations', 'ack', { operationId: r.data.operationId }); return r; };
     const shot = async (name: string) => { await page.waitForTimeout(650); await page.screenshot({ path: path.join(evidence, 'etapa4-' + name + '.png'), fullPage: true }); };
     await nav(page, 'Integraciones');
     await expect(page.getByText('Todo está en simulación.')).toBeVisible();
@@ -579,7 +605,7 @@ test('integrations run in simulation: terminal, platform order, PAC stamp, outbo
     await expect(page.getByText(/Visa •••• 4242 · aut\./)).toBeVisible();
     await page.getByRole('button', { name: 'Cerrar detalle', exact: true }).click();
     // Close the platform order and stamp its invoice with the simulated PAC.
-    for (const unit of state.units.filter((u: any) => u.visitId === accepted.visitId && u.status === 'received')) { await exec('unit.state', { id: unit.id, status: 'preparing' }); await exec('unit.state', { id: unit.id, status: 'ready' }); }
+    for (const unit of state.units.filter((u: any) => u.visitId === accepted.visitId && u.status === 'received')) { expect((await exec('unit.state', { id: unit.id, status: 'preparing' })).ok).toBe(true); expect((await exec('unit.state', { id: unit.id, status: 'ready' })).ok).toBe(true); }
     await nav(page, 'Delivery y clientes');
     await page.locator('.kc.platform', { hasText: 'Laura QA' }).getByRole('button', { name: 'Entregar al repartidor' }).click();
     await expect(page.locator('.kc.platform', { hasText: 'Laura QA' }).getByText(/Entregado a/)).toBeVisible();
@@ -653,6 +679,35 @@ test('a PAC submission that lost its answer is retried by the manager with the s
     expect(request.retryReason).toBe('No aparece en el portal de Facturama');
     await expect(row.getByText('Prueba sandbox · sin validez fiscal')).toBeVisible();
     expect(errors).toEqual([]);
+
+});
+test('a license about to expire warns inside the app and leaves it working', async ({ page }) => {
+
+    expect((await call('fixture', 'license.expiring', {})).data.state).toBe('active');
+    try {
+
+        await login(page, 'license-warning');
+        await expect(page.getByText('La licencia vence en 2 días.', { exact: false })).toBeVisible();
+        await page.screenshot({ path: path.join(evidence, 'hybrid-license-warning-1360.png') });
+        await page.setViewportSize({ width: 390, height: 844 });
+        await expect(page.getByText('La licencia vence en 2 días.', { exact: false })).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        await page.screenshot({ path: path.join(evidence, 'hybrid-license-warning-390.png') });
+
+    } finally { await call('fixture', 'license.restore', {}); }
+
+});
+test('the cash page offers refunds with a second manager and the double-approval threshold', async ({ page }) => {
+
+    await login(page, 'refund-ui');
+    await nav(page, 'Caja');
+    await page.getByRole('button', { name: 'Devolver un pago' }).click();
+    await expect(page.getByRole('combobox', { name: 'Gerente que autoriza' })).toBeVisible();
+    await expect(page.getByLabel('PIN del gerente que autoriza')).toBeVisible();
+    await expect(page.getByText(/lo autoriza otro gerente con su PIN/)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Doble aprobación' }).click();
+    await expect(page.getByRole('spinbutton', { name: /desde el que hacen falta dos gerentes/ })).toHaveValue('1000');
 
 });
 test('an expired license replaces sign-in with the lock screen and nothing else', async ({ page }) => {

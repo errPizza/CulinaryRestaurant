@@ -9,7 +9,11 @@ namespace MesaNexo.Api;
 public sealed partial class BranchService {
     LicenseOptions? licensing; ILicenseKey? licenseKey; CulinaryServer? server;
     readonly ConcurrentDictionary<string, JsonObject> verified = new();
+    // Highest key floor seen, kept with the license; intermediates below it no longer verify anything.
+    Jws.KeyFloor floor = Jws.KeyFloor.None;
     readonly long startedTick = Environment.TickCount64; DateTimeOffset? anchor;
+    // CulinaryServer answered that this machine is not the one activated. Kept in memory: the worker asks again on start.
+    bool hardwareRefused;
     // A wall clock behind what was already signed or committed by more than this is treated as tampering.
     static readonly TimeSpan ClockTolerance = TimeSpan.FromMinutes(15);
     public void UseLicensing(LicenseOptions options, CulinaryServer? client = null) {
@@ -28,21 +32,26 @@ public sealed partial class BranchService {
     JsonObject Verified(string jws, string type) {
 
         if (verified.TryGetValue(type + jws, out var payload)) return payload;
-        payload = Jws.Verify(jws, type);
+        payload = Jws.Verify(jws, type, floor);
         if (verified.Count > 64) verified.Clear();
         verified[type + jws] = payload;
         return payload;
 
     }
+    void UseFloor(Jws.KeyFloor next) { if (next == floor) return; floor = next; verified.Clear(); }
     public LicenseView License(BranchState s) {
 
         var record = s.List("license").FirstOrDefault();
         if (record is null || licensing is null) return LicenseView.Missing;
+        UseFloor(floor.Max(Jws.KeyFloor.Read(record.S("keyFloor"))));
         JsonObject payload;
         JsonObject? notice;
         try { payload = Verified(record.S("license"), Jws.License); notice = record.S("notice") == "" ? null : Verified(record.S("notice"), Jws.Status); } catch (BusinessException) { return new("mismatch", null); }
         var now = Clock(s, payload, out var behind);
-        return LicenseView.Evaluate(payload, notice, siteId, Key.Spki, now, behind);
+        // A failed TPM is a machine that needs a transfer, with the lock screen, not a server error on every request.
+        string spki;
+        try { spki = Key.Spki; } catch (BusinessException) { return new("mismatch", payload); }
+        return LicenseView.Evaluate(payload, notice, siteId, spki, now, behind, hardwareRefused);
 
     }
     // The wall clock can be set back; the time since this process started cannot. The branch never reads a time
@@ -53,7 +62,7 @@ public sealed partial class BranchService {
         var floor = LicenseView.Signed(payload);
         // A commit made while the clock ran ahead must not lock the branch for good: past the offline grace after the
         // last signed time, the committed time is not trusted.
-        if (DateTimeOffset.TryParse(s.Meta.S("clock"), out var committed) && committed > floor && committed <= floor.AddDays(3)) floor = committed;
+        if (DateTimeOffset.TryParse(s.Meta.S("clock"), out var committed) && committed > floor && committed <= LicenseView.OfflineUntil(payload)) floor = committed;
         anchor ??= wall > floor ? wall : floor;
         var counted = anchor.Value + TimeSpan.FromMilliseconds(Environment.TickCount64 - startedTick);
         var now = new[] { wall, floor, counted }.Max();
@@ -68,8 +77,10 @@ public sealed partial class BranchService {
 
     }
     // Only a root-signed license for this site and this machine's key; a lower revision never replaces a higher one.
-    public async Task<LicenseView> InstallLicense(string jws, bool activation = false, CancellationToken ct = default) {
+    public async Task<LicenseView> InstallLicense(string jws, bool activation = false, CancellationToken ct = default, string? keyFloor = null) {
 
+        var offered = Jws.KeyFloor.Read(keyFloor);
+        UseFloor(floor.Max(offered));
         var payload = Verified(jws, Jws.License);
         Need(payload.S("siteId") == siteId, "La licencia es de otra sucursal", 403);
         Need(payload.Obj("key").S("spki") == Key.Spki, "La licencia está ligada a otro equipo", 403);
@@ -85,6 +96,8 @@ public sealed partial class BranchService {
             }
             record ??= s.Add("license", J.O("id", "current", "siteId", siteId));
             record["license"] = jws;
+            var stored = Jws.KeyFloor.Read(record.S("keyFloor"));
+            if (stored.Max(offered) == offered && offered != stored) record["keyFloor"] = keyFloor;
             record["notice"] = "";
             record["installedAt"] = J.Now();
             await Commit(s, J.Id(), "culinary-server", J.Hash(jws), J.O("installed", true), activation ? "license.activate" : "license.renew", ct);
@@ -125,21 +138,38 @@ public sealed partial class BranchService {
     // First activation, or a new one after the provider released the machine: allowed only while the branch is locked.
     public async Task<JsonObject> Activate(JsonObject p, CancellationToken ct = default) {
 
-        Need(License(await View(ct)).Usable is false, "Culinary Restaurant ya tiene una licencia vigente", 409);
+        var state = await View(ct);
+        // The license is stored in the branch's records; with none yet, the code would be spent and nothing kept.
+        Need(state.Count > 0, "Configura primero el restaurante; después activa la licencia", 409);
+        Need(License(state).Usable is false, "Culinary Restaurant ya tiene una licencia vigente", 409);
         Need(Guid.TryParse(p.S("licenseId").Trim(), out var id), "Escribe el identificador de licencia que te dio tu proveedor");
         var code = Text(p, "activationCode", 40);
         var key = Key;
         var body = J.O("activationCode", code, "siteId", siteId, "key", J.O("alg", key.Alg, "spki", key.Spki), "binding", Binding());
         JsonObject reply;
-        try { reply = await Server.Signed(HttpMethod.Post, "/branch/v1/activate", id.ToString("D"), key, body, ct); } catch (ServerRejection e) { throw new BusinessException(e.Status is 400 or 401 or 403 or 409 ? 403 : 502, e.Code == "activation_rejected" ? "Código de activación inválido, ya usado o de una licencia cancelada" : e.Message); }
-        return (await InstallLicense(reply.S("license"), true, ct)).Summary();
+        try { reply = await Server.Signed(HttpMethod.Post, "/branch/v1/activate", id.ToString("D"), key, body, ct); } catch (ServerRejection e) {
+            // A code already spent by this same machine (the install failed after CulinaryServer accepted it): only this
+            // machine's key can sign the renewal, so the license comes back without a new code.
+            if (e.Code == "activation_rejected" && await Recover(id, key, ct) is { } recovered) reply = recovered;
+            else throw new BusinessException(e.Status is 400 or 401 or 403 or 409 ? 403 : 502, e.Code == "activation_rejected" ? "Código de activación inválido, ya usado o de una licencia cancelada" : e.Message);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException && !ct.IsCancellationRequested) { throw new BusinessException(502, "No se pudo contactar a CulinaryServer; revisa que el equipo tenga Internet e inténtalo de nuevo"); }
+        return (await InstallLicense(reply.S("license"), true, ct, reply.S("keyFloor"))).Summary();
+
+    }
+    async Task<JsonObject?> Recover(Guid id, ILicenseKey key, CancellationToken ct) {
+
+        var body = key.Binding == "tpm" ? new JsonObject() : J.O("fingerprint", HardwareIdentity.Fingerprint(licensing!.HardwareFile));
+        try { return await Server.Signed(HttpMethod.Post, "/branch/v1/license/renew", id.ToString("D"), key, body, ct); } catch (ServerRejection) { return null; }
 
     }
     public async Task<LicenseView> Renew(CancellationToken ct = default) {
 
         var body = Key.Binding == "tpm" ? new JsonObject() : J.O("fingerprint", HardwareIdentity.Fingerprint(licensing!.HardwareFile));
-        var reply = await Call(HttpMethod.Post, "/branch/v1/license/renew", body, ct);
-        return await InstallLicense(reply.S("license"), false, ct);
+        JsonObject reply;
+        try { reply = await Call(HttpMethod.Post, "/branch/v1/license/renew", body, ct); } catch (ServerRejection e) when (e.Code == "binding_mismatch") { hardwareRefused = true; throw; }
+        hardwareRefused = false;
+        return await InstallLicense(reply.S("license"), false, ct, reply.S("keyFloor"));
 
     }
 }

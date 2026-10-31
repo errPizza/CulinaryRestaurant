@@ -20,6 +20,9 @@ public sealed partial class PostgresBranchStore: IBranchStore, IDisposable {
     // Acknowledged events move to the archive after this long; pending ones are never dropped, whatever their age.
     static readonly TimeSpan AckedRetention = TimeSpan.FromDays(7);
     const int ArchiveBatch = 16, BaselineRecords = 512;
+    // Past either mark the outbox raises an alert; nothing is dropped. Age counts only once a central is configured.
+    const long AlertBytes = 2L * 1024 * 1024 * 1024;
+    static readonly TimeSpan AlertAge = TimeSpan.FromDays(1);
     // Every writer takes this transaction-scoped lock first, so commits are serial as they were on SQLite.
     internal const long WriterLock = 0x4d4e5354;
     readonly NpgsqlDataSource data;
@@ -276,13 +279,16 @@ public sealed partial class PostgresBranchStore: IBranchStore, IDisposable {
         return J.O("records", records, "revision", revision, "before", more ? positions[records.Count - 1] : null);
 
     }
-    async Task<JsonNode> OutboxStatus(CancellationToken ct) {
+    async Task<JsonObject> OutboxStatus(CancellationToken ct) {
 
         await using var db = await data.OpenConnectionAsync(ct);
-        await using var cmd = Command(db, null, "SELECT count(*), min(created) FROM events WHERE acked IS NULL");
+        await using var cmd = Command(db, null, "SELECT count(*), min(created), pg_total_relation_size('events'), (SELECT value FROM store_metadata WHERE key='outbox_acked_seq') FROM events WHERE acked IS NULL");
         await using var row = await cmd.ExecuteReaderAsync(ct);
         await row.ReadAsync(ct);
-        return J.O("pending", row.GetInt64(0), "oldest_pending", row.IsDBNull(1) ? null : row.GetDouble(1));
+        double? oldest = row.IsDBNull(1) ? null : row.GetDouble(1);
+        var bytes = row.GetInt64(2);
+        var alert = bytes > AlertBytes ? "size" : oldest is { } o && Epoch() - o > AlertAge.TotalSeconds && Central() == true ? "age" : null;
+        return J.O("pending", row.GetInt64(0), "oldest_pending", oldest, "bytes", bytes, "acked_seq", row.IsDBNull(3) ? 0 : long.Parse(row.GetString(3)), "alert", alert);
 
     }
     async Task<JsonNode> EventStatus(string eventId, CancellationToken ct) {
@@ -334,8 +340,8 @@ public sealed partial class PostgresBranchStore: IBranchStore, IDisposable {
         } else state = J.O("mode", "complete");
         if (J.Canonical(state) != before) await Exec(db, tx, "INSERT INTO store_metadata VALUES('mesanexo_outbox', @v) ON CONFLICT(key) DO UPDATE SET value=excluded.value", ct, ("v", J.Canonical(state)));
         await tx.CommitAsync(ct);
-        var pending = await Scalar<long>(db, null, "SELECT count(*) FROM events WHERE acked IS NULL", ct);
-        return J.O("mode", state.S("mode") == "standalone-dropped" ? "standalone" : state.S("mode"), "pending", pending, "more", state.S("mode") == "baseline");
+        var status = await OutboxStatus(ct);
+        return J.O("mode", state.S("mode") == "standalone-dropped" ? "standalone" : state.S("mode"), "pending", status.L("pending"), "alert", status["alert"]?.DeepClone(), "more", state.S("mode") == "baseline");
 
     }
     async Task<string?> BaselineEvent(NpgsqlConnection db, NpgsqlTransaction tx, string after, int part, CancellationToken ct) {
@@ -413,10 +419,55 @@ public sealed partial class PostgresBranchStore: IBranchStore, IDisposable {
         return values;
 
     }
-    public async Task Acknowledge(string eventId, string digest, CancellationToken ct = default) {
+    // A batch of acknowledgements in one transaction, which also records the last confirmed sequence. They must be the
+    // oldest pending events in order: an acknowledgement that would leave an earlier event behind is refused whole.
+    public async Task Acknowledge(IReadOnlyList<(string EventId, string Digest)> batch, CancellationToken ct = default) {
+
+        if (batch.Count == 0) return;
+        await using var db = await data.OpenConnectionAsync(ct);
+        await using var tx = await db.BeginTransactionAsync(ct);
+        var now = Epoch();
+        long last = 0;
+        foreach (var (eventId, digest) in batch) {
+
+            var seq = await Scalar<long?>(db, tx, "UPDATE events SET acked=@now WHERE id=@i AND digest=@d AND acked IS NULL RETURNING seq", ct, ("now", now), ("i", eventId), ("d", digest));
+            if (seq is not { } value || value <= last) throw new StoreException("COS-DATA-CONFLICT");
+            last = value;
+
+        }
+        if (await Scalar<object>(db, tx, "SELECT 1 FROM events WHERE acked IS NULL AND seq < @s LIMIT 1", ct, ("s", last)) is not null) throw new StoreException("COS-DATA-CONFLICT");
+        await Exec(db, tx, "INSERT INTO store_metadata VALUES('outbox_acked_seq', @v) ON CONFLICT(key) DO UPDATE SET value=greatest(store_metadata.value::bigint, excluded.value::bigint)::text", ct, ("v", last.ToString()));
+        await tx.CommitAsync(ct);
+
+    }
+    public Task Acknowledge(string eventId, string digest, CancellationToken ct = default) => Acknowledge([(eventId, digest)], ct);
+    // After a restore: every event opens under this keyring and matches its digest, none is in both tables, and
+    // together they account for every committed transaction. A store migrated from SQLite may have dropped some.
+    public async Task<JsonObject> VerifyOutbox(CancellationToken ct = default) {
 
         await using var db = await data.OpenConnectionAsync(ct);
-        if (await Exec(db, null, "UPDATE events SET acked=@now WHERE id=@i AND digest=@d AND acked IS NULL", ct, ("now", Epoch()), ("i", eventId), ("d", digest)) != 1) throw new StoreException("COS-DATA-CONFLICT");
+        long total = 0, transactions = 0, damaged = 0, last = 0;
+        foreach (var table in new[] { "events", "events_archive" }) {
+
+            await using var cmd = Command(db, null, "SELECT id, record_id, version, envelope, digest, seq FROM " + table);
+            await using var row = await cmd.ExecuteReaderAsync(ct);
+            while (await row.ReadAsync(ct)) {
+
+                total++;
+                last = Math.Max(last, row.GetInt64(5));
+                if (row.GetString(1).StartsWith("tx_")) transactions++;
+                try { if (Digest(OpenEvent((byte[])row[3], row.GetString(1), row.GetInt64(2), row.GetString(0))) != row.GetString(4)) damaged++; } catch (StoreException) { damaged++; }
+
+            }
+
+        }
+        var receipts = await Scalar<long>(db, null, "SELECT count(*) FROM records WHERE id LIKE 'tx\\_%'", ct);
+        var duplicated = await Scalar<long>(db, null, "SELECT count(*) FROM events e JOIN events_archive a ON a.id = e.id", ct);
+        var dropped = await Scalar<string>(db, null, "SELECT value FROM store_metadata WHERE key='mesanexo_outbox_dropped'", ct) is not null;
+        var acked = long.Parse(await Scalar<string>(db, null, "SELECT value FROM store_metadata WHERE key='outbox_acked_seq'", ct) ?? "0");
+        var pending = await Scalar<long>(db, null, "SELECT count(*) FROM events WHERE acked IS NULL", ct);
+        var valid = damaged == 0 && duplicated == 0 && acked <= last && (dropped ? transactions <= receipts : transactions == receipts);
+        return J.O("valid", valid, "events", total, "pending", pending, "transactions", receipts, "damaged", damaged, "duplicated", duplicated, "acked_seq", acked, "dropped_before", dropped);
 
     }
     public async Task Retry(string eventId, CancellationToken ct = default) {

@@ -23,7 +23,7 @@ public sealed partial class MainView {
                 var current = await http.PostAsJsonAsync("api/device/can-install", request);
                 var allowed = JsonNode.Parse(await current.Content.ReadAsStringAsync())!;
                 Rules.Need(current.IsSuccessStatusCode && allowed.B("allowed"), "La sucursal inició operación; espera a su cierre");
-                Updates.Signed(update.S("update"), profile.SiteId, "win-x64");
+                Updates.Signed(update, profile.SiteId, "win-x64");
                 await Updates.Verify(update, target, "win-x64");
                 await App.InstallUpdate!(target);
 

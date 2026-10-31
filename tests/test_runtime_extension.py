@@ -233,16 +233,23 @@ class RuntimeTests(unittest.TestCase):
         self.config.write_text('{broken')
         self.assertEqual(self.maintain()['mode'], 'unknown')
         self.assertEqual(self.store.status()['events'], 1)
-    def test_without_central_old_pending_events_dropped_recent_kept(self):
+    def test_without_central_pending_events_kept_whatever_their_age(self):
         self.put(self.transaction())
         self.put(self.transaction('e2', 1, 'second'))
-        self.sql("UPDATE events SET created=1.0 WHERE id='e1'")
+        self.sql('UPDATE events SET created=1.0')
         self.branch(False)
-        self.assertEqual(self.maintain(), {'mode': 'standalone', 'dropped': 1, 'more': False})
-        self.assertEqual([w['event_id'] for w, _ in self.store.pending()], ['e2'])
-        self.assertEqual(self.maintain()['dropped'], 0)
+        self.assertEqual(self.maintain(), {'mode': 'standalone', 'more': False})
+        self.assertEqual([w['event_id'] for w, _ in self.store.pending()], ['e1', 'e2'])
+        # A central connected later receives the whole history and needs no baseline.
+        self.branch(True)
+        self.assertEqual(self.maintain(), {'mode': 'complete', 'more': False})
+        self.assertEqual(self.store.status()['pending'], 2)
+    def test_dropped_event_reads_untracked(self):
+        # Only an earlier version of this extension dropped pending events without a central.
+        self.put(self.transaction())
+        self.sql("DELETE FROM events WHERE id='e1'")
+        self.sql("INSERT INTO metadata VALUES('mesanexo_outbox_dropped','1')")
         self.assertTrue(self.put(self.transaction())['duplicate'])
-        # Dropped without any central acknowledging it: the receipt stays, but nothing claims it was delivered.
         self.assertEqual(mesanexo_ipc.dispatch(self.store, {'op': 'event_status_v1', 'event_id': 'e1'}, dataio.dispatch), {'local': 'committed', 'remote': 'untracked'})
     def test_complete_outbox_needs_no_baseline(self):
         self.put(self.transaction())
@@ -256,9 +263,11 @@ class RuntimeTests(unittest.TestCase):
         self.put(self.transaction(changes=changes))
         for n in range(1, 4):
             self.put(self.transaction('u' + str(n), changes=[{'record_id': 'mn_meta_site', 'expected_version': n, 'data': {'id': 'site', 'revision': n + 1}}, {'record_id': 'mn_audit_' + str(n), 'expected_version': 0, 'data': {'sequence': n}}]))
-        self.sql("UPDATE events SET created=1.0 WHERE id!='u3'")
+        # A store an earlier version of this extension let drop the older pending events without a central.
         self.branch(False)
-        self.assertEqual(self.maintain()['dropped'], 3)
+        self.assertEqual(self.maintain()['mode'], 'standalone')
+        self.sql("DELETE FROM events WHERE id!='u3'")
+        self.sql("INSERT INTO metadata VALUES('mesanexo_outbox_dropped','1')")
         self.put(self.transaction('u4', changes=[{'record_id': 'mn_meta_site', 'expected_version': 4, 'data': {'id': 'site', 'revision': 5}}, {'record_id': 'mn_unit_000', 'expected_version': 1, 'data': {'n': 0, 'notes': 'changed'}}]))
         self.branch(True)
         steps = []

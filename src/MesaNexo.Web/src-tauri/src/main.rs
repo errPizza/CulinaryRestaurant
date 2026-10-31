@@ -38,6 +38,12 @@ async fn native_call(window: tauri::WebviewWindow, state: tauri::State<'_,State>
     if window.label()!="main" {return Err("Ventana no autorizada".into());}
     if command=="window.present" {return kiosk::present(&window);}
     if command=="window.ready" {return kiosk::ready(&window);}
+    if command=="power.status" {return Ok(json!({"ok":true,"data":{"available":kiosk::enabled()}}));}
+    if command=="power.battery" {return tauri::async_runtime::spawn_blocking(kiosk::battery_status).await.map_err(|_|"No se pudo atender la solicitud".to_owned())?;}
+    if command=="power.request" {return tauri::async_runtime::spawn_blocking(move || kiosk::power(&args)).await.map_err(|_|"No se pudo atender la solicitud".to_owned())?;}
+    if command=="network.status" {return tauri::async_runtime::spawn_blocking(kiosk::network_status).await.map_err(|_|"No se pudo atender la solicitud".to_owned())?;}
+    if command=="network.scan" {return tauri::async_runtime::spawn_blocking(kiosk::network_scan).await.map_err(|_|"No se pudo atender la solicitud".to_owned())?;}
+    if command=="network.connect" {return tauri::async_runtime::spawn_blocking(move || kiosk::network_connect(&args)).await.map_err(|_|"No se pudo atender la solicitud".to_owned())?;}
     let bridge=state.0.clone();let app=window.app_handle().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let installing=command=="updates.install";

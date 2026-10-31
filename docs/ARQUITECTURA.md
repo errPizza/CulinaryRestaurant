@@ -14,7 +14,34 @@ El listener HTTPS de sucursal mantiene el nombre TLS aunque el descubrimiento en
 
 La operación local no requiere central ni Internet. Su disponibilidad se muestra por separado; no se infiere Internet a partir de la LAN. El worker original es el único emisor de outbox. La central requiere mTLS para sucursales y solo devuelve ACK después del commit durable con deduplicación por sucursal/evento. El refresco de política es un canal separado, firmado y verificado localmente; no envía el outbox.
 
-El outbox no crece sin límite. Un evento con ACK de la central se conserva 7 días y luego se borra (la central ya lo comprometió). Si `/etc/culinaryos/branch.json` no configura central, nadie confirmará nunca los eventos: los pendientes se conservan 7 días y luego se descartan. Los registros, recibos y auditoría locales no se tocan. Al configurar una central después, `outbox_maintain_v1` (llamado por `OutboxWorker`) encola primero una línea base `mesa-nexo-baseline-v1`: todos los registros `mn_` en su versión actual, auditoría incluida, en eventos de 56 KiB como máximo. La central la proyecta con su upsert por versión, así que el orden respecto a los eventos retenidos no importa. Lo único que la central no recibe es la secuencia transacción por transacción anterior a la conexión. Sin `branch.json` legible no se descarta nada. Un almacén que nunca descartó eventos no necesita línea base.
+El outbox nunca descarta un evento pendiente, tenga la antigüedad que tenga y haya o no central en `/etc/culinaryos/branch.json`. Una central conectada después recibe la historia completa, transacción por transacción.
+- **Entrega y acuses.** `CentralSyncWorker` envía los pendientes del más antiguo al más nuevo y deja de enviar en el primero que falla. Guarda los acuses por lote (hasta 16) en una sola transacción, junto con la última secuencia confirmada (`outbox_acked_seq`). Un lote que dejaría atrás un evento anterior sin confirmar se rechaza completo. Si un lote se pierde por una caída, la central vuelve a recibir esos eventos y responde con el mismo commit.
+- **Archivo.** Un evento con ACK de hace más de 7 días pasa de `events` a `events_archive`, unos cuantos por transacción. No se borra: `events + events_archive` siempre suma el número de transacciones confirmadas.
+- **Alerta.** `outbox_status_v1` y `outbox_maintain_v1` responden `alert`: `size` si la tabla `events` pasa de 2 GiB, `age` si hay central configurada y el pendiente más antiguo tiene más de un día. `OutboxWorker` lo registra como `COS-OUTBOX-SIZE` o `COS-OUTBOX-AGE` y la barra de estado del cliente lo muestra. La alerta nunca recorta el outbox.
+- **Línea base (`mesa-nexo-baseline-v1`).** Sólo existe para sucursales migradas desde SQLite cuya extensión anterior descartó pendientes sin central (`standalone-dropped`). Al configurar la central, `outbox_maintain_v1` encola en pasos acotados todos los registros `mn_` en su versión actual, auditoría incluida, en eventos de 56 KiB como máximo. La central la proyecta con su upsert por versión, así que el orden respecto a los eventos retenidos no importa. Lo que la línea base no recupera es la secuencia de las transacciones descartadas. Sólo queda su resultado final y el rastro before/after de la auditoría. `event_status_v1` responde `untracked` para esos eventos. Un almacén que nunca descartó eventos no necesita línea base.
+- **Extensión SQLite.** `runtime/mesanexo_ipc.py` ya no está en la ruta de datos de una sucursal PostgreSQL. CulinaryOS la sigue enganchando al servicio `culinaryos-data`, que en el appliance sólo responde `health`, y sirve para el laboratorio y las pruebas de contrato. Tampoco descarta pendientes.
+
+## Puntos de control de la bitácora
+
+La cadena de auditoría detecta un cambio aislado, pero quien tenga todas las llaves locales puede reescribir un registro y recalcular la cadena. Por eso `CheckpointWorker` firma la cabeza cada hora y en cada cierre de caja, y la publica en un bucket de Cloudflare R2 con credenciales propias, separadas de CulinaryServer.
+
+- **Por qué no se puede borrar lo publicado.** R2 no tiene tokens de sólo escritura. La protección es un bucket lock, que rechaza sobrescribir o borrar durante el plazo. El nombre del objeto incluye secuencia y hash: una segunda cabeza para la misma secuencia queda junto a la primera.
+- **Quién compara.** La sucursal, al arrancar y a diario. Si no coincide, avisa al gerente, detiene las autorizaciones con PIN y deja evidencia en `alerts/`. La venta sigue. Un atacante con root puede apagar esa revisión local, así que la que cuenta es la externa: `--export-audit` en la sucursal y, en otro equipo, `--verify-checkpoints bitacora.json --checkpoints-dir copia-del-bucket --site SITIO`, que no usa base de datos ni llaves.
+- **Restauraciones.** Una copia anterior a lo publicado también diverge. `--accept-checkpoints "motivo"` declara esos objetos en `accepted/`. La declaración queda en el bucket y el verificador externo la lista, porque cada una debe corresponder a una restauración real.
+
+Cada sucursal lleva su propio bucket, porque los tokens de R2 se limitan por bucket, y sus credenciales van en `/etc/culinaryos/integrations/checkpoints.json` (ver `deploy/integrations/checkpoints.example.json`). Para crear uno:
+
+```bash
+npx wrangler r2 bucket create culinary-bitacora-SITIO
+npx wrangler r2 bucket lock add culinary-bitacora-SITIO --name retencion --retention-indefinite
+```
+
+## Inventario
+
+- **Sin existencias negativas.** Una comanda sin insumos suficientes no se envía a cocina: se rechaza con «Stock insuficiente» antes de escribir nada. Ni un retiro ni un conteo pueden tocar lo reservado por comandas abiertas. Si el sistema dice que no hay y sí hay, se corrige con un conteo, no vendiendo en negativo.
+- **Reservar, consumir.** Enviar a cocina reserva con la receta de ese momento. Liquidar encola el consumo con esa misma receta, aunque después cambie.
+- **Movimientos inmutables.** Guardan costo y versión de receta, y nada los edita. Una devolución es un movimiento nuevo que apunta al original, incluso parcial, y nunca supera lo consumido.
+- **Conciliación.** Cada 6 horas, `InventoryBalance` compara cantidad y valor de cada existencia contra la suma de sus movimientos, contra las capas abiertas y contra lo que sigue reservado. Si no cuadra, avisa al gerente. No corrige nada: un conteo encima borraría el rastro.
 
 ## Límites explícitos
 
