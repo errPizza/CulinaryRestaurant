@@ -108,6 +108,8 @@ public sealed class BranchState(CommittedState committed, bool readOnly = false)
     readonly Dictionary<string, JsonObject> touched = []; readonly Dictionary<string, List<string>> added = [];
     public BranchState() : this(CommittedState.Empty) { }
     public CommittedState Committed => committed;
+    // Set only while authorize.pin runs the action it authorizes; never comes from a request.
+    public (string Requester, string Approver)? Approval { get; set; }
     public bool ReadOnly => readOnly;
     public int Touched => touched.Count;
     public IReadOnlyDictionary<string, StoredRecord> Original => committed.Records;

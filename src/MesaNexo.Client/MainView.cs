@@ -58,6 +58,19 @@ public sealed partial class MainView: UserControl {
     string EntityName(string kind, string id) => id == "" && kind == "table" ? "Servicio rápido" : Item(kind, id).S("name", id);
     static string Money(long cents) => (cents / 100m).ToString("C", CultureInfo.GetCultureInfo("es-MX"));
     TextBox Input(string caption, string initial = "", bool password = false) { var input = new TextBox { Text = initial, MinHeight = 44, PlaceholderText = caption, PasswordChar = password ? '●' : '\0', HorizontalAlignment = HorizontalAlignment.Stretch }; AutomationProperties.SetName(input, caption); return input; }
+    // Money above the threshold: the second manager types their own PIN in the same form.
+    Field[] ApprovalFields => [new("approverId", "Gerente que autoriza", "select", "", [new("", "Sin segunda autorización"), .. Items("user").Where(x => x.S("role") == "manager" && x.B("active") && x.B("hasPin") && x.S("id") != user?.S("id")).Select(x => new Option(x.S("id"), x.S("name")))]), new("passcode", "PIN del gerente que autoriza", "password")];
+    async Task Authorized(string type, JsonObject p) {
+
+        var approver = p.S("approverId");
+        var passcode = p.S("passcode");
+        p.Remove("approverId");
+        p.Remove("passcode");
+        if (approver == "") { await Act(type, p); return; }
+        var reply = await Act("authorize.pin", J.O("approverId", approver, "passcode", passcode, "action", J.O("type", type, "payload", p)));
+        if (reply["ok"] is not null && !reply.B("ok")) throw new InvalidOperationException(reply.S("error"));
+
+    }
     async Task<JsonObject> Act(string type, JsonObject p) { var r = await session!.Execute(type, p); state = await session.State(); Render(); return r.Obj("result"); }
     async Task OpenVisit(string id) { visit = id; draft = await session!.LoadDraft(id); page = "Mesas y cuentas"; Render(); }
     static void Preparation(StackPanel panel, JsonObject unit, bool dark = false) {

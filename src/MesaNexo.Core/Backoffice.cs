@@ -4,7 +4,20 @@ using static MesaNexo.Core.Rules;
 namespace MesaNexo.Core;
 // Stage 2 back office: suppliers, purchases, payables, counts, expenses, petty cash, cash limit and PIN authorization.
 public sealed partial class Restaurant {
-    public static readonly string[] PinActions = ["request.decide", "visit.unlock", "visit.reopen", "drawer.request", "cash.withdraw"];
+    public static readonly string[] PinActions = ["request.decide", "visit.unlock", "visit.reopen", "drawer.request", "cash.withdraw", "payment.refund", "cash.adjust", "stock.count", "dual.configure"];
+    const long DualControlDefault = 100000;
+    // Money leaving above the threshold takes two people: whoever asked and another manager, with their own PIN. A manager's
+    // approvalLimit caps what they may authorize at all. requester: who asked, when that is on record (a waiter's request).
+    void DualControl(BranchState s, JsonObject u, long amount, string requester = "") {
+
+        var limit = u.L("approvalLimit");
+        Need(limit == 0 || amount <= limit, "El límite de autorización de " + u.S("name") + " es de " + Pesos(limit), 403);
+        var threshold = s.Meta.L("dualControlAmount", DualControlDefault);
+        if (amount < threshold) return;
+        var second = s.Approval is { } approval ? approval.Requester != approval.Approver : requester != "" && requester != u.S("id");
+        Need(second, "Desde " + Pesos(threshold) + " lo autoriza otro gerente con su PIN", 409);
+
+    }
     public static readonly string[] UserPermissions = ["payments", "shiftReports", "quickSale", "mergeTables", "transfer"];
     const int PinAttempts = 5;
     long DrawerCash(BranchState s, JsonObject cash) => cash.L("initial") + s.Related("payment", "cashId", cash.S("id")).Where(x => x.S("method") == "cash").Sum(x => x.L("amount") + x.L("tip")) + s.Related("movement", "cashId", cash.S("id")).Sum(x => x.S("type") == "income" ? x.L("amount") : -x.L("amount"));
@@ -127,16 +140,18 @@ public sealed partial class Restaurant {
                     if (!Regex.IsMatch(p.S("passcode"), "^[0-9]{4,6}$") || !passwords.Verify(approver.S("pinHash"), PinMaterial(s, approver, p.S("passcode")))) {
 
                         var fails = approver.L("pinFails") + 1;
-                        if (fails >= PinAttempts) { approver["pinLockedUntil"] = DateTimeOffset.UtcNow.AddMinutes(5).ToString("O"); fails = 0; }
+                        if (fails >= PinAttempts) { approver["pinLockedUntil"] = DateTimeOffset.UtcNow.AddMinutes(5).ToString("O"); fails = 0; Add(s, "ownernotice", J.O("type", "pin-locked", "userId", approver.S("id"), "actor", u.S("id"), "status", "pending", "at", J.Now())); }
                         approver["pinFails"] = fails;
-                        Add(s, "pinauth", J.O("actor", u.S("id"), "approverId", approver.S("id"), "actionType", actionType, "targetId", payload.S("id"), "ok", false, "at", J.Now()));
+                        Add(s, "pinauth", J.O("actor", u.S("id"), "approverId", approver.S("id"), "actionType", actionType, "targetId", payload.S("id"), "reason", payload.S("reason"), "amount", payload.L("amount"), "ok", false, "result", "wrong-pin", "at", J.Now()));
                         result = J.O("ok", false, "error", fails == 0 ? "PIN incorrecto. Se bloqueó por 5 minutos" : "PIN incorrecto", "remaining", fails == 0 ? 0 : PinAttempts - fails);
                         break;
 
                     }
                     approver["pinFails"] = 0;
-                    var inner = Act(s, approver, actionType, (JsonObject)payload.DeepClone());
-                    Add(s, "pinauth", J.O("actor", u.S("id"), "approverId", approver.S("id"), "actionType", actionType, "targetId", payload.S("id"), "ok", true, "at", J.Now()));
+                    s.Approval = (u.S("id"), approver.S("id"));
+                    JsonObject inner;
+                    try { inner = Act(s, approver, actionType, (JsonObject)payload.DeepClone()); } finally { s.Approval = null; }
+                    Add(s, "pinauth", J.O("actor", u.S("id"), "approverId", approver.S("id"), "actionType", actionType, "targetId", payload.S("id"), "reason", payload.S("reason"), "amount", inner["amount"]?.DeepClone() ?? payload.L("amount"), "ok", true, "result", "applied", "at", J.Now()));
                     result = J.O("ok", true, "authorizedBy", approver.S("id"), "result", inner);
                     break;
 
@@ -269,6 +284,7 @@ public sealed partial class Restaurant {
                         lines.Add(J.O("ingredientId", i.S("id"), "theoretical", theoretical, "counted", counted, "difference", difference, "cost", cost));
 
                     }
+                    DualControl(s, u, shortage);
                     count["lines"] = lines;
                     count["shortageCost"] = shortage;
                     count["surplusCost"] = surplus;

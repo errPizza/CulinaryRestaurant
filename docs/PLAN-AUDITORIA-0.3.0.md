@@ -292,6 +292,18 @@ Estados: **Confirmado** (el riesgo existe en el código), **Parcial** (hay una p
 **Acciones.** Perfiles de autorización (supervisor con límites) y segunda aprobación arriba de un importe para reembolsos, cancelaciones y ajustes (umbral en preguntas). Registro de quién solicita, quién autoriza, motivo y resultado. Bloqueo de PIN por intentos y alertas.
 **Comprobación.** Pruebas de escalamiento, PIN bloqueado, sesión revocada y operación fuera de límite.
 
+**Estado (30 de octubre de 2026): hecho.**
+- Ya existía: PIN con hash, bloqueo de 5 minutos tras 5 intentos y registro `pinauth`.
+- Hecho:
+  - Doble aprobación desde 1,000 MXN en devoluciones, cancelaciones, descuentos, cortesías, ajustes de caja y faltantes de conteo. La da otro gerente con su PIN. Una solicitud de un mesero decidida por un gerente ya tiene dos personas.
+  - El umbral se cambia con **Doble aprobación**, en Caja, y siempre entre dos. Es la versión posible de «lo configura el dueño»: el rol `dueno` sólo ve la central y no opera en la sucursal.
+  - Perfil de supervisor: un gerente con `approvalLimit` no autoriza por encima de ese importe, y nadie cambia su propio límite.
+  - `pinauth` guarda quién pidió, quién autorizó, motivo, importe y resultado. Un PIN bloqueado genera un aviso al dueño.
+  - **Devolver un pago** en Caja, en las dos interfaces. Cierra la pantalla pendiente de los hallazgos 4 y 11.
+  - La retención de autorizaciones del hallazgo 8 también detiene `authorize.pin`; antes sólo frenaba la acción directa.
+- Pruebas: `--approval-only`, con escalamiento, autoaprobación, PIN equivocado y bloqueado, límite de supervisor, cancelación, ajuste, conteo, cambio de umbral y sesión cerrada.
+- Falta: dos gerentes con PIN en cada sucursal. Con uno solo, nadie puede autorizar por encima del umbral.
+
 ### 13. Fallos en cada frontera
 **Acciones.** Id de correlación desde la interfaz hasta el almacén; errores tipados y tiempos límite; distinguir «no ejecutado» de «ejecutado con respuesta perdida» (ya existe en parte con `command.send` y el recibo IPC). Pruebas de caída del puente, del backend y de PostgreSQL antes y después del commit.
 **Comprobación.** Por cada frontera, una sola transición financiera y una sola operación persistida.

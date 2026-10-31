@@ -10,6 +10,14 @@ public sealed partial class Restaurant {
 
         result = new();
         if (type == "visit.trail") { Role(u, "manager"); result = MoneyTrail(s, s.Get("visit", p.S("id"))); return true; }
+        if (type == "dual.configure") {
+
+            Role(u, "manager");
+            Need(s.Approval is { } a && a.Requester != a.Approver, "El umbral lo cambian dos gerentes: lo autoriza otro gerente con su PIN", 409);
+            s.Meta["dualControlAmount"] = Amount(p, "amount", 1);
+            return true;
+
+        }
         if (type != "payment.refund") return false;
         Role(u, "manager");
         var pay = s.Get("payment", p.S("id"));
@@ -20,6 +28,7 @@ public sealed partial class Restaurant {
         var amount = p.ContainsKey("amount") ? Amount(p, "amount", 1) : left;
         Need(amount > 0 && amount <= left, "No se puede devolver más de lo cobrado", 409);
         var reason = Text(p, "reason");
+        DualControl(s, u, amount);
         var txn = s.Related("terminaltxn", "paymentId", pay.S("id")).FirstOrDefault(x => x.B("live"));
         var link = s.Related("paylink", "paymentId", pay.S("id")).FirstOrDefault(x => x.B("live"));
         var provider = txn ?? link;
@@ -27,7 +36,7 @@ public sealed partial class Restaurant {
         Need(provider is null || amount == charged, "El proveedor devuelve el cargo completo", 409);
         var route = provider is not null ? "provider" : pay.S("method") == "cash" ? "cash" : "manual";
         if (route == "provider") { Need(provider!.S("status") is "approved" or "paid", "El cargo no está en un estado que se pueda devolver", 409); provider["status"] = "refund-queued"; provider["message"] = "Devolución solicitada: " + reason; }
-        var refund = Add(s, "refund", J.O("paymentId", pay.S("id"), "visitId", v.S("id"), "amount", amount, "method", pay.S("method"), "route", route, "reason", reason, "actor", u.S("id"), "at", J.Now(), "providerRecord", provider?.S("id") ?? "", "creditNote", s.Related("fiscal", "visitId", v.S("id")).Any(x => x.S("status").EndsWith("stamped")) ? "pending" : "none"));
+        var refund = Add(s, "refund", J.O("paymentId", pay.S("id"), "visitId", v.S("id"), "amount", amount, "method", pay.S("method"), "route", route, "reason", reason, "actor", u.S("id"), "requestedBy", s.Approval?.Requester ?? u.S("id"), "approvedBy", s.Approval?.Approver ?? "", "at", J.Now(), "providerRecord", provider?.S("id") ?? "", "creditNote", s.Related("fiscal", "visitId", v.S("id")).Any(x => x.S("status").EndsWith("stamped")) ? "pending" : "none"));
         if (route == "cash") {
 
             var cash = s.Related("cash", "status", "open").FirstOrDefault() ?? throw new BusinessException(409, "Abre una caja para devolver efectivo");

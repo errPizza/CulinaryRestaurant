@@ -362,11 +362,14 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
                     Need(v.S("status") == "open", "Cuenta cerrada");
                     if (p.B("approve")) {
 
+                        var gross = Totals(s, v).L("gross");
+                        var at = r.Obj("discount");
+                        DualControl(s, u, r.S("type") switch { "cancel" => s.Get("unit", r.S("unitId")).L("price"), "comp" => gross, "discount" => at.S("kind") == "percent" ? Cents.Percent(gross, at["value"]?.GetValue<decimal>() ?? 0) : at.L("value"), _ => 0 }, r.S("actor"));
+
                         if (r.S("type") is "discount" or "comp") {
 
                             var d = r.S("type") == "comp" ? J.O("kind", "percent", "value", 100) : r.Obj("discount");
                             ValidateDiscount(d);
-                            var gross = Totals(s, v).L("gross");
                             var value = d["value"]!.GetValue<decimal>();
                             var percentage = d.S("kind") == "percent" ? value : gross == 0 ? (value == 0 ? 0 : decimal.MaxValue) : value * 100 / gross;
                             Need(r.S("type") == "comp" || percentage <= s.Meta.L("discountLimit", 30), "Supera el límite de descuento");
@@ -527,6 +530,7 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
                     user["username"] = username;
                     user["role"] = role;
                     user["active"] = p.B("active", true);
+                    if (p["approvalLimit"] is not null && p.L("approvalLimit") != user.L("approvalLimit")) { Need(user.S("id") != u.S("id"), "Tu límite de autorización lo cambia otro gerente", 403); user["approvalLimit"] = Amount(p, "approvalLimit"); }
                     var permissions = new JsonObject();
                     foreach (var key in UserPermissions) permissions[key] = p.Obj("permissions").B(key, true);
                     user["permissions"] = permissions;
