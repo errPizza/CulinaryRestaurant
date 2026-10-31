@@ -63,6 +63,7 @@ static class Program {
         if (args.Contains("--adapters-only")) { try { await AdapterTests.Run(evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "adapters.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--license-only")) { try { await LicenseTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "licenses.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--checkpoint-only")) { try { await CheckpointTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "checkpoints.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
+        if (args.Contains("--inventory-only")) { try { await InventoryTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "inventory.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--tenant-only")) { try { await TenantTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "tenants.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--integrations-only")) { try { await IntegrationTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "integrations.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--loyalty-only")) { try { await LoyaltyTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "loyalty.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
@@ -205,6 +206,7 @@ static class Program {
             await CentralTests.Run(root, python, evidence);
             await LicenseTests.Run(root, python, evidence);
             await CheckpointTests.Run(root, evidence);
+            await InventoryTests.Run(root, evidence);
             await UiTests.RunLicenseLock(root, evidence);
             await MigrationTests.Run(root, python, evidence);
             await BusinessTests.Run(root, python, evidence);

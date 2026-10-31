@@ -73,6 +73,7 @@ public sealed partial class BranchService {
         if (now - healthRead > TimeSpan.FromMinutes(1)) { healthAlerts = ReadServerHealth(healthFile, now); healthRead = now; }
         var alerts = (JsonArray)healthAlerts.DeepClone();
         if (BackupAlert(now) is { } backup) alerts.Add(backup);
+        if (inventoryAlert is { } inventory) alerts.Add(inventory.DeepClone());
         return alerts;
 
     }

@@ -75,7 +75,7 @@ public sealed partial class Restaurant {
         if (reservation.S("status") != "reserved") return;
         if (reservation.B("prepared")) {
 
-            Add(s, "stockjob", J.O("id", "waste-" + reservation.S("id") + "-" + reservation.L("cycle"), "unitId", reservation.S("unitId"), "visitId", reservation.S("visitId"), "warehouseId", reservation.S("warehouseId"), "status", "pending", "movementType", "prepared-waste", "reason", reason, "at", J.Now(), "lines", reservation.A("lines")));
+            Add(s, "stockjob", J.O("id", "waste-" + reservation.S("id") + "-" + reservation.L("cycle"), "unitId", reservation.S("unitId"), "visitId", reservation.S("visitId"), "warehouseId", reservation.S("warehouseId"), "status", "pending", "movementType", "prepared-waste", "reason", reason, "at", J.Now(), "recipeVersions", new[] { reservation.S("recipeVersionId") }, "lines", reservation.A("lines")));
             reservation["status"] = "waste-queued";
 
         } else {
@@ -132,7 +132,32 @@ public sealed partial class Restaurant {
         }
 
     }
-    JsonObject Consume(BranchState s, string warehouse, string ingredient, long quantity, string type, string source, string actor, bool reserved = false) {
+    // Stock is a running total of immutable movements, so the movements can check it: quantity and value against their sum,
+    // units against the open layers, and what is reserved against what still holds a reservation.
+    public static JsonObject InventoryBalance(BranchState s) {
+
+        var reserved = new Dictionary<string, long>();
+        void Hold(string warehouse, string ingredient, long quantity) { var key = warehouse + "-" + ingredient; reserved[key] = reserved.GetValueOrDefault(key) + quantity; }
+        foreach (var r in s.List("unitstock").Where(x => x.S("status") == "reserved")) foreach (var line in r.A("lines").Objects()) Hold(r.S("warehouseId"), line.S("ingredientId"), line.L("quantity"));
+        foreach (var job in s.List("stockjob").Where(x => x.S("status") == "pending")) foreach (var line in job.A("lines").Objects()) Hold(job.S("warehouseId"), line.S("ingredientId"), line.L("remaining", line.L("quantity")));
+        foreach (var t in s.List("transfer").Where(x => x.S("status") == "sender-approved")) Hold(t.S("fromWarehouseId"), t.S("ingredientId"), t.L("quantity"));
+        var moves = s.List("stockmovement").GroupBy(x => x.S("warehouseId") + "-" + x.S("ingredientId")).ToDictionary(x => x.Key, x => x.ToArray());
+        var layers = s.List("stocklayer").GroupBy(x => x.S("warehouseId") + "-" + x.S("ingredientId")).ToDictionary(x => x.Key, x => x.Sum(y => y.L("remaining")));
+        var problems = new JsonArray();
+        var stocks = s.List("stock").ToArray();
+        foreach (var stock in stocks) {
+
+            var id = stock.S("id");
+            var history = moves.GetValueOrDefault(id, []);
+            var expected = J.O("quantity", history.Sum(x => x.L("quantity")), "value", history.Sum(x => x.L("cost")), "layers", layers.GetValueOrDefault(id), "reserved", reserved.GetValueOrDefault(id));
+            var actual = J.O("quantity", stock.L("quantity"), "value", stock.L("value"), "layers", stock.L("quantity"), "reserved", stock.L("reserved"));
+            if (J.Canonical(expected) != J.Canonical(actual)) problems.Add(J.O("stockId", id, "expected", expected, "actual", actual));
+
+        }
+        return J.O("balanced", problems.Count == 0, "checked", stocks.Length, "problems", problems);
+
+    }
+    JsonObject Consume(BranchState s, string warehouse, string ingredient, long quantity, string type, string source, string actor, bool reserved = false, JsonNode? recipeVersions = null) {
 
         var stock = Stock(s, warehouse, ingredient);
         Need(stock.L("quantity") - (reserved ? 0 : stock.L("reserved")) >= quantity, "Stock no disponible");
@@ -147,7 +172,9 @@ public sealed partial class Restaurant {
         stock["quantity"] = stock.L("quantity") - quantity;
         stock["value"] = stock.L("value") - costTotal;
         if (reserved) stock["reserved"] = stock.L("reserved") - quantity;
-        return Add(s, "stockmovement", J.O("warehouseId", warehouse, "ingredientId", ingredient, "quantity", -quantity, "cost", -costTotal, "costMethod", method, "type", type, "sourceId", source, "actor", actor, "at", J.Now(), "layers", trace));
+        var movement = J.O("warehouseId", warehouse, "ingredientId", ingredient, "quantity", -quantity, "cost", -costTotal, "costMethod", method, "type", type, "sourceId", source, "actor", actor, "at", J.Now(), "layers", trace);
+        if (recipeVersions is not null) movement["recipeVersions"] = recipeVersions.DeepClone();
+        return Add(s, "stockmovement", movement);
 
     }
     void ReceiveStock(BranchState s, string warehouse, string ingredient, long quantity, long cost, string type, string source, string actor) {
@@ -209,9 +236,17 @@ public sealed partial class Restaurant {
 
                     var original = s.Get("stockmovement", p.S("movementId"));
                     Need(original.L("quantity") < 0 && original.S("type") == "sale", "Sólo devolución física de consumo registrado");
-                    Need(!s.Related("stockmovement", "type", "return").Any(x => x.S("sourceId") == original.S("id")), "Consumo ya devuelto");
+                    // A movement adds up every portion of a sale, so one of them can come back. The sale itself is never touched.
+                    var returned = s.Related("stockmovement", "type", "return").Where(x => x.S("sourceId") == original.S("id")).ToArray();
+                    var left = -original.L("quantity") - returned.Sum(x => x.L("quantity"));
+                    var leftCost = -original.L("cost") - returned.Sum(x => x.L("cost"));
+                    Need(left > 0, "Consumo ya devuelto");
+                    ValidateIngredientUnit(s.Get("ingredient", original.S("ingredientId")), p.S("unit", "base"));
+                    var back = OptionalQuantity(p, "quantity", p.S("unit", "base"));
+                    if (back == 0) back = left;
+                    Need(back <= left, "No se puede devolver más de lo consumido");
                     Text(p, "reason");
-                    ReceiveStock(s, original.S("warehouseId"), original.S("ingredientId"), -original.L("quantity"), -original.L("cost"), "return", original.S("id"), u.S("id"));
+                    ReceiveStock(s, original.S("warehouseId"), original.S("ingredientId"), back, back == left ? leftCost : CostAt(CostRate(-original.L("cost"), -original.L("quantity")), back), "return", original.S("id"), u.S("id"));
                     break;
 
                 }
@@ -221,7 +256,7 @@ public sealed partial class Restaurant {
                     if (job.S("status") == "done") { result = J.O("duplicate", true); break; }
                     Need(job.S("status") == "pending", "Trabajo inválido");
                     var line = job.A("lines").Objects().FirstOrDefault(x => x.L("remaining", x.L("quantity")) > 0);
-                    if (line is not null) { var left = line.L("remaining", line.L("quantity")); var batch = s.Related("stocklayer", "warehouseId", job.S("warehouseId")).Where(x => x.S("ingredientId") == line.S("ingredientId") && x.L("remaining") > 0).OrderBy(x => x.L("order")).Take(20).Sum(x => x.L("remaining")); var take = Math.Min(left, batch); Need(take > 0, "Capas insuficientes para consumo reservado"); Consume(s, job.S("warehouseId"), line.S("ingredientId"), take, job.S("movementType", "sale"), id, u.S("id"), true); line["remaining"] = left - take; }
+                    if (line is not null) { var left = line.L("remaining", line.L("quantity")); var batch = s.Related("stocklayer", "warehouseId", job.S("warehouseId")).Where(x => x.S("ingredientId") == line.S("ingredientId") && x.L("remaining") > 0).OrderBy(x => x.L("order")).Take(20).Sum(x => x.L("remaining")); var take = Math.Min(left, batch); Need(take > 0, "Capas insuficientes para consumo reservado"); Consume(s, job.S("warehouseId"), line.S("ingredientId"), take, job.S("movementType", "sale"), id, u.S("id"), true, job["recipeVersions"]); line["remaining"] = left - take; }
                     if (job.A("lines").Objects().All(x => x.L("remaining", x.L("quantity")) == 0)) { job["status"] = "done"; job["completedAt"] = J.Now(); }
                     break;
 

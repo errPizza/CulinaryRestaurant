@@ -30,7 +30,7 @@ public static class ApiHost {
         if (checkpoints is not null && licensing is not null) builder.Services.AddSingleton<IHostedService>(sp => new CheckpointWorker(sp.GetRequiredService<BranchService> (), checkpoints, sp.GetRequiredService<ILogger<CheckpointWorker>> ()));
         if (backups is not null && store is PostgresBranchStore offsite) builder.Services.AddSingleton<IHostedService>(sp => new OffsiteBackupWorker(sp.GetRequiredService<BranchService> (), offsite, backups, options.LabDirectory ?? "/var/lib/culinaryos-app", sp.GetRequiredService<ILogger<OffsiteBackupWorker>> ()));
         builder.Services.AddSignalR(o => { o.MaximumReceiveMessageSize = 16 * 1024; o.EnableDetailedErrors = false; });
-        builder.Services.AddHostedService<InventoryWorker> (); builder.Services.AddHostedService<OutboxWorker> ();
+        builder.Services.AddHostedService<InventoryWorker> (); builder.Services.AddHostedService<InventoryBalanceWorker> (); builder.Services.AddHostedService<OutboxWorker> ();
         if (store is PostgresBranchStore branchStore && options.Credentials is not null) builder.Services.AddSingleton<IHostedService> (sp => new CentralSyncWorker(branchStore, "/etc/culinaryos/branch.json", options.Credentials, sp.GetRequiredService<ILogger<CentralSyncWorker>> ()));
         
         if (printer is not null) builder.Services.AddSingleton<IHostedService> (sp => new PrintWorker(sp.GetRequiredService<BranchService> (), printer, sp.GetRequiredService<ILogger<PrintWorker>> ()));

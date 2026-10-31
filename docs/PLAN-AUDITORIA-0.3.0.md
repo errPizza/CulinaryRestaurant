@@ -259,6 +259,16 @@ Estados: **Confirmado** (el riesgo existe en el código), **Parcial** (hay una p
 **Acciones.** Guardar versión de receta y costo en cada movimiento; movimientos inmutables con compensaciones; política explícita de existencias negativas; idempotencia de reservar, liberar y consumir ante reintentos.
 **Comprobación.** Pruebas: última unidad pedida desde dos terminales a la vez, cancelación parcial de comanda preparada, devolución de una venta antigua y conciliación de compras, ventas, mermas y ajustes.
 
+**Estado (30 de octubre de 2026): hecho.**
+- Ya estaba bien, y ahora tiene prueba: reservas atómicas, receta congelada al enviar, movimientos inmutables, liberación idempotente y consumo una sola vez.
+- Hecho:
+  - Cada movimiento de venta y de merma preparada guarda su versión de receta, además del costo.
+  - `stock.return` admite devolución parcial, con costo proporcional y sin superar lo consumido. Antes, una venta de tres porciones sólo podía devolverse completa.
+  - `InventoryBalance`: cada 6 horas compara existencias contra movimientos, capas y reservas, y avisa al gerente si no cuadran.
+  - Política de existencias negativas, explícita: no hay. Está en `docs/ARQUITECTURA.md`.
+- Pruebas (`--inventory-only`): última unidad desde dos terminales a la vez, reintento idempotente, cancelación parcial de una comanda preparada, devolución de una venta anterior, y conciliación tras compra, venta, merma, conteo, traspaso y devolución. También detecta una existencia alterada.
+- Falta: en interfaz, la conciliación sólo se ve como aviso; no hay pantalla con el detalle, que queda en el journal.
+
 ### 11. Política monetaria y fiscal
 **Acciones.** Documento único de redondeo (centavos enteros, IVA incluido, reparto de residuos en divisiones y descuentos); funciones centralizadas; trazabilidad venta → pago → devolución → CFDI.
 **Comprobación.** Pruebas de propiedades (FsCheck o generador propio): la suma de partes siempre es igual al total, en divisiones, descuentos, propinas y pagos mixtos.

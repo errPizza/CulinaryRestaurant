@@ -36,6 +36,13 @@ npx wrangler r2 bucket create culinary-bitacora-SITIO
 npx wrangler r2 bucket lock add culinary-bitacora-SITIO --name retencion --retention-indefinite
 ```
 
+## Inventario
+
+- **Sin existencias negativas.** Una comanda sin insumos suficientes no se envía a cocina: se rechaza con «Stock insuficiente» antes de escribir nada. Ni un retiro ni un conteo pueden tocar lo reservado por comandas abiertas. Si el sistema dice que no hay y sí hay, se corrige con un conteo, no vendiendo en negativo.
+- **Reservar, consumir.** Enviar a cocina reserva con la receta de ese momento. Liquidar encola el consumo con esa misma receta, aunque después cambie.
+- **Movimientos inmutables.** Guardan costo y versión de receta, y nada los edita. Una devolución es un movimiento nuevo que apunta al original, incluso parcial, y nunca supera lo consumido.
+- **Conciliación.** Cada 6 horas, `InventoryBalance` compara cantidad y valor de cada existencia contra la suma de sus movimientos, contra las capas abiertas y contra lo que sigue reservado. Si no cuadra, avisa al gerente. No corrige nada: un conteo encima borraría el rastro.
+
 ## Límites explícitos
 
 IPC original: tramas de 128 KiB y eventos de 64 KiB. La extensión limita transacciones a 56 KiB, 256 cambios y páginas a 32 registros/~100 KiB. La importación rechaza registros mayores de 40 KiB, incluidas imágenes inline grandes; deben externalizarse en una copia hacia HTTPS de confianza. No se truncan datos. Operaciones demasiado grandes se rechazan y requieren dividir el trabajo.
