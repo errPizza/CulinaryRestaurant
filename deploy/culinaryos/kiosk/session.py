@@ -15,6 +15,8 @@ import time
 
 APP = "/opt/culinaryos-app/client/CulinaryRestaurant"
 CONFIG = "/opt/culinaryos-app/kiosk/openbox.xml"
+LOG_LIMIT = 256 * 1024
+TAIL_BYTES = 4096
 
 
 def valid_ready(raw, pid, nonce):
@@ -43,6 +45,47 @@ class Watchdog:
                 else now - self.last_paint > 45)
 
 
+def exit_cause(returncode):
+    if returncode is None:
+        return "sin senales de la interfaz"
+    if returncode < 0:
+        try:
+            return "senal " + signal.Signals(-returncode).name
+        except ValueError:
+            return f"senal {-returncode}"
+    return f"codigo de salida {returncode}"
+
+
+def append_log(path, text):
+    """A crash must leave its cause behind; the log can never stop the recovery."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.is_file() and path.stat().st_size > LOG_LIMIT:
+            path.replace(path.with_suffix(".log.1"))
+        with path.open("a", encoding="utf-8") as log:
+            log.write(text)
+    except OSError:
+        pass
+
+
+def tail(path):
+    try:
+        with path.open("rb") as output:
+            output.seek(max(0, path.stat().st_size - TAIL_BYTES))
+            return output.read().decode("utf-8", "replace")
+    except OSError:
+        return ""
+
+
+def trim(path):
+    """The output lives in the session's small tmpfs for as long as the app runs."""
+    try:
+        if path.stat().st_size > LOG_LIMIT:
+            os.truncate(path, 0)
+    except OSError:
+        pass
+
+
 def terminate(child):
     if child is None:
         return
@@ -67,6 +110,8 @@ class Session:
         import tkinter as tk
         self.root = root
         self.runtime = runtime
+        state = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local/state")
+        self.log = Path(state) / "culinary-restaurant/kiosk.log"
         self.child = None
         self.wm = None
         self.guard = None
@@ -114,13 +159,26 @@ class Session:
     def start(self, now):
         self.nonce = secrets.token_hex(32)
         env = dict(os.environ, CULINARY_RESTAURANT_KIOSK="1",
-                   CULINARY_RESTAURANT_KIOSK_NONCE=self.nonce)
-        self.child = subprocess.Popen([APP], env=env, start_new_session=True,
-                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                   CULINARY_RESTAURANT_KIOSK_NONCE=self.nonce,
+                   # WebKitGTK's DMA-BUF path fails on some real GPUs and never runs on the
+                   # software renderer of the test VMs, where shortcuts do work.
+                   WEBKIT_DISABLE_DMABUF_RENDERER="1")
+        output_path = self.runtime / "app-output.log"
+        output_path.write_bytes(b"")
+        with output_path.open("ab") as output:
+            self.child = subprocess.Popen([APP], env=env, start_new_session=True,
+                                          stdout=output, stderr=output)
         self.guard = Watchdog(now)
 
-    def recover(self, now):
+    def record_failure(self, now, reason):
+        when = time.strftime("%Y-%m-%d %H:%M:%S")
+        append_log(self.log, f"{when} Recuperando: {reason}, {now - self.guard.started:.0f} s "
+                             f"despues de abrir\n{tail(self.runtime / 'app-output.log')}\n")
+
+    def recover(self, now, reason=None):
         self.show_loading("Recuperando Culinary Restaurant…")
+        if self.guard is not None:
+            self.record_failure(now, reason or exit_cause(self.child and self.child.poll()))
         terminate(self.child)
         self.child = None
         self.retries += 1
@@ -150,12 +208,13 @@ class Session:
                     if self.visible:
                         self.root.withdraw()
                         self.visible = False
+            trim(self.runtime / "app-output.log")
             if self.child and (self.child.poll() is not None or self.guard.expired(now)):
                 self.recover(now)
             elif self.child and self.guard.last_paint is not None and now - self.guard.started > 120:
                 self.retries = 0
-        except OSError:
-            self.recover(now)
+        except OSError as error:
+            self.recover(now, f"error de la sesion: {error}")
         finally:
             if not self.stopping:
                 self.root.after(250, self.tick)

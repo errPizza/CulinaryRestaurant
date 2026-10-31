@@ -36,6 +36,33 @@ class KioskRecovery(unittest.TestCase):
             self.assertFalse(guard.expired(now + 11))
         self.assertTrue(guard.expired(650))
 
+    def test_recovery_records_why_the_interface_went_away(self):
+        import signal
+        self.assertEqual(session.exit_cause(None), "sin senales de la interfaz")
+        self.assertEqual(session.exit_cause(1), "codigo de salida 1")
+        self.assertEqual(session.exit_cause(-signal.SIGSEGV), "senal SIGSEGV")
+        self.assertEqual(session.exit_cause(-signal.SIGINT), "senal SIGINT")
+        self.assertEqual(session.exit_cause(-200), "senal 200")
+
+    def test_failure_log_keeps_the_end_of_the_output_and_stays_small(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            log = root / "state/kiosk.log"
+            session.append_log(log, "primer fallo\n")
+            self.assertEqual(log.read_text(encoding="utf-8"), "primer fallo\n")
+            log.write_bytes(b"x" * (session.LOG_LIMIT + 1))
+            session.append_log(log, "segundo fallo\n")
+            self.assertEqual(log.read_text(encoding="utf-8"), "segundo fallo\n")
+            self.assertEqual(log.with_suffix(".log.1").stat().st_size, session.LOG_LIMIT + 1)
+            output = root / "app-output.log"
+            output.write_bytes(b"a" * session.TAIL_BYTES + b"\xffERROR FINAL")
+            self.assertTrue(session.tail(output).endswith("ERROR FINAL"))
+            self.assertLessEqual(len(session.tail(output).encode()), session.TAIL_BYTES + 3)
+            self.assertEqual(session.tail(root / "absent"), "")
+            blocked = root / "file"
+            blocked.write_text("")
+            session.append_log(blocked / "kiosk.log", "sin espacio\n")
+
     def test_prior_process_cannot_dismiss_loading_screen(self):
         nonce = "a" * 64
         value = {"protocol": 1, "pid": 123, "nonce": nonce}

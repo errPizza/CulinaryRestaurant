@@ -96,6 +96,86 @@ pub fn power(args: &Value) -> Result<Value, String> {
     Ok(json!({"ok":true,"data":{"action":verb}}))
 }
 
+// Battery of a laptop (sysfs) or of a UPS (NUT). Only what the hardware reports: a value
+// it does not give stays null, and nothing is shown unless the machine is off the mains.
+const POWER_SUPPLIES: &str = "/sys/class/power_supply";
+const UPS: &str = "culinaryos@localhost";
+const MAX_RUNTIME_SECONDS: f64 = 172_800.0;
+
+fn sysfs(dir: &std::path::Path, name: &str) -> Option<String> {
+    Some(std::fs::read_to_string(dir.join(name)).ok()?.trim().to_owned())
+}
+
+fn sysfs_number(dir: &std::path::Path, name: &str) -> Option<f64> {
+    sysfs(dir, name)?.parse().ok()
+}
+
+fn runtime(seconds: f64) -> Value {
+    if seconds > 0.0 && seconds <= MAX_RUNTIME_SECONDS { json!(seconds.round() as u64) } else { Value::Null }
+}
+
+// Energy (µWh over µW) or charge (µAh over µA), whichever the driver exposes.
+fn laptop_runtime(dir: &std::path::Path) -> Value {
+    if let Some(seconds) = sysfs_number(dir, "time_to_empty_now") {
+        return runtime(seconds);
+    }
+    for (stock, rate) in [("energy_now", "power_now"), ("charge_now", "current_now")] {
+        if let (Some(stock), Some(rate)) = (sysfs_number(dir, stock), sysfs_number(dir, rate)) {
+            return if rate > 0.0 { runtime(stock / rate * 3600.0) } else { Value::Null };
+        }
+    }
+    Value::Null
+}
+
+fn laptop_battery(root: &std::path::Path) -> Option<Value> {
+    let mut mains = false;
+    let mut discharging = None;
+    let mut supplies: Vec<_> = std::fs::read_dir(root).ok()?.flatten().map(|entry| entry.path()).collect();
+    supplies.sort();
+    for dir in supplies {
+        match sysfs(&dir, "type").as_deref() {
+            Some("Mains") | Some("USB") if sysfs(&dir, "online").as_deref() == Some("1") => mains = true,
+            // scope=Device is a wireless mouse or similar, not what powers this machine.
+            Some("Battery") if sysfs(&dir, "scope").as_deref() != Some("Device")
+                && sysfs(&dir, "status").as_deref() == Some("Discharging") && discharging.is_none() => discharging = Some(dir),
+            _ => {}
+        }
+    }
+    let dir = discharging.filter(|_| !mains)?;
+    let percent = sysfs_number(&dir, "capacity").map(|value| value.clamp(0.0, 100.0).round() as u64);
+    Some(json!({"source":"battery","percent":percent,"seconds":laptop_runtime(&dir),"low":false}))
+}
+
+fn ups_battery(report: &str) -> Option<Value> {
+    let value = |name: &str| report.lines().find_map(|line| line.strip_prefix(name)?.strip_prefix(": ").map(str::trim));
+    let status: Vec<&str> = value("ups.status")?.split_whitespace().collect();
+    if !status.contains(&"OB") {
+        return None;
+    }
+    let percent = value("battery.charge").and_then(|v| v.parse::<f64>().ok()).map(|v| v.clamp(0.0, 100.0).round() as u64);
+    let seconds = value("battery.runtime").and_then(|v| v.parse::<f64>().ok()).map_or(Value::Null, runtime);
+    Some(json!({"source":"ups","percent":percent,"seconds":seconds,"low":status.contains(&"LB")}))
+}
+
+pub fn battery_status() -> Result<Value, String> {
+    if !enabled() {
+        return Ok(json!({"ok":true,"data":{"available":false}}));
+    }
+    // The UPS answers for the whole restaurant, so it wins while it is the one on battery.
+    let report = std::process::Command::new("/usr/bin/upsc")
+        .arg(UPS)
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+        .unwrap_or_default();
+    let found = ups_battery(&report).or_else(|| laptop_battery(std::path::Path::new(POWER_SUPPLIES)));
+    Ok(json!({"ok":true,"data": match found {
+        Some(mut battery) => { battery["available"] = true.into(); battery["onBattery"] = true.into(); battery }
+        None => json!({"available":true,"onBattery":false}),
+    }}))
+}
+
 // Wi-Fi of the appliance kiosk through NetworkManager. Fixed nmcli verbs only; the
 // renderer supplies an SSID and password as plain arguments, never a command line.
 fn nmcli(args: &[&str]) -> Result<String, String> {
@@ -201,4 +281,90 @@ pub fn network_connect(args: &Value) -> Result<Value, String> {
     }
     nmcli(&command)?;
     Ok(json!({"ok":true,"data":{"ssid":ssid}}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    fn supply(root: &Path, name: &str, files: &[(&str, &str)]) {
+        let dir = root.join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        for (file, value) in files {
+            std::fs::write(dir.join(file), format!("{value}\n")).unwrap();
+        }
+    }
+
+    fn fixture(name: &str) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!("culinary-battery-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    #[test]
+    fn laptop_on_battery_reports_charge_and_runtime_from_energy() {
+        let root = fixture("energy");
+        supply(&root, "AC", &[("type", "Mains"), ("online", "0")]);
+        supply(&root, "BAT0", &[("type", "Battery"), ("status", "Discharging"), ("capacity", "64"), ("energy_now", "20000000"), ("power_now", "10000000")]);
+        let battery = laptop_battery(&root).unwrap();
+        assert_eq!(battery["percent"], 64);
+        assert_eq!(battery["seconds"], 7200);
+    }
+
+    #[test]
+    fn laptop_runtime_also_comes_from_charge_or_the_driver() {
+        let root = fixture("charge");
+        supply(&root, "BAT0", &[("type", "Battery"), ("status", "Discharging"), ("capacity", "50"), ("charge_now", "1500000"), ("current_now", "3000000")]);
+        assert_eq!(laptop_battery(&root).unwrap()["seconds"], 1800);
+        supply(&root, "BAT0", &[("time_to_empty_now", "900")]);
+        assert_eq!(laptop_battery(&root).unwrap()["seconds"], 900);
+    }
+
+    #[test]
+    fn missing_or_idle_rate_gives_percent_without_inventing_time() {
+        let root = fixture("no-rate");
+        supply(&root, "BAT0", &[("type", "Battery"), ("status", "Discharging"), ("capacity", "30"), ("energy_now", "20000000"), ("power_now", "0")]);
+        let battery = laptop_battery(&root).unwrap();
+        assert_eq!(battery["percent"], 30);
+        assert!(battery["seconds"].is_null());
+    }
+
+    #[test]
+    fn mains_charging_and_peripherals_show_nothing() {
+        let root = fixture("mains");
+        supply(&root, "AC", &[("type", "Mains"), ("online", "1")]);
+        supply(&root, "BAT0", &[("type", "Battery"), ("status", "Discharging"), ("capacity", "99")]);
+        assert!(laptop_battery(&root).is_none());
+        let root = fixture("charging");
+        supply(&root, "BAT0", &[("type", "Battery"), ("status", "Charging"), ("capacity", "70")]);
+        assert!(laptop_battery(&root).is_none());
+        let root = fixture("mouse");
+        supply(&root, "hidpp_battery_0", &[("type", "Battery"), ("scope", "Device"), ("status", "Discharging"), ("capacity", "40")]);
+        assert!(laptop_battery(&root).is_none());
+        assert!(laptop_battery(&root.join("absent")).is_none());
+    }
+
+    #[test]
+    fn ups_counts_only_while_on_battery() {
+        let on_battery = ups_battery("battery.charge: 87\nbattery.runtime: 1260\nups.status: OB DISCHRG\n").unwrap();
+        assert_eq!(on_battery["source"], "ups");
+        assert_eq!(on_battery["percent"], 87);
+        assert_eq!(on_battery["seconds"], 1260);
+        assert_eq!(on_battery["low"], false);
+        assert_eq!(ups_battery("battery.charge: 9\nups.status: OB LB\n").unwrap()["low"], true);
+        assert!(ups_battery("battery.charge: 100\nups.status: OL\n").is_none());
+        assert!(ups_battery("ups.status: OL CHRG\n").is_none());
+        assert!(ups_battery("").is_none());
+    }
+
+    #[test]
+    fn ups_without_estimate_keeps_only_what_it_reports() {
+        let battery = ups_battery("ups.status: OB\nbattery.charge: 50\n").unwrap();
+        assert!(battery["seconds"].is_null());
+        assert_eq!(battery["percent"], 50);
+        assert!(ups_battery("ups.status: OB\n").unwrap()["percent"].is_null());
+        assert!(ups_battery("ups.status: OB\nbattery.runtime: 999999\n").unwrap()["seconds"].is_null());
+    }
 }
