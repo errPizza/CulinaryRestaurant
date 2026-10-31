@@ -107,31 +107,33 @@ static class PrintTests {
 
         using var printer = new SimulatedPrinter();
         var driver = new EscPosPrintDriver(new PrinterOptions(printer.Uri));
+        // The driver is done once the bytes are sent; the simulated printer keeps them when it sees the connection close.
+        async Task<bool> Print() { var count = printer.Printed.Length; var printed = await service.ProcessPrint(driver); for (var i = 0; printed && i < 20 && printer.Printed.Length == count; i++) await Task.Delay(100); return printed; }
         var first = await Bill(table.S("id"));
-        Check(await service.ProcessPrint(driver), "pending bill is printed");
+        Check(await Print(), "pending bill is printed");
         var bill = printer.Printed.Single();
         var text = EscPosReader.Text(bill);
         Check(text.Contains("Café La Niña") && text.Contains("Mesa 01") && text.Contains("Mesero Ñuño") && text.Contains("2 x Café de olla") && text.Contains("$90.00") && text.Contains("1 x Piña colada") && text.Contains("TOTAL") && text.Contains("$180.00") && text.Contains("IVA incluido"), "bill shows restaurant, table, waiter, grouped lines and totals");
         Check(EscPosReader.Has(bill, Cut) && !EscPosReader.Has(bill, Pulse), "bill cuts the paper and does not open the drawer");
         var done = await Job(first);
         Check(done.S("status") == "submitted" && done.S("evidence").Contains("lista") && done.S("driver").StartsWith("ESC/POS"), "printed job records the driver and the printer status as evidence");
-        Check(!await service.ProcessPrint(driver) && printer.Printed.Length == 1, "a printed job is never printed again");
+        Check(!await Print() && printer.Printed.Length == 1, "a printed job is never printed again");
 
         printer.Paper = false;
         var noPaper = await Bill();
-        await Deny(() => service.ProcessPrint(driver), "sin papel", "printer without paper is reported before claiming the job");
+        await Deny(() => Print(), "sin papel", "printer without paper is reported before claiming the job");
         Check((await Job(noPaper)).S("status") == "pending" && printer.Printed.Length == 1, "a job the printer cannot take stays pending and untouched");
         printer.Paper = true;
-        Check(await service.ProcessPrint(driver) && printer.Printed.Length == 2, "the pending job prints once paper is back");
+        Check(await Print() && printer.Printed.Length == 2, "the pending job prints once paper is back");
         printer.CoverOpen = true;
         var coverOpen = await Bill();
-        await Deny(() => service.ProcessPrint(driver), "tapa abierta", "open cover holds printing");
+        await Deny(() => Print(), "tapa abierta", "open cover holds printing");
         printer.CoverOpen = false;
-        Check(await service.ProcessPrint(driver) && (await Job(coverOpen)).S("status") == "submitted", "job held by the open cover prints after closing it");
+        Check(await Print() && (await Job(coverOpen)).S("status") == "submitted", "job held by the open cover prints after closing it");
 
         printer.Paper = false;
         var drawer = await Act("drawer.request", J.O("reason", "Cambio de fondo"));
-        Check(await service.ProcessPrint(driver), "drawer opens even without paper");
+        Check(await Print(), "drawer opens even without paper");
         var kick = printer.Printed.Last();
         Check(EscPosReader.Has(kick, Pulse) && !EscPosReader.Has(kick, Cut) && EscPosReader.Text(kick).Trim() == "" && (await Job(drawer.S("id"))).S("status") == "submitted", "drawer job sends only the pulse: no paper, no cut");
         printer.Paper = true;
@@ -139,21 +141,21 @@ static class PrintTests {
         printer.DropAfter = 20;
         var dropped = await Bill();
         var before = printer.Printed.Length;
-        Check(await service.ProcessPrint(driver), "a job interrupted mid-ticket is still recorded");
+        Check(await Print(), "a job interrupted mid-ticket is still recorded");
         Check((await Job(dropped)).S("status") == "uncertain" && (await Job(dropped)).S("evidence").Contains("revisar"), "an interrupted ticket is uncertain, for a manager to check the paper");
         printer.DropAfter = null;
-        Check(!await service.ProcessPrint(driver) && printer.Printed.Length == before + 1, "an uncertain ticket is never reprinted by itself");
+        Check(!await Print() && printer.Printed.Length == before + 1, "an uncertain ticket is never reprinted by itself");
         var retry = await Act("print.retry", J.O("id", dropped, "reason", "Salió cortado"));
-        Check(await service.ProcessPrint(driver) && EscPosReader.Text(printer.Printed.Last()).Contains("REIMPRESIÓN") && (await Job(retry.S("id"))).S("status") == "submitted", "a manager's retry prints once more, marked as a reprint");
+        Check(await Print() && EscPosReader.Text(printer.Printed.Last()).Contains("REIMPRESIÓN") && (await Job(retry.S("id"))).S("status") == "submitted", "a manager's retry prints once more, marked as a reprint");
 
         var dead = new EscPosPrintDriver(new PrinterOptions("tcp://127.0.0.1:" + FreePort()));
         var offline = await Bill();
         await Deny(() => service.ProcessPrint(dead), "sin conexión", "an unreachable printer leaves the job pending");
-        Check((await Job(offline)).S("status") == "pending" && await service.ProcessPrint(driver), "the job prints when a printer answers again");
+        Check((await Job(offline)).S("status") == "pending" && await Print(), "the job prints when a printer answers again");
 
         printer.Silent = true;
         var silent = await Bill();
-        Check(await service.ProcessPrint(driver) && (await Job(silent)).S("evidence").Contains("sin estado"), "a printer without real-time status still prints and says the status was not confirmed");
+        Check(await Print() && (await Job(silent)).S("evidence").Contains("sin estado"), "a printer without real-time status still prints and says the status was not confirmed");
         printer.Silent = false;
 
         var device = Path.Combine(folder, "lp0");

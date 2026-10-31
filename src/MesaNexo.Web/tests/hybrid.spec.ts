@@ -556,7 +556,8 @@ test('integrations run in simulation: terminal, platform order, PAC stamp, outbo
     await login(page, 'integrations');
     const dialog = () => page.getByRole('dialog');
     const save = async () => { await dialog().getByRole('button', { name: 'Guardar', exact: true }).click(); await expect(dialog()).toHaveCount(0); };
-    const exec = async (type: string, payload: any) => { const r = await call('integrations', 'execute', { type, payload }); if (r.ok) await call('integrations', 'ack', { operationId: r.data.operationId }); return r; };
+    // The page's own last operation may still be waiting for its receipt; until then the client refuses another one.
+    const exec = async (type: string, payload: any) => { let r: any; await expect.poll(async () => { r = await call('integrations', 'execute', { type, payload }); return r.ok || !/incierta/.test(r.error || ''); }, { timeout: 15000 }).toBe(true); if (r.ok) await call('integrations', 'ack', { operationId: r.data.operationId }); return r; };
     const shot = async (name: string) => { await page.waitForTimeout(650); await page.screenshot({ path: path.join(evidence, 'etapa4-' + name + '.png'), fullPage: true }); };
     await nav(page, 'Integraciones');
     await expect(page.getByText('Todo está en simulación.')).toBeVisible();
@@ -604,7 +605,7 @@ test('integrations run in simulation: terminal, platform order, PAC stamp, outbo
     await expect(page.getByText(/Visa •••• 4242 · aut\./)).toBeVisible();
     await page.getByRole('button', { name: 'Cerrar detalle', exact: true }).click();
     // Close the platform order and stamp its invoice with the simulated PAC.
-    for (const unit of state.units.filter((u: any) => u.visitId === accepted.visitId && u.status === 'received')) { await exec('unit.state', { id: unit.id, status: 'preparing' }); await exec('unit.state', { id: unit.id, status: 'ready' }); }
+    for (const unit of state.units.filter((u: any) => u.visitId === accepted.visitId && u.status === 'received')) { expect((await exec('unit.state', { id: unit.id, status: 'preparing' })).ok).toBe(true); expect((await exec('unit.state', { id: unit.id, status: 'ready' })).ok).toBe(true); }
     await nav(page, 'Delivery y clientes');
     await page.locator('.kc.platform', { hasText: 'Laura QA' }).getByRole('button', { name: 'Entregar al repartidor' }).click();
     await expect(page.locator('.kc.platform', { hasText: 'Laura QA' }).getByText(/Entregado a/)).toBeVisible();
