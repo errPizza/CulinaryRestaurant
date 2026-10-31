@@ -293,7 +293,7 @@ class CulinaryInstallation(unittest.TestCase):
         return bundle, build_root, work, binary
     def test_resume_reuses_matching_client_without_running_compiler(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(i, 'run') as command:
-            bundle, build_root, work, binary = self.compiled_fixture(Path(tmp))
+            bundle, build_root, work, binary = self.compiled_fixture(Path(tmp).resolve())
             before = binary.read_bytes()
             self.assertEqual(i.find_compiled_client(bundle, build_root, work.stat().st_uid), binary)
             command.assert_not_called()
@@ -378,17 +378,17 @@ class CulinaryInstallation(unittest.TestCase):
         (bundle / 'runtime/mesanexo_ipc.py').write_bytes((ROOT / 'runtime/mesanexo_ipc.py').read_bytes())
         (bundle / 'deploy/culinaryos').mkdir(parents=True)
         (bundle / 'deploy/culinaryos/extension-history.json').write_bytes((ROOT / 'deploy/culinaryos/extension-history.json').read_bytes())
-        legacy = (ROOT / 'artifacts/culinaryos-cd-r3/runtime/mesanexo_ipc.py').read_bytes()
+        legacy = (ROOT / 'tests/fixtures/delivered-extensions/r1-r2-lf.py').read_bytes()
         (runtime / 'mesanexo_ipc.py').write_bytes(legacy)
         return bundle, runtime, legacy
     def test_every_delivered_extension_is_known_for_upgrade(self):
         payload = (ROOT / 'runtime/mesanexo_ipc.py').read_bytes()
         self.assertNotIn(b'\r\n', payload)
         known = i.known_extensions(ROOT)
-        delivered = list((ROOT / 'artifacts').glob('*/runtime/mesanexo_ipc.py'))
+        delivered = list((ROOT / 'tests/fixtures/delivered-extensions').glob('*.py'))
         self.assertTrue(delivered)
         for path in delivered:
-            with self.subTest(release=path.parts[-3]):
+            with self.subTest(release=path.name):
                 self.assertIn(i.digest(path), known)
         self.assertNotIn(hashlib.sha256(payload).hexdigest(), known)
     def test_known_earlier_extension_reported_for_upgrade_unchanged(self):
