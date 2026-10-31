@@ -113,14 +113,24 @@ class Session:
 
     def start(self, now):
         self.nonce = secrets.token_hex(32)
-        env = dict(os.environ, CULINARY_RESTAURANT_KIOSK="1",
+        env = dict(os.environ, CULINARY_RESTAURANT_KIOSK="1", RUST_BACKTRACE="1",
                    CULINARY_RESTAURANT_KIOSK_NONCE=self.nonce)
-        self.child = subprocess.Popen([APP], env=env, start_new_session=True,
-                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # The previous run is kept: after a crash it holds why the client died.
+        log = self.runtime / "client.log"
+        if log.is_file():
+            log.replace(self.runtime / "client.previous.log")
+        with log.open("wb") as output:
+            self.child = subprocess.Popen([APP], env=env, start_new_session=True,
+                                          stdout=output, stderr=subprocess.STDOUT)
         self.guard = Watchdog(now)
 
     def recover(self, now):
         self.show_loading("Recuperando Culinary Restaurant…")
+        if self.child:
+            code = self.child.poll()
+            reason = "sin latido de la interfaz" if code is None else f"salida {code}"
+            with (self.runtime / "client.log").open("a") as output:
+                output.write(f"\n[sesion] recuperacion: {reason}\n")
         terminate(self.child)
         self.child = None
         self.retries += 1

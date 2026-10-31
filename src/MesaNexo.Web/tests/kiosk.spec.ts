@@ -207,6 +207,65 @@ test('kiosk shows the wired link and joins open and protected Wi-Fi networks', a
 
 });
 
+const signedIn = { user: { id: 'u1', name: 'Pizza de Peperoni', role: 'gerente' }, restaurant: { name: 'McMamadas', branchId: 'b1', modules: [] }, branches: [{ id: 'b1', name: 'McMamadas' }] };
+async function kioskWithSource(page: import('@playwright/test').Page, source: object) {
+
+    await page.addInitScript(({ source, signedIn }) => {
+
+        (window as any).__TAURI_INTERNALS__ = {
+            invoke: async (_name: string, p: any) => {
+
+                if (p.command === 'window.present') return { ok: true, data: { enabled: true } };
+                if (p.command === 'window.ready') return { ok: true, data: { visible: true } };
+                if (p.command === 'power.status') return { ok: true, data: { available: true } };
+                if (p.command === 'power.source') return { ok: true, data: source };
+                if (p.command === 'network.status') return { ok: true, data: { available: true, kind: 'ethernet', name: 'Cable de red', signal: null, wifi: true } };
+                if (p.command === 'profile.get') return { ok: true, data: { ServerUrl: 'https://restaurant.invalid:8443' } };
+                if (p.command === 'motion.get') return { ok: true, data: { reduced: true } };
+                if (p.command === 'license.status') return { ok: true, data: { state: 'active' } };
+                if (p.command === 'status') return { ok: true, data: { authenticated: true } };
+                if (p.command === 'state') return { ok: true, data: signedIn };
+                return { ok: true, data: {} };
+
+            }
+        };
+
+    }, { source, signedIn });
+    await page.goto('/');
+
+}
+test.describe('topbar', () => {
+
+    for (const [source, name] of [[{ onBattery: true, source: 'laptop', percent: 78, minutes: 125 }, /Funcionando con pila: 78 %, quedan cerca de 2 h 5 min/], [{ onBattery: true, source: 'ups', percent: 15, minutes: null }, /Funcionando con UPS: 15 %/]] as const) test('shows the charge left: ' + source.source, async ({ page }) => {
+
+        await kioskWithSource(page, source);
+        await expect(page.getByRole('status', { name })).toBeVisible();
+
+    });
+    test('stays out of the way on mains power', async ({ page }) => {
+
+        await kioskWithSource(page, { onBattery: false });
+        await expect(page.locator('.topbar')).toBeVisible();
+        await expect(page.locator('.battery-status')).toHaveCount(0);
+
+    });
+    for (const width of [1280, 1366, 1440, 1536, 1600, 1640, 1700, 1760, 1920, 2560]) test('fills ' + width + ' px without overlapping, even on battery', async ({ page }) => {
+
+        await page.setViewportSize({ width, height: 800 });
+        await kioskWithSource(page, { onBattery: true, source: 'laptop', percent: 78, minutes: 125 });
+        await expect(page.locator('.topbar')).toBeVisible();
+        const boxes = await page.locator('.topbar-in > *').evaluateAll(items => items.map(item => { const box = item.getBoundingClientRect(); return { left: box.left, right: box.right, top: box.top, bottom: box.bottom }; }));
+        for (const [i, a] of boxes.entries()) for (const b of boxes.slice(i + 1)) expect(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top).toBe(true);
+        expect(Math.max(...boxes.map(box => box.right))).toBeLessThanOrEqual(width);
+        const navigation = page.getByRole('navigation', { name: 'Navegación principal' });
+        expect(await navigation.evaluate(nav => nav.scrollWidth <= nav.clientWidth)).toBe(true);
+        expect(await page.locator('.main').evaluate(main => main.getBoundingClientRect().width)).toBe(width);
+        await page.screenshot({ path: `../../evidence/hardware-topbar-${width}.png`, animations: 'disabled' });
+
+    });
+
+});
+
 test('network controls stay hidden outside the appliance', async ({ page }) => {
 
     await page.addInitScript(() => {

@@ -202,3 +202,124 @@ pub fn network_connect(args: &Value) -> Result<Value, String> {
     nmcli(&command)?;
     Ok(json!({"ok":true,"data":{"ssid":ssid}}))
 }
+
+// Battery of a laptop or UPS while mains power is out. Figures the hardware does
+// not report stay null: the screen shows less rather than an invented estimate.
+type Supply = std::collections::BTreeMap<String, String>;
+
+fn number(text: &str) -> Option<f64> {
+    text.trim().parse::<f64>().ok().filter(|value| value.is_finite() && *value >= 0.0)
+}
+
+fn minutes_left(cells: &[&Supply], stored: &str, rate: &str) -> Option<f64> {
+    let (mut left, mut drain) = (0.0, 0.0);
+    for cell in cells {
+        left += number(cell.get(stored)?)?;
+        drain += number(cell.get(rate)?)?;
+    }
+    (drain > 0.0).then(|| (left / drain * 60.0).round())
+}
+
+fn laptop_source(supplies: &[Supply]) -> Option<Value> {
+    // Wireless mice and keyboards also report here, with scope=Device.
+    let cells: Vec<&Supply> = supplies.iter()
+        .filter(|s| s.get("type").is_some_and(|v| v.trim() == "Battery"))
+        .filter(|s| s.get("scope").is_none_or(|v| v.trim() != "Device"))
+        .collect();
+    if !cells.iter().any(|s| s.get("status").is_some_and(|v| v.trim() == "Discharging")) {
+        return None;
+    }
+    let levels: Vec<f64> = cells.iter().filter_map(|s| s.get("capacity").and_then(|v| number(v))).collect();
+    let percent = (!levels.is_empty()).then(|| (levels.iter().sum::<f64>() / levels.len() as f64).round());
+    let minutes = minutes_left(&cells, "energy_now", "power_now").or_else(|| minutes_left(&cells, "charge_now", "current_now"));
+    Some(json!({"onBattery":true,"source":"laptop","percent":percent,"minutes":minutes}))
+}
+
+fn ups_source(upsc: &str) -> Option<Value> {
+    let read = |key: &str| upsc.lines().find_map(|line| line.strip_prefix(key)?.strip_prefix(": ").map(str::trim));
+    // OB means on battery; OL, on line. A status can carry several flags, such as "OB LB".
+    if !read("ups.status")?.split_whitespace().any(|flag| flag == "OB") {
+        return None;
+    }
+    let percent = read("battery.charge").and_then(number).map(f64::round);
+    let minutes = read("battery.runtime").and_then(number).map(|seconds| (seconds / 60.0).round());
+    Some(json!({"onBattery":true,"source":"ups","percent":percent,"minutes":minutes}))
+}
+
+fn read_supplies() -> Vec<Supply> {
+    let Ok(entries) = std::fs::read_dir("/sys/class/power_supply") else { return Vec::new(); };
+    entries.flatten().map(|entry| {
+        ["type", "scope", "status", "capacity", "energy_now", "power_now", "charge_now", "current_now"].iter()
+            .filter_map(|name| Some((name.to_string(), std::fs::read_to_string(entry.path().join(name)).ok()?)))
+            .collect()
+    }).collect()
+}
+
+// The UPS name is the one CulinaryOS gives it (docs/UPS-Y-APAGONES.md); no NUT, no UPS.
+fn read_ups() -> Option<String> {
+    let output = std::process::Command::new("/usr/bin/upsc")
+        .arg("culinaryos@localhost")
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    output.status.success().then(|| String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+pub fn power_source() -> Result<Value, String> {
+    let source = if enabled() {
+        laptop_source(&read_supplies()).or_else(|| read_ups().as_deref().and_then(ups_source))
+    } else {
+        None
+    };
+    Ok(json!({"ok":true,"data":source.unwrap_or(json!({"onBattery":false}))}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn supply(fields: &[(&str, &str)]) -> Supply {
+        fields.iter().map(|(k, v)| (k.to_string(), format!("{v}\n"))).collect()
+    }
+
+    #[test]
+    fn laptop_on_battery_reports_level_and_time() {
+        let cell = supply(&[("type", "Battery"), ("status", "Discharging"), ("capacity", "78"), ("energy_now", "30000000"), ("power_now", "15000000")]);
+        let mains = supply(&[("type", "Mains")]);
+        let source = laptop_source(&[mains, cell]).unwrap();
+        assert_eq!(source["source"], "laptop");
+        assert_eq!(source["percent"], 78.0);
+        assert_eq!(source["minutes"], 120.0);
+    }
+
+    #[test]
+    fn laptop_reporting_charge_instead_of_energy_still_gets_time() {
+        let cell = supply(&[("type", "Battery"), ("status", "Discharging"), ("capacity", "50"), ("charge_now", "2000000"), ("current_now", "4000000")]);
+        assert_eq!(laptop_source(&[cell]).unwrap()["minutes"], 30.0);
+    }
+
+    #[test]
+    fn laptop_without_a_rate_shows_no_estimate() {
+        let cell = supply(&[("type", "Battery"), ("status", "Discharging"), ("capacity", "50"), ("energy_now", "2000000"), ("power_now", "0")]);
+        let source = laptop_source(&[cell]).unwrap();
+        assert_eq!(source["percent"], 50.0);
+        assert!(source["minutes"].is_null());
+    }
+
+    #[test]
+    fn plugged_in_or_peripheral_batteries_are_ignored() {
+        let charging = supply(&[("type", "Battery"), ("status", "Charging"), ("capacity", "90")]);
+        let mouse = supply(&[("type", "Battery"), ("scope", "Device"), ("status", "Discharging"), ("capacity", "40")]);
+        assert!(laptop_source(&[charging, mouse]).is_none());
+    }
+
+    #[test]
+    fn ups_reports_only_while_on_battery() {
+        let source = ups_source("battery.charge: 64\nbattery.runtime: 1530\nups.status: OB LB\n").unwrap();
+        assert_eq!(source["source"], "ups");
+        assert_eq!(source["percent"], 64.0);
+        assert_eq!(source["minutes"], 26.0);
+        assert!(ups_source("battery.charge: 100\nups.status: OL CHRG\n").is_none());
+    }
+}

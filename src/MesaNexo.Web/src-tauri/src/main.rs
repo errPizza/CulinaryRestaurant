@@ -40,6 +40,7 @@ async fn native_call(window: tauri::WebviewWindow, state: tauri::State<'_,State>
     if command=="window.ready" {return kiosk::ready(&window);}
     if command=="power.status" {return Ok(json!({"ok":true,"data":{"available":kiosk::enabled()}}));}
     if command=="power.request" {return tauri::async_runtime::spawn_blocking(move || kiosk::power(&args)).await.map_err(|_|"No se pudo atender la solicitud".to_owned())?;}
+    if command=="power.source" {return tauri::async_runtime::spawn_blocking(kiosk::power_source).await.map_err(|_|"No se pudo atender la solicitud".to_owned())?;}
     if command=="network.status" {return tauri::async_runtime::spawn_blocking(kiosk::network_status).await.map_err(|_|"No se pudo atender la solicitud".to_owned())?;}
     if command=="network.scan" {return tauri::async_runtime::spawn_blocking(kiosk::network_scan).await.map_err(|_|"No se pudo atender la solicitud".to_owned())?;}
     if command=="network.connect" {return tauri::async_runtime::spawn_blocking(move || kiosk::network_connect(&args)).await.map_err(|_|"No se pudo atender la solicitud".to_owned())?;}
