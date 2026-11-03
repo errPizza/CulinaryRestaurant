@@ -81,6 +81,68 @@ static class BusinessTests {
         Check(!(await service.CanInstall(device)).B("allowed"), "client update blocked while installation session remains active");
         await Act("session.logout", new());
         Check((await service.CanInstall(device)).B("allowed"), "client update permitted only after local accounts and device session close");
+        var stranded = await service.Login(device);
+        Check((await service.CanInstall(device)).S("reason").Contains("sesión"), "update block names the device session as its cause");
+        await Deny(() => service.EndDeviceSessions(J.O("deviceId", device.S("deviceId"), "deviceSecret", J.Id(), "siteId", "rules-site")), "a wrong device secret cannot end the device sessions");
+        Check((await service.EndDeviceSessions(device)).L("ended") == 1, "a device without a client session ends the one its closed app stranded");
+        Check((await service.EndDeviceSessions(device)).L("ended") == 0, "ending device sessions twice has nothing left to do");
+        Check((await service.CanInstall(device)).B("allowed"), "a stranded session no longer blocks the update once its device ended it");
+        await Deny(() => service.Action(stranded.S("token"), J.O("operationId", J.Id(), "type", "session.logout", "payload", new JsonObject())), "an ended device session cannot act");
+        var opener = await service.Login(device);
+        var free = (await service.Action(opener.S("token"), J.O("operationId", J.Id(), "type", "table.save", "payload", J.O("name", "Mesa 3", "zone", "Salón", "capacity", 4)))).Obj("result");
+        await service.Action(opener.S("token"), J.O("operationId", J.Id(), "type", "visit.open", "payload", J.O("tableId", free.S("id"), "people", 2, "waiterId", waiter.S("id"))));
+        await service.EndDeviceSessions(device);
+        Check((await service.CanInstall(device)).S("reason").Contains("1 cuenta abierta"), "update block names the open account instead of the session");
+        // From inside the app: a manager signs everyone out, and only with nothing left open.
+        var manager = (await service.Login(device)).S("token");
+        var waiterDevice = (JsonObject)device.DeepClone();
+        waiterDevice["username"] = "service";
+        var serving = (await service.Login(waiterDevice)).S("token");
+        await Deny(() => service.CloseForUpdate(serving), "a waiter cannot sign the branch out for an update");
+        await Deny(() => service.CheckUpdate(new(), serving), "a waiter cannot download an update from inside the app");
+        await Deny(() => service.CloseForUpdate(manager), "an open account keeps every session open");
+        var account = (await service.Load()).Related("visit", "status", "open").Single();
+        await service.Action(manager, J.O("operationId", J.Id(), "type", "visit.close", "payload", J.O("id", account.S("id"))));
+        var register = (await service.Action(manager, J.O("operationId", J.Id(), "type", "cash.open", "payload", J.O("initial", 0)))).Obj("result");
+        Check((await service.CanInstall(device)).S("reason").Contains("sesión"), "the session of this device is still named first");
+        await Deny(() => service.CloseForUpdate(manager), "an open cash register keeps every session open");
+        await service.EndDeviceSessions(device);
+        Check((await service.CanInstall(device)).S("reason").Contains("1 caja abierta"), "update block names the open register");
+        manager = (await service.Login(device)).S("token");
+        serving = (await service.Login(waiterDevice)).S("token");
+        await service.Action(manager, J.O("operationId", J.Id(), "type", "cash.close", "payload", J.O("id", register.S("id"), "counted", 0)));
+        Check((await service.CloseForUpdate(manager)).L("ended") == 2, "with nothing open the update signs out every device, the manager included");
+        await Deny(() => service.State(serving), "a device signed out for the update loses its session");
+        try { await service.State(serving); } catch (BusinessException e) { Check(e.Status == 401 && e.Message.Contains("actualizar"), "whoever is signed out for the update is told why"); }
+        await Deny(() => service.State(manager), "the manager who confirmed the update loses the session too");
+        Check((await service.CanInstall(device)).B("allowed"), "the install permission holds once everyone is out");
+        // What a failure leaves behind, before anything leaves the branch.
+        var faults = new FaultLog(Path.Combine(folder, "faults.json"));
+        service.UseFaults(faults);
+        faults.Record("api", "error", "pago 1 de cliente ana@correo.mx con token abc123 y tarjeta 4111 1111 1111 1111", "Caja", "at C:\\Users\\kikin\\x.cs GET /api/state?branchId=7 password: hola", J.O("operationId", "op-1", "numero", null));
+        faults.Record("api", "error", "pago 2 de cliente ana@correo.mx con token abc123 y tarjeta 4111 1111 1111 1111", "Caja", "at C:\\Users\\kikin\\x.cs GET /api/state?branchId=7 password: hola", J.O("operationId", "op-2"));
+        var recorded = faults.Pending();
+        Check(recorded.Length == 1 && recorded[0].L("occurrences") == 2 && recorded[0].S("firstAt") != "", "the same fault with another number only counts");
+        var told = recorded[0].ToJsonString();
+        Check(!told.Contains("ana@correo.mx") && !told.Contains("abc123") && !told.Contains("4111") && !told.Contains("kikin") && !told.Contains("branchId=7") && !told.Contains("hola") && recorded[0].Obj("context").S("operationId") == "op-1", "a report leaves out contact, credentials, card digits, the home folder and query strings");
+        Check(new FaultLog(Path.Combine(folder, "faults.json")).Pending().Length == 1, "a fault survives a restart of the server");
+        faults.Record("api", "error", "pago 3 de cliente ana@correo.mx con token abc123 y tarjeta 4111 1111 1111 1111", "Caja", "at C:\\Users\\kikin\\x.cs GET /api/state?branchId=7 password: hola");
+        faults.Delivered(recorded);
+        Check(faults.Pending() is [var left] && left.L("occurrences") == 1, "repeats counted while a batch travelled go out on the next one");
+        faults.Delivered(faults.Pending());
+        Check(faults.Pending().Length == 0 && new FaultLog(Path.Combine(folder, "faults.json")).Pending().Length == 0, "a delivered fault is gone from the file too");
+        var terminalFault = J.O("deviceId", device.S("deviceId"), "deviceSecret", device.S("deviceSecret"), "siteId", "rules-site", "source", "web", "severity", "error", "what", "La interfaz dejó de dibujarse", "affected", "Pantalla Caja", "detail", "TypeError", "context", J.O("page", "cash"), "version", "0.3.3", "platform", "win-x64");
+        await service.ReportFault(terminalFault);
+        Check(faults.Pending() is [var shown] && shown.S("platform") == "win-x64" && shown.Obj("context").S("page") == "cash", "a terminal reports its own fault through its device credentials");
+        faults.Delivered(faults.Pending());
+        faults.Record("web", "error", "  ", "Pantalla", "traza");
+        Check(faults.Pending() is [var blank] && blank.S("what") != "", "a fault without text still says something, so CulinaryServer does not refuse the batch");
+        faults.Delivered(faults.Pending());
+        var forged = (JsonObject)terminalFault.DeepClone();
+        forged["deviceSecret"] = J.Id();
+        await Deny(() => service.ReportFault(forged), "a stranger on the network cannot fill the fault log");
+        terminalFault["source"] = "api";
+        await Deny(() => service.ReportFault(terminalFault), "a terminal cannot report as the server");
 
     }
 }

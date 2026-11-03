@@ -226,8 +226,7 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
                         string? promoId = null;
                         if (Licensed(s, "promotions")) {
 
-                            var tz = TimeZoneInfo.FindSystemTimeZoneById("America/Mexico_City");
-                            var hour = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, tz).Hour;
+                            var hour = BranchNow(s).Hour;
                             var promo = s.List("promotion").FirstOrDefault(x => x.B("active") && x.S("coupon") == "" && x.A("productIds").Strings().Contains(prod.S("id")) && hour >= x.I("startHour") && hour < x.I("endHour") && (!x.B("combo") || x.A("productIds").Strings().All(pid => items.Objects().Any(z => z.S("productId") == pid))));
                             if (promo is not null) { price = Cents.Percent(price, 100m - promo.L("percent")); promoId = promo.S("id"); }
 
@@ -513,6 +512,8 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
                     m["stations"] = J.N(stations);
                     m["delayMinutes"] = Amount(p, "delayMinutes", 1, 120);
                     m["discountLimit"] = Amount(p, "discountLimit", 0, 100);
+                    if (p.ContainsKey("timeZone")) { Need(TimeZoneInfo.TryFindSystemTimeZoneById(p.S("timeZone"), out _), "Zona horaria inválida"); m["timeZone"] = p.S("timeZone"); }
+                    if (p.ContainsKey("businessDayCutoffMinutes")) m["businessDayCutoffMinutes"] = Amount(p, "businessDayCutoffMinutes", 0, 720);
                     if (p.ContainsKey("drawerOnCash")) m["drawerOnCash"] = p.B("drawerOnCash");
                     if (p.ContainsKey("displayBanners")) { var banners = p.A("displayBanners").Strings().Select(b => Sanitize(b, 140)).Where(b => b != "").ToArray(); Need(banners.Length <= 10, "Máximo 10 mensajes para la pantalla del cliente"); m["displayBanners"] = J.N(banners); }
                     break;

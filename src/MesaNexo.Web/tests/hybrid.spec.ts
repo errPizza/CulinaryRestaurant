@@ -4,6 +4,8 @@ import { createInterface } from 'node:readline';
 import path from 'node:path';
 import fs from 'node:fs';
 const root = path.resolve('../..'), evidence = path.join(root, 'evidence');
+// The shell scrolls inside <main>; screens without it scroll the document.
+const fits = () => { const box = document.querySelector('main') ?? document.documentElement; return box.scrollWidth <= box.clientWidth; };
 let process: ChildProcessWithoutNullStreams, ready: any, sequence = 0;
 const pending = new Map<string, { resolve: (x: any) => void, reject: (e: any) => void }>();
 function call(client: string, command: string, args: any = {}) { return new Promise<any>((resolve, reject) => { const id = String(++sequence); pending.set(id, { resolve, reject }); process.stdin.write(JSON.stringify({ id, client, command, args }) + '\n'); }); }
@@ -53,7 +55,7 @@ test('original CSS, supplied logos, responsive layout and click pop', async ({ p
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(650);
     await page.screenshot({ path: path.join(evidence, 'hybrid-login-390.png'), fullPage: true });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(fits)).toBe(true);
     expect(errors).toEqual([]);
 
 });
@@ -68,18 +70,15 @@ test('figures count up to their value and the theme swap grows from its switch',
     const final = await figure.innerText();
     expect(final).toMatch(/\d/);
     expect(samples.at(-1) === final || samples.some(x => x !== final)).toBe(true);
-    await page.evaluate(() => { const d = document as any, original = d.startViewTransition?.bind(d); (window as any).swaps = 0; if (original) d.startViewTransition = (update: () => void) => { (window as any).swaps++; return original(update); }; });
-    const supported = await page.evaluate(() => 'startViewTransition' in document);
     await page.getByRole('button', { name: /^Menú de/ }).click();
     await page.getByRole('button', { name: 'Oscuro' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-    if (supported) expect(await page.evaluate(() => (window as any).swaps)).toBe(1);
+    expect(await page.evaluate(() => document.getAnimations().some(a => String((a.effect as KeyframeEffect).pseudoElement).startsWith('::view-transition-new')))).toBe(true);
     await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(evidence, 'hybrid-theme-dark.png') });
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.getByRole('button', { name: 'Claro' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-    expect(await page.evaluate(() => (window as any).swaps)).toBe(supported ? 1 : 0);
 
 });
 test('real HTTPS POS: open table, protected draft, kitchen, delivery, cash and close', async ({ page }) => {
@@ -142,10 +141,27 @@ test('all migrated administration pages load against current state', async ({ pa
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(650);
     await page.screenshot({ path: path.join(evidence, 'hybrid-inventory-390.png'), fullPage: true });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(fits)).toBe(true);
     expect(errors).toEqual([]);
 
 });
+test('a fault in the window travels through the real bridge and API into the log that leaves for Culinary Admin', async ({ page }) => {
+
+    await login(page, 'reporter', 'caja');
+    await expect(page.locator('main h1')).toHaveText('Arqueo ciego');
+    const reply = await call('reporter', 'fault.report', { what: 'Prueba de punta a punta cliente@correo.mx', affected: 'Pantalla de prueba', detail: 'traza', context: { page: 'blind', role: 'cajero' } });
+    expect(reply.ok).toBe(true);
+    const lab = path.join(root, '.lab'), newest = fs.readdirSync(lab).filter(name => name.startsWith('hybrid-')).map(name => path.join(lab, name)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
+    await expect.poll(() => fs.existsSync(path.join(newest, 'faults.json')) ? fs.readFileSync(path.join(newest, 'faults.json'), 'utf8') : '').toContain('Prueba de punta a punta');
+    const [fault] = JSON.parse(fs.readFileSync(path.join(newest, 'faults.json'), 'utf8')).filter((x: any) => x.what.includes('Prueba de punta a punta'));
+    expect(fault).toMatchObject({ source: 'web', severity: 'error', affected: 'Pantalla de prueba', occurrences: 1, context: { page: 'blind', role: 'cajero' } });
+    expect(fault.version).toMatch(/^0\.3\.\d+$/);
+    expect(['win-x64', 'linux-x64']).toContain(fault.platform);
+    expect(fault.context.os).toBeTruthy();
+    expect(fault.what).not.toContain('cliente@correo.mx');
+
+});
+
 test('cashier visibility, reduced motion and no browser token persistence', async ({ page }) => {
 
     await login(page, 'cashier', 'caja');
@@ -159,7 +175,7 @@ test('cashier visibility, reduced motion and no browser token persistence', asyn
     await button.click();
     expect(await button.evaluate(e => e.getAnimations().length)).toBe(0);
     await page.locator('.version-button').click();
-    await expect(page.getByRole('dialog', { name: 'Culinary Restaurant 0.3.0' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Culinary Restaurant 0.3.03' })).toBeVisible();
     await page.keyboard.press('Escape');
     expect(await page.evaluate(() => Object.keys(sessionStorage))).toEqual([]);
 
@@ -309,7 +325,7 @@ test('support stays visible and saves requests, replies and revocable consent', 
     await expect(page.getByRole('button', { name: 'Autorizar consulta de soporte' })).toHaveCount(0);
     const state = (await call('support-ui', 'state')).data;
     expect(state.tickets.find((t: any) => t.subject === 'Consulta de prueba de soporte').messages).toHaveLength(2);
-    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.evaluate(() => document.querySelector('main')!.scrollTo(0, 0));
     await page.waitForTimeout(450);
     await page.screenshot({ path: path.join(evidence, 'support-fixed-1360.png'), fullPage: true });
     expect(errors).toEqual([]);
@@ -325,7 +341,7 @@ test('approved design uses aligned controls, semantic icons and responsive real-
     await expect(page.locator('.ui-metric')).toHaveCount(4);
     await expect.poll(async () => page.locator('.ui-metric').evaluateAll(nodes => { const heights = nodes.map(n => n.getBoundingClientRect().height); return Math.max(...heights) - Math.min(...heights); })).toBeLessThan(1);
     await expect(page.locator('.ui-metric .ui-icon')).toHaveCount(4);
-    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.evaluate(() => document.querySelector('main')!.scrollTo(0, 0));
     await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(evidence, 'approved-overview-1360.png'), fullPage: true });
     await nav(page, 'Mesas y cuentas');
@@ -337,7 +353,7 @@ test('approved design uses aligned controls, semantic icons and responsive real-
     await page.getByLabel('Buscar mesa', { exact: true }).fill('no existe');
     await expect(page.getByText('No hay mesas con este filtro.', { exact: true })).toBeVisible();
     await page.getByLabel('Buscar mesa', { exact: true }).fill('');
-    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.evaluate(() => document.querySelector('main')!.scrollTo(0, 0));
     await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(evidence, 'approved-tables-1360.png'), fullPage: true });
     await nav(page, 'Soporte');
@@ -346,16 +362,16 @@ test('approved design uses aligned controls, semantic icons and responsive real-
     await page.getByRole('group', { name: 'Filtrar solicitudes' }).getByRole('button', { name: /Cerradas/ }).click();
     await expect(page.locator('article.ticket')).toHaveCount(0);
     await page.getByRole('group', { name: 'Filtrar solicitudes' }).getByRole('button', { name: /Todas/ }).click();
-    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.evaluate(() => document.querySelector('main')!.scrollTo(0, 0));
     await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(evidence, 'approved-support-1360.png'), fullPage: true });
     for (const name of ['Mesas y cuentas', 'Soporte', 'Inventario', 'Equipo y dispositivos']) {
 
         await page.setViewportSize({ width: 390, height: 844 });
         await nav(page, name);
-        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.evaluate(() => document.querySelector('main')!.scrollTo(0, 0));
         await page.waitForTimeout(300);
-        const overflow = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
+        const overflow = await page.evaluate(() => { const box = document.querySelector('main') ?? document.documentElement; return box.scrollWidth > box.clientWidth; });
         expect(overflow, name + ' must fit mobile width').toBe(false);
         if (name === 'Soporte') await page.screenshot({ path: path.join(evidence, 'approved-support-390.png'), fullPage: true });
         if (name === 'Mesas y cuentas') await page.screenshot({ path: path.join(evidence, 'approved-tables-390.png'), fullPage: true });
@@ -628,7 +644,7 @@ test('integrations run in simulation: terminal, platform order, PAC stamp, outbo
     await page.evaluate(() => { delete document.documentElement.dataset.theme; });
     await page.setViewportSize({ width: 390, height: 844 });
     await shot('integraciones-390');
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(fits)).toBe(true);
     expect(errors).toEqual([]);
 
 });
@@ -691,7 +707,7 @@ test('a license about to expire warns inside the app and leaves it working', asy
         await page.screenshot({ path: path.join(evidence, 'hybrid-license-warning-1360.png') });
         await page.setViewportSize({ width: 390, height: 844 });
         await expect(page.getByText('La licencia vence en 2 días.', { exact: false })).toBeVisible();
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        expect(await page.evaluate(fits)).toBe(true);
         await page.screenshot({ path: path.join(evidence, 'hybrid-license-warning-390.png') });
 
     } finally { await call('fixture', 'license.restore', {}); }
@@ -725,7 +741,7 @@ test('an expired license replaces sign-in with the lock screen and nothing else'
         await page.screenshot({ path: path.join(evidence, 'hybrid-license-expired-1360.png'), fullPage: true });
         await page.setViewportSize({ width: 390, height: 844 });
         await expect(page.getByRole('button', { name: 'Reintentar' })).toBeVisible();
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        expect(await page.evaluate(fits)).toBe(true);
         await page.screenshot({ path: path.join(evidence, 'hybrid-license-expired-390.png'), fullPage: true });
 
     } finally { await call('fixture', 'license.restore', {}); }

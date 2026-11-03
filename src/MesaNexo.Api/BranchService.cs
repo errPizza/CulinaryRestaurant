@@ -104,7 +104,7 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
     public JsonObject Authenticate(BranchState s, string token, out JsonObject session) {
 
         var hash = J.Hash(token);
-        session = s.Related("session", "tokenHash", hash).FirstOrDefault(x => !x.B("revoked") && DateTimeOffset.Parse(x.S("expires")) > DateTimeOffset.UtcNow) ?? throw new BusinessException(401, "Inicia sesión de nuevo");
+        session = s.Related("session", "tokenHash", hash).FirstOrDefault(x => !x.B("revoked") && DateTimeOffset.Parse(x.S("expires")) > DateTimeOffset.UtcNow) ?? throw new BusinessException(401, s.Related("session", "tokenHash", hash).Any(x => x.B("forUpdate")) ? "Se cerró la sesión para actualizar Culinary Restaurant; vuelve a entrar en unos minutos" : "Inicia sesión de nuevo");
         var u = s.Get("user", session.S("userId"));
         Need(u.B("active"), "Usuario desactivado", 401);
         var d = s.Get("device", session.S("deviceId"));
@@ -249,6 +249,7 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
         if (CertificateWarning(u.S("role")) is { } certificate) connection["certificate"] = certificate;
         if (auditAlert is { } alert && u.S("role") == "manager") connection["auditAlert"] = alert.DeepClone();
         if (u.S("role") == "manager") connection["server"] = ServerAlerts();
+        if (u.S("role") == "manager") connection["updates"] = Volatile.Read(ref releases).DeepClone();
         result["connection"] = connection;
         return result;
 
@@ -311,15 +312,70 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
         return J.O("internalPreview", true, "key", v.S("trackingKey"), "link", "mesanexo://seguimiento/" + v.S("trackingKey"), "expires", v["trackingExpires"], "units", s.Related("unit", "visitId", visitId).Select(x => J.O("name", x.S("name"), "status", x.S("status"), "notes", x.S("notes"))).ToArray());
 
     }
-    public async Task<JsonObject> CanInstall(JsonObject device, CancellationToken ct = default) {
+    static bool LiveSession(JsonObject session) => !session.B("revoked") && DateTimeOffset.Parse(session.S("expires")) > DateTimeOffset.UtcNow;
+    JsonObject VerifiedDevice(BranchState s, JsonObject device) {
 
-        var s = await View(ct);
         Need(device.S("siteId") == siteId, "Sucursal incorrecta", 403);
         var d = s.Get("device", device.S("deviceId"));
         Need(d.B("authorized") && d.S("secretHash") == J.Hash(device.S("deviceSecret")), "Dispositivo no autorizado", 403);
-        var sessions = s.Related("session", "deviceId", d.S("id")).Any(x => !x.B("revoked") && DateTimeOffset.Parse(x.S("expires")) > DateTimeOffset.UtcNow);
-        var accounts = s.Related("visit", "status", "open").Any();
-        return J.O("allowed", !sessions && !accounts && License(s).Usable, "policy", "Cerrar sesión y todas las cuentas; requiere una licencia vigente");
+        return d;
+
+    }
+    // What keeps a branch from updating, whoever asks: nothing may be left half served when the app closes.
+    string UpdateBlock(BranchState s) {
+
+        var accounts = s.Related("visit", "status", "open").Count();
+        var registers = s.Related("cash", "status", "open").Count();
+        return accounts == 1 ? "Hay 1 cuenta abierta en la sucursal; ciérrala para actualizar"
+            : accounts > 1 ? $"Hay {accounts} cuentas abiertas en la sucursal; ciérralas para actualizar"
+            : registers == 1 ? "Hay 1 caja abierta en la sucursal; ciérrala para actualizar"
+            : registers > 1 ? $"Hay {registers} cajas abiertas en la sucursal; ciérralas para actualizar"
+            : License(s).Usable ? "" : "Se requiere una licencia vigente para actualizar";
+
+    }
+    public async Task<JsonObject> CanInstall(JsonObject device, CancellationToken ct = default) {
+
+        var s = await View(ct);
+        var d = VerifiedDevice(s, device);
+        var reason = s.Related("session", "deviceId", d.S("id")).Any(LiveSession) ? "Este equipo tiene una sesión abierta; ciérrala para actualizar" : UpdateBlock(s);
+        return J.O("allowed", reason == "", "reason", reason, "policy", "Cerrar sesión y todas las cuentas y cajas; requiere una licencia vigente");
+
+    }
+    // A manager installing from inside the app: everyone is signed out at the last moment, only with nothing left open.
+    public async Task<JsonObject> CloseForUpdate(string token, CancellationToken ct = default) {
+
+        return await Exclusive(async () => {
+
+            var s = await Load(ct);
+            var u = Authenticate(s, token, out _);
+            Role(u, "manager");
+            var block = UpdateBlock(s);
+            Need(block == "", block, 409);
+            var sessions = s.List("session").Where(LiveSession).ToArray();
+            foreach (var session in sessions) { session["revoked"] = true; session["forUpdate"] = true; }
+            var result = J.O("ended", sessions.Length);
+            await Commit(s, J.Id(), u.S("id"), J.Hash("update-sessions:" + J.Now()), result, "update.sessions.end", ct);
+            return result;
+
+        }, ct);
+
+    }
+    // The token lives only in the client's memory: closing the app or losing power strands a session nobody can use or sign out of.
+    // A device that reports having none ends them with its own credentials, instead of waiting out the 12 hours.
+    public async Task<JsonObject> EndDeviceSessions(JsonObject device, CancellationToken ct = default) {
+
+        return await Exclusive(async () => {
+
+            var s = await Load(ct);
+            var d = VerifiedDevice(s, device);
+            var sessions = s.Related("session", "deviceId", d.S("id")).Where(LiveSession).ToArray();
+            var result = J.O("ended", sessions.Length);
+            if (sessions.Length == 0) return result;
+            foreach (var session in sessions) session["revoked"] = true;
+            await Commit(s, J.Id(), "local-device", J.Hash("device-sessions:" + d.S("id") + ":" + J.Now()), result, "device.sessions.end", ct);
+            return result;
+
+        }, ct);
 
     }
     public async Task RotateEnrollment(string code, CancellationToken ct = default) { Need(code.Length >= 20, "Código mínimo de 20 caracteres"); await Exclusive(async () => { var s = await Load(ct); s.Meta["enrollmentHash"] = J.Hash(code); return await Commit(s, J.Id(), "local-admin", J.Hash("enrollment"), J.O("ok", true), "device.enrollment.rotate", ct); }, ct); }

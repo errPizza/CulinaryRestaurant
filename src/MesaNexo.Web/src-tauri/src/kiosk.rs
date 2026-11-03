@@ -44,7 +44,9 @@ pub fn present(window: &WebviewWindow) -> Result<Value, String> {
         let view: &tauri::Webview = window.as_ref();
         view.set_focus().map_err(|e| e.to_string())?;
     }
-    Ok(json!({"ok":true,"data":{"enabled":enabled()}}))
+    // Without DMA-BUF WebKitGTK has no compositor: the page must not ask it for full-screen effects.
+    let cpu_drawing = std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_some();
+    Ok(json!({"ok":true,"data":{"enabled":enabled(),"cpuDrawing":cpu_drawing}}))
 }
 
 pub fn ready(window: &WebviewWindow) -> Result<Value, String> {

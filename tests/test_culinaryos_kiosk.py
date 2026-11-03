@@ -44,6 +44,37 @@ class KioskRecovery(unittest.TestCase):
         self.assertEqual(session.exit_cause(-signal.SIGINT), "senal SIGINT")
         self.assertEqual(session.exit_cause(-200), "senal 200")
 
+    def test_gpu_is_used_only_with_intel_or_amd_drivers(self):
+        with tempfile.TemporaryDirectory() as temp:
+            drm = Path(temp)
+            self.assertFalse(session.gpu_ready(drm))
+            (drm / "renderD128").mkdir()
+            for driver, expected in (("vmwgfx", False), ("nouveau", False), ("i915", True), ("amdgpu", True)):
+                with patch.object(Path, "resolve", lambda _: Path("/sys/bus/pci/drivers") / driver):
+                    self.assertEqual(session.gpu_ready(drm), expected, driver)
+
+    def test_only_a_crash_or_a_freeze_gives_up_the_gpu(self):
+        class Child:
+            def __init__(self, code):
+                self.code = code
+
+            def poll(self):
+                return self.code
+
+        with tempfile.TemporaryDirectory() as temp:
+            for code, gives_up in ((0, False), (1, False), (-15, False), (-9, False), (-11, True), (-6, True), (None, True)):
+                run = session.Session.__new__(session.Session)
+                run.child, run.on_gpu = Child(code), True
+                run.log = Path(temp) / "kiosk.log"
+                run.cpu_only = Path(temp) / "cpu-rendering"
+                run.cpu_only.unlink(missing_ok=True)
+                run.give_up_gpu()
+                self.assertEqual(run.cpu_only.exists(), gives_up, code)
+            run.on_gpu = False
+            run.cpu_only.unlink()
+            run.give_up_gpu()
+            self.assertFalse(run.cpu_only.exists())
+
     def test_failure_log_keeps_the_end_of_the_output_and_stays_small(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -62,6 +93,23 @@ class KioskRecovery(unittest.TestCase):
             blocked = root / "file"
             blocked.write_text("")
             session.append_log(blocked / "kiosk.log", "sin espacio\n")
+
+    def test_a_failure_leaves_a_report_the_app_sends_on_its_next_start(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run = session.Session.__new__(session.Session)
+            run.runtime = root
+            run.log = root / "state/kiosk.log"
+            run.faults = run.log.with_name("faults.jsonl")
+            run.guard = type("Guard", (), {"started": 10})
+            (root / "app-output.log").write_text("fallo de WebKit\n", encoding="utf-8")
+            run.record_failure(70, "senal SIGSEGV")
+            run.record_failure(80, "codigo de salida 1")
+            first, second = [json.loads(line) for line in run.faults.read_text(encoding="utf-8").splitlines()]
+            self.assertIn("senal SIGSEGV", first["what"])
+            self.assertIn("reinició", first["affected"])
+            self.assertIn("fallo de WebKit", first["detail"])
+            self.assertEqual((first["seconds"], second["seconds"]), ("60", "70"))
 
     def test_keyring_key_is_private_and_survives_restarts(self):
         with tempfile.TemporaryDirectory() as tmp:

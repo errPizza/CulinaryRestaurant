@@ -87,6 +87,7 @@ try {
     await Reject(async () => { await bridge.Call("profile.save", profileNode); }, "profile cannot change during an active session");
     var s = (await bridge.Call("state", new()))!.AsObject();
     Check(s.A("products").Count == 1, "bridge reads actual encrypted runtime through trusted HTTPS");
+    Check((await bridge.Call("state", J.O("known", s.S("stateVersion"))))!.AsObject().B("unchanged"), "a poll without changes stays in the bridge");
     var waiter = s.A("users").Objects().First(x => x.S("role") == "mesero");
     async Task<JsonObject> Execute(string type, JsonObject payload) { var response = (await bridge.Call("execute", J.O("type", type, "payload", payload)))!.AsObject(); await bridge.Call("ack", J.O("operationId", response.S("operationId"))); return response.Obj("result"); }
     var unacknowledged = (await bridge.Call("execute", J.O("type", "catalog.category", "payload", J.O("name", "Recibo IPC"))))!.AsObject();

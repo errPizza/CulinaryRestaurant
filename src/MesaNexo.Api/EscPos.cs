@@ -108,7 +108,6 @@ public static class EscPosDocument {
         if (job.S("waiterName") != "") w.Row("Atendió", job.S("waiterName"));
         w.Row("Fecha", Local(job.S("at")));
         w.Rule();
-        // Units are sold one by one; the receipt groups equal name and price into one line.
         foreach (var group in snapshot.A("units").Objects().Where(x => x.S("status") is not ("cancelled" or "unavailable")).GroupBy(x => (Name: x.S("name"), Price: x.L("price")))) w.Row(group.Count() + " x " + group.Key.Name, Money(group.Key.Price * group.Count()));
         w.Rule().Row("Subtotal", Money(totals.L("gross")));
         if (totals.L("discount") > 0) w.Row("Descuento", "-" + Money(totals.L("discount")));
@@ -181,7 +180,7 @@ public sealed class EscPosPrintDriver(PrinterOptions options): IPrintDriver {
         try { await using var stream = await Open(ct); return Last = await Query(stream, ct) ?? new(false); } catch (Exception e) when (e is SocketException or IOException or OperationCanceledException && !ct.IsCancellationRequested) { return Last = new(false); }
 
     }
-    // Before the job is claimed: whatever is found here leaves it pending, so nothing is lost and nothing is printed twice.
+
     public async Task Preflight(JsonObject job, CancellationToken ct) {
 
         var status = await Status(ct);
@@ -190,7 +189,7 @@ public sealed class EscPosPrintDriver(PrinterOptions options): IPrintDriver {
         if (job.S("type") != "drawer") Need(status.CanPrint, "Impresora " + status.Describe(), 503);
 
     }
-    // After the job is claimed. "failed" only when nothing reached the printer; any doubt is "uncertain" for a manager to resolve.
+
     public async Task<PrintOutcome> Submit(JsonObject job, CancellationToken ct) {
 
         var data = EscPosDocument.Render(job, options.Columns);

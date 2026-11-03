@@ -28,7 +28,7 @@ export function BatteryStatus() {
     const low = status.low || (percent != null && percent <= LOW_PERCENT);
     const source = status.source === 'ups' ? 'Con UPS, sin corriente' : 'Con pila, sin cable';
     const label = [source, percent != null ? percent + ' %' : '', time ? 'unas ' + time + ' de servicio' : ''].filter(Boolean).join(' · ');
-    return <span className={'battery-status' + (low ? ' low' : '')} role="status" aria-label={label} title={label}>
+    return <span className={'battery-status' + (low ? ' low' : '')} role="status" aria-label={label}>
         <UiIcon name="battery" />
         {percent != null && <span>{percent} %</span>}
         {time && <span className="battery-time">≈ {time}</span>}

@@ -12,6 +12,8 @@ public static class Program {
             if (Arg("decrypt-backup") is string legacy) { await Migration.DecryptBackup(legacy, Arg("legacy-key") ?? throw new Exception(), Arg("output") ?? throw new Exception()); Console.WriteLine("Copia descifrada y validada; protege la salida y continúa con el exportador."); return 0; }
             // Outside the branch: an export of the chain against a copy of the bucket, with no database and no keys.
             if (Arg("verify-checkpoints") is string export) { var verdict = await OfflineCheck.Run(export, Arg("checkpoints-dir") ?? throw new Exception("Especifica --checkpoints-dir"), Arg("site") ?? throw new Exception("Especifica --site")); Console.WriteLine(verdict.ToJsonString()); return verdict.B("valid") ? 0 : 4; }
+            // For the root updater: the signed offer, this site and the exact package, with this binary's own root key.
+            if (Arg("verify-update") is string offer) { await UpdateCheck.Run(offer, Arg("package") ?? throw new Exception("Especifica --package"), Arg("site") ?? throw new Exception("Especifica --site")); return 0; }
             var lab = args.Contains("--lab");
             var site = Arg("site") ?? (File.Exists("/etc/culinaryos/site.json") ? JsonNode.Parse(File.ReadAllText("/etc/culinaryos/site.json"))!.S("site_id") : throw new InvalidOperationException("Especifica --site"));
             var credentials = Environment.GetEnvironmentVariable("CREDENTIALS_DIRECTORY");
@@ -51,10 +53,10 @@ public static class Program {
             var fiscal = integrations.Use("pac", FiscalOptions.From);
             // The license key lives in the backend's own state directory, outside the synchronized store.
             var licensing = new LicenseOptions(lab ? Path.Combine(options.LabDirectory!, "license") : "/var/lib/culinaryos-app/license", Arg("license-server"), Arg("hardware-file") ?? (lab ? Path.Combine(options.LabDirectory!, "hardware.json") : HardwareIdentity.DefaultFile), UseTpm: !lab, CentralCertificate: options.Credentials is null ? null : Path.Combine(options.Credentials, "central-cert"));
-            using (certificate) { await using var app = ApiHost.Build(options, store, certificate, licensing, Arg("cloud-url") is string cloudUrl ? new CloudOptions(cloudUrl, options.Credentials ?? throw new Exception(), Arg("central-public-key") ?? throw new Exception()) : null, printer, fiscal, integrations, checkpoints, backups); await app.RunAsync(); }
+            using (certificate) { await using var app = ApiHost.Build(options, store, certificate, licensing, Arg("cloud-url") is string cloudUrl ? new CloudOptions(cloudUrl, options.Credentials ?? throw new Exception(), Arg("central-public-key") ?? throw new Exception()) : null, printer, fiscal, integrations, checkpoints, backups); var running = app.Services.GetRequiredService<BranchService>().Faults; AppDomain.CurrentDomain.UnhandledException += (_, e) => running.Record("api", "critical", "El servidor de la sucursal se cerró: " + (e.ExceptionObject as Exception)?.GetType().Name, "Las terminales pierden la conexión hasta que el servicio reinicia", e.ExceptionObject.ToString() ?? ""); await app.RunAsync(); }
             return 0;
 
-        } catch (BusinessException e) { Console.Error.WriteLine(e.Message); return 1; } catch (Exception e) { Console.Error.WriteLine("No se pudo iniciar Culinary Restaurant. Comprueba identidad, configuración, credenciales y runtime."); if (args.Contains("--lab")) Console.Error.WriteLine(e); return 1; }
+        } catch (BusinessException e) { Console.Error.WriteLine(e.Message); return 1; } catch (Exception e) { Console.Error.WriteLine("No se pudo iniciar Culinary Restaurant. Comprueba identidad, configuración, credenciales y runtime."); if (args.Contains("--lab")) Console.Error.WriteLine(e); else new FaultLog(FaultLog.DefaultFile).Record("api", "critical", "El servidor de la sucursal no pudo iniciar: " + e.GetType().Name, "Ninguna terminal puede conectarse a la sucursal", e.ToString()); return 1; }
 
     }
 }

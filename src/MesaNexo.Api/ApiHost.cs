@@ -18,11 +18,18 @@ public static class ApiHost {
         builder.Logging.ClearProviders();
         builder.Logging.AddSimpleConsole(x => x.SingleLine = true);
         builder.Logging.SetMinimumLevel(LogLevel.Warning);
+        var faults = new FaultLog(options.LabDirectory is { } faultDirectory ? Path.Combine(faultDirectory, "faults.json") : FaultLog.DefaultFile);
+        builder.Logging.AddProvider(new FaultLoggerProvider(faults));
         builder.WebHost.ConfigureKestrel(k => { k.Limits.MaxRequestBodySize = 112 * 1024; k.Listen(IPAddress.Parse(options.Bind), options.Port, l => l.UseHttps(cert)); });
         builder.Services.AddSingleton<IBranchStore>(store);
         builder.Services.AddSingleton<IPasswordHasher, Passwords>();
         builder.Services.AddSingleton(sp => new BranchService(store, options.SiteId, sp.GetRequiredService<IPasswordHasher> ()));
-        builder.Services.AddRateLimiter(o => o.AddPolicy("login", ctx => RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown", _=> new FixedWindowRateLimiterOptions{ PermitLimit = 8, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }))); 
+        builder.Services.AddRateLimiter(o => {
+
+            o.AddPolicy("login", ctx => RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown", _=> new FixedWindowRateLimiterOptions{ PermitLimit = 8, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+            o.AddPolicy("faults", ctx => RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown", _=> new FixedWindowRateLimiterOptions{ PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+
+        });
        
         if (cloud is not null) builder.Services.AddSingleton<IHostedService>(sp => new CloudPull(sp.GetRequiredService<BranchService> (), cloud));
         if (licensing?.ServerUrl is not null) builder.Services.AddSingleton<IHostedService>(sp => new LicenseWorker(sp.GetRequiredService<BranchService> (), sp.GetRequiredService<ILogger<LicenseWorker>> ()));
@@ -45,6 +52,8 @@ public static class ApiHost {
         var app = builder.Build();
         var service = app.Services.GetRequiredService<BranchService> ();
         service.UseIntegrations(integrations, terminals);
+        service.UseFaults(faults);
+        service.UseStats(new StatsLedger(options.LabDirectory is { } statsDirectory ? Path.Combine(statsDirectory, "owner-stats.json") : StatsLedger.DefaultFile));
         service.UseCertificate(cert.NotAfter);
         if (options.Credentials is not null) service.UseServerHealth("/run/culinaryos/status.json");
         if (licensing is not null) service.UseLicensing(licensing);
@@ -54,7 +63,7 @@ public static class ApiHost {
             ctx.Response.Headers.CacheControl = "no-store"; 
             ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
 
-            try{ await next(); } catch(BusinessException e){ await Error(ctx,e.Status,e.Message); } catch(StoreException e){ await Error(ctx, e.Code == "COS-DATA-CONFLICT" || e.Code == "COS-DATA-IDEMPOTENCY" ? 409: e.Code == "COS-DATA-INVALID" ? 413: e.Code == "COS-DATA-FULL" ? 507: 503, e.Code == "COS-DATA-INVALID" ? "Carga demasiado grande o inválida; divide la comanda o reduce el tamaño de la imagen.": e.Code, e.Code); } catch(Exception e) when(e is JsonException or FormatException or InvalidOperationException or OverflowException){ await Error(ctx, 400, "Solicitud o formato inválido"); } catch(Exception){ await Error(ctx, 503, "Servicio local no disponible; conserva la operación y reconcilia"); }
+            try{ await next(); } catch(BusinessException e){ await Error(ctx,e.Status,e.Message); } catch(StoreException e){ if (e.Code is not ("COS-DATA-CONFLICT" or "COS-DATA-IDEMPOTENCY" or "COS-DATA-INVALID")) faults.Request(ctx, e); await Error(ctx, e.Code == "COS-DATA-CONFLICT" || e.Code == "COS-DATA-IDEMPOTENCY" ? 409: e.Code == "COS-DATA-INVALID" ? 413: e.Code == "COS-DATA-FULL" ? 507: 503, e.Code == "COS-DATA-INVALID" ? "Carga demasiado grande o inválida; divide la comanda o reduce el tamaño de la imagen.": e.Code, e.Code); } catch(Exception e) when(e is JsonException or FormatException or InvalidOperationException or OverflowException){ if (e.Message.StartsWith("COS-")) faults.Request(ctx, e); await Error(ctx, 400, "Solicitud o formato inválido"); } catch(Exception e){ faults.Request(ctx, e); await Error(ctx, 503, "Servicio local no disponible; conserva la operación y reconcilia"); }
         
         });
 
@@ -70,14 +79,18 @@ public static class ApiHost {
         app.MapPost("/api/license/activate", async(HttpContext c, CancellationToken ct) => await service.Activate(await Body(c, ct), ct)).RequireRateLimiting("login");
         app.MapGet("/api/setup", async(CancellationToken ct) => J.O("needsSetup", options.SetupCode is not null && await service.AwaitingSetup(ct), "siteId", options.SiteId));
         app.MapPost("/api/setup", async(HttpContext c, CancellationToken ct) => await service.Setup(await Body(c, ct), options.SetupCode, ct)).RequireRateLimiting("login");
-        app.MapPost("/api/updates/check", async(HttpContext c, CancellationToken ct) => await service.CheckUpdate(await Body(c, ct), ct)).RequireRateLimiting("login");
-        app.MapPost("/api/updates/download", async(HttpContext c, CancellationToken ct) => { var response = await service.DownloadUpdate(await Body(c, ct), ct); c.Response.RegisterForDispose(response); return Results.Stream(await response.Content.ReadAsStreamAsync(ct), "application/octet-stream"); });
+        app.MapPost("/api/updates/check", async(HttpContext c, CancellationToken ct) => await service.CheckUpdate(await Body(c, ct), OptionalToken(c), ct)).RequireRateLimiting("login");
+        app.MapPost("/api/updates/look", async(HttpContext c, CancellationToken ct) => await service.LookForUpdate(Token(c), await Body(c, ct), ct)).RequireRateLimiting("login");
+        app.MapPost("/api/updates/close-sessions", async(HttpContext c, CancellationToken ct) => await service.CloseForUpdate(Token(c), ct));
+        app.MapPost("/api/updates/download", async(HttpContext c, CancellationToken ct) => { var response = await service.DownloadUpdate(await Body(c, ct), OptionalToken(c), ct); c.Response.RegisterForDispose(response); return Results.Stream(await response.Content.ReadAsStreamAsync(ct), "application/octet-stream"); });
         app.MapPost("/api/device/can-install", async(HttpContext c, CancellationToken ct) => await service.CanInstall(await Body(c, ct), ct));
+        app.MapPost("/api/faults", async(HttpContext c, CancellationToken ct) => await service.ReportFault(await Body(c, ct), ct)).RequireRateLimiting("faults");
+        app.MapPost("/api/device/end-sessions", async(HttpContext c, CancellationToken ct) => await service.EndDeviceSessions(await Body(c, ct), ct)).RequireRateLimiting("login");
         app.MapGet("/api/preview/{id}", async(string id, HttpContext c, CancellationToken ct) => await service.Preview(Token(c), id, ct));
         app.MapGet("/api/reports", async(HttpContext c, CancellationToken ct) => await service.Report(Token(c), c.Request.Query["from"], c.Request.Query["until"], c.Request.Query["after"], ct));
         app.MapGet("/api/audit/verify", async(HttpContext c, CancellationToken ct) => await service.VerifyAudit(Token(c), ct));
         app.MapGet("/api/state", async(HttpContext c, CancellationToken ct) => await service.State(Token(c), ct, c.Request.Query.TryGetValue("since", out var since) ? since.ToString(): null));
-        app.MapPost("/api/action", async(HttpContext c, CancellationToken ct) => { var body = await Body(c, ct); c.Items["operationId"] = body.S("operationId"); return await service.Action(Token(c), body, ct); });
+        app.MapPost("/api/action", async(HttpContext c, CancellationToken ct) => { var body = await Body(c, ct); c.Items["operationId"] = body.S("operationId"); c.Items["actionType"] = body.S("type"); return await service.Action(Token(c), body, ct); });
         app.MapGet("/api/operations/{id}", async(string id, HttpContext c, CancellationToken ct) => await service.OperationStatus(Token(c), id, ct));
 
         if (options.ReadySocket is not null){ 
@@ -92,6 +105,7 @@ public static class ApiHost {
     }
 
     static string Token(HttpContext c){ var h = c.Request.Headers.Authorization.ToString(); Rules.Need(h.StartsWith("Bearer ") && h.Length is > 10 and < 200, "Autenticación requerida", 401); return h[7..]; }
+    static string? OptionalToken(HttpContext c) => c.Request.Headers.Authorization.Count > 0 ? Token(c) : null;
     static async Task<JsonObject> Body(HttpContext c, CancellationToken ct) => (await JsonNode.ParseAsync(c.Request.Body, cancellationToken: ct)) as JsonObject ?? throw new BusinessException(400, "Objeto JSON requerido");
     // The operation id runs from the client through this API to the store's receipt, so it is what support asks for. Outcome tells the
     // client what it may assume: a rejection did not run; a conflict or a failure may have, and only reconciling says which.

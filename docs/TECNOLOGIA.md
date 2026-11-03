@@ -1,4 +1,5 @@
 # Versiones verificadas — 15 de octubre de 2026
+Desde entonces el SDK fijado subió a 10.0.402: manda `global.json`.
 .NET 10 LTS; SDK disponible 10.0.301 (runtime 10.0.9). Los paquetes autocontenidos se publican con runtime 10.0.13, comprobado en el registro oficial de Microsoft/NuGet. El SDK instalado conserva runtime 10.0.9 para ejecutar las pruebas de desarrollo.
 Avalonia 12.1.4 (versión estable comprobada en el registro oficial NuGet). Escritorio net10.0, Android net10.0-android, iOS net10.0-ios. No WebView ni navegador.
 Fuentes oficiales consultadas:

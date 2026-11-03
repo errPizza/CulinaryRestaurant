@@ -100,7 +100,7 @@ public sealed class PrintWorker(BranchService branch, IPrintDriver driver, ILogg
             try { if (await branch.ProcessPrint(driver, ct)) { delay = 0; reported = ""; } } catch (OperationCanceledException) when (ct.IsCancellationRequested) { break; } catch (BusinessException e) { delay = 5000; if (e.Message != reported) log.LogWarning("Impresión en espera: {Reason}", e.Message); reported = e.Message; } catch (Exception) { delay = 5000; log.LogWarning("Impresión pendiente; se reintenta"); }
             branch.NotePrinter(driver is EscPosPrintDriver escpos && escpos.Last is { } status ? status.Describe() : "configurada");
             if (delay > 0) try { await Task.Delay(delay, ct); } catch (OperationCanceledException) { break; }
-
+            
         }
 
     }

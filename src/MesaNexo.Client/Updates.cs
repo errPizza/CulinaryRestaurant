@@ -8,9 +8,10 @@ namespace MesaNexo.Client;
 // trusts neither of them: it checks the signed update and the release manifest itself before keeping the installer.
 public static class Updates {
     public static Version Current => typeof(Updates).Assembly.GetName().Version ?? new Version(0, 0, 0);
-    public static async Task<JsonObject?> Fetch(ConnectionProfile profile, JsonObject device, string platform, string directory, CancellationToken ct = default) {
+    public static async Task<JsonObject?> Fetch(ConnectionProfile profile, JsonObject device, string platform, string directory, CancellationToken ct = default, string? token = null) {
 
         using var http = TrustedConnection.Create(profile);
+        if (token is not null) http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
         var request = (JsonObject)device.DeepClone();
         request["siteId"] = profile.SiteId;
         request["platform"] = platform;

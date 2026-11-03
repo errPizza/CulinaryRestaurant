@@ -600,11 +600,11 @@
     "result": "passed"
   },
   {
-    "test": "central no longer serves provider route api/backups/69b28932f886461c85c8101b5ca112de",
+    "test": "central no longer serves provider route api/backups/0d728bb2152d472784dcd42e70305fa3",
     "result": "passed"
   },
   {
-    "test": "central no longer serves provider route api/operations/e42949d101e140f9a60705bcaaa61d74",
+    "test": "central no longer serves provider route api/operations/11553792f60e49a18efa593edeb39ab8",
     "result": "passed"
   },
   {
@@ -808,6 +808,14 @@
     "result": "passed"
   },
   {
+    "test": "an unsent support message is due at once",
+    "result": "passed"
+  },
+  {
+    "test": "an open ticket looks for replies every 30 seconds",
+    "result": "passed"
+  },
+  {
     "test": "a local support ticket reaches CulinaryServer",
     "result": "passed"
   },
@@ -836,6 +844,18 @@
     "result": "passed"
   },
   {
+    "test": "the root updater accepts a signed package for this site",
+    "result": "passed"
+  },
+  {
+    "test": "the root updater refuses an offer for another site",
+    "result": "passed"
+  },
+  {
+    "test": "the root updater refuses changed package bytes",
+    "result": "passed"
+  },
+  {
     "test": "a release manifest for other bytes is rejected even with a valid authorization",
     "result": "passed"
   },
@@ -845,6 +865,18 @@
   },
   {
     "test": "manifest and authorization from their own intermediates are accepted",
+    "result": "passed"
+  },
+  {
+    "test": "a signed-in manager sees the offer and that nothing blocks it",
+    "result": "passed"
+  },
+  {
+    "test": "the same session downloads the installer without being closed first",
+    "result": "passed"
+  },
+  {
+    "test": "a published version reaches the managers of the branch",
     "result": "passed"
   },
   {
@@ -925,6 +957,14 @@
   },
   {
     "test": "an expired license blocks client updates",
+    "result": "passed"
+  },
+  {
+    "test": "a fault reaches CulinaryServer signed by the branch and leaves the log",
+    "result": "passed"
+  },
+  {
+    "test": "with nothing to tell the branch stays quiet",
     "result": "passed"
   },
   {
@@ -1884,6 +1924,282 @@
     "result": "passed"
   },
   {
+    "test": "2026-10-30: OwnerStats hours equal the hand calculation",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-30: OwnerStats payments equal the hand calculation",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-30: OwnerStats refunds equal the hand calculation",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-30: OwnerStats channels equal the hand calculation",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-30: OwnerStats products equal the hand calculation",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-30: OwnerStats staff equal the hand calculation",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-30: OwnerStats cash equal the hand calculation",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-30: OwnerStats cashCloses equal the hand calculation",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-30: OwnerStats inventory equal the hand calculation",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-30: a past day with nothing open is complete",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-31: OwnerStats hours equal the hand calculation",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-31: OwnerStats payments equal the hand calculation",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-31: OwnerStats refunds equal the hand calculation",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-31: OwnerStats channels equal the hand calculation",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-31: OwnerStats products equal the hand calculation",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-31: OwnerStats staff equal the hand calculation",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-31: OwnerStats cash equal the hand calculation",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-31: OwnerStats cashCloses equal the hand calculation",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-31: OwnerStats inventory equal the hand calculation",
+    "result": "passed"
+  },
+  {
+    "test": "2026-10-31: a past day with nothing open is complete",
+    "result": "passed"
+  },
+  {
+    "test": "the vector holds two business days",
+    "result": "passed"
+  },
+  {
+    "test": "the vector meets every identity",
+    "result": "passed"
+  },
+  {
+    "test": "Z1: the panel counts what the vector says",
+    "result": "passed"
+  },
+  {
+    "test": "Z2: the panel counts what the vector says",
+    "result": "passed"
+  },
+  {
+    "test": "a published day keeps its unit cost",
+    "result": "passed"
+  },
+  {
+    "test": "a Z that differs from the panel with no reopening is an error on the day of that Z",
+    "result": "passed"
+  },
+  {
+    "test": "sales that differ by waiter stop the day",
+    "result": "passed"
+  },
+  {
+    "test": "a sale before the first Z has no close and one at the end of the last waits for the next",
+    "result": "passed"
+  },
+  {
+    "test": "the cutoff opens the business day",
+    "result": "passed"
+  },
+  {
+    "test": "the day in progress is not complete",
+    "result": "passed"
+  },
+  {
+    "test": "the ledger remembers what a finished day published",
+    "result": "passed"
+  },
+  {
+    "test": "changed figures make the day pending again",
+    "result": "passed"
+  },
+  {
+    "test": "the revision grows even with the clock set back",
+    "result": "passed"
+  },
+  {
+    "test": "without a usable license nothing is uploaded",
+    "result": "passed"
+  },
+  {
+    "test": "the upload carries the day, the branch and what is live",
+    "result": "passed"
+  },
+  {
+    "test": "today is sent as not complete",
+    "result": "passed"
+  },
+  {
+    "test": "no customer or ticket leaves the branch",
+    "result": "passed"
+  },
+  {
+    "test": "with no change only the heartbeat goes out",
+    "result": "passed"
+  },
+  {
+    "test": "a real report.z equals the panel to the cent",
+    "result": "passed"
+  },
+  {
+    "test": "report.z and the panel agree on tickets",
+    "result": "passed"
+  },
+  {
+    "test": "report.z and the panel agree on people",
+    "result": "passed"
+  },
+  {
+    "test": "report.z and the panel agree on gross",
+    "result": "passed"
+  },
+  {
+    "test": "report.z and the panel agree on tax",
+    "result": "passed"
+  },
+  {
+    "test": "report.z and the panel agree on voidedCount",
+    "result": "passed"
+  },
+  {
+    "test": "report.z and the panel agree on voidedAmount",
+    "result": "passed"
+  },
+  {
+    "test": "report.z and the panel agree on comps",
+    "result": "passed"
+  },
+  {
+    "test": "report.z and the panel agree on staffMeals",
+    "result": "passed"
+  },
+  {
+    "test": "report.z and the panel agree on payments",
+    "result": "passed"
+  },
+  {
+    "test": "the frozen Z travels with its day and its digest",
+    "result": "passed"
+  },
+  {
+    "test": "a reopened account leaves the panel while the Z keeps its frozen figures",
+    "result": "passed"
+  },
+  {
+    "test": "the reopened account is counted by both frozen closes",
+    "result": "passed"
+  },
+  {
+    "test": "the panel counts it once, in the later close",
+    "result": "passed"
+  },
+  {
+    "test": "the difference is exactly the reopened account and raises no error",
+    "result": "passed"
+  },
+  {
+    "test": "an unknown time zone is refused",
+    "result": "passed"
+  },
+  {
+    "test": "a cutoff past noon is refused",
+    "result": "passed"
+  },
+  {
+    "test": "time zone and cutoff decide the business day of a branch",
+    "result": "passed"
+  },
+  {
+    "test": "the upload tells the server the zone of the branch",
+    "result": "passed"
+  },
+  {
+    "test": "hours follow the clock of the branch",
+    "result": "passed"
+  },
+  {
+    "test": "an unreachable server surfaces to the worker, which tries again",
+    "result": "passed"
+  },
+  {
+    "test": "the change stays pending across a restart",
+    "result": "passed"
+  },
+  {
+    "test": "the pending day arrives when the server returns",
+    "result": "passed"
+  },
+  {
+    "test": "a restart does not send delivered days again",
+    "result": "passed"
+  },
+  {
+    "test": "a server without the route is not an error and the day waits",
+    "result": "passed"
+  },
+  {
+    "test": "a repeated or old revision never replaces what the server holds",
+    "result": "passed"
+  },
+  {
+    "test": "a day the server ignored counts as answered",
+    "result": "passed"
+  },
+  {
+    "test": "between full passes only the recent days are added up",
+    "result": "passed"
+  },
+  {
+    "test": "a catch-up goes in bounded batches, newest first",
+    "result": "passed"
+  },
+  {
+    "test": "a day with nothing left replaces what the server held",
+    "result": "passed"
+  },
+  {
+    "test": "days past the retention are not sent",
+    "result": "passed"
+  },
+  {
     "test": "nobody changes their own limit \u00B7 Tu l\u00EDmite de autorizaci\u00F3n lo cambia otro gerente",
     "result": "passed"
   },
@@ -2233,6 +2549,114 @@
   },
   {
     "test": "client update permitted only after local accounts and device session close",
+    "result": "passed"
+  },
+  {
+    "test": "update block names the device session as its cause",
+    "result": "passed"
+  },
+  {
+    "test": "a wrong device secret cannot end the device sessions",
+    "result": "passed"
+  },
+  {
+    "test": "a device without a client session ends the one its closed app stranded",
+    "result": "passed"
+  },
+  {
+    "test": "ending device sessions twice has nothing left to do",
+    "result": "passed"
+  },
+  {
+    "test": "a stranded session no longer blocks the update once its device ended it",
+    "result": "passed"
+  },
+  {
+    "test": "an ended device session cannot act",
+    "result": "passed"
+  },
+  {
+    "test": "update block names the open account instead of the session",
+    "result": "passed"
+  },
+  {
+    "test": "a waiter cannot sign the branch out for an update",
+    "result": "passed"
+  },
+  {
+    "test": "a waiter cannot download an update from inside the app",
+    "result": "passed"
+  },
+  {
+    "test": "an open account keeps every session open",
+    "result": "passed"
+  },
+  {
+    "test": "the session of this device is still named first",
+    "result": "passed"
+  },
+  {
+    "test": "an open cash register keeps every session open",
+    "result": "passed"
+  },
+  {
+    "test": "update block names the open register",
+    "result": "passed"
+  },
+  {
+    "test": "with nothing open the update signs out every device, the manager included",
+    "result": "passed"
+  },
+  {
+    "test": "a device signed out for the update loses its session",
+    "result": "passed"
+  },
+  {
+    "test": "whoever is signed out for the update is told why",
+    "result": "passed"
+  },
+  {
+    "test": "the manager who confirmed the update loses the session too",
+    "result": "passed"
+  },
+  {
+    "test": "the install permission holds once everyone is out",
+    "result": "passed"
+  },
+  {
+    "test": "the same fault with another number only counts",
+    "result": "passed"
+  },
+  {
+    "test": "a report leaves out contact, credentials, card digits, the home folder and query strings",
+    "result": "passed"
+  },
+  {
+    "test": "a fault survives a restart of the server",
+    "result": "passed"
+  },
+  {
+    "test": "repeats counted while a batch travelled go out on the next one",
+    "result": "passed"
+  },
+  {
+    "test": "a delivered fault is gone from the file too",
+    "result": "passed"
+  },
+  {
+    "test": "a terminal reports its own fault through its device credentials",
+    "result": "passed"
+  },
+  {
+    "test": "a fault without text still says something, so CulinaryServer does not refuse the batch",
+    "result": "passed"
+  },
+  {
+    "test": "a stranger on the network cannot fill the fault log",
+    "result": "passed"
+  },
+  {
+    "test": "a terminal cannot report as the server",
     "result": "passed"
   },
   {

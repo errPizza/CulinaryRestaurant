@@ -38,7 +38,7 @@ En pantallas estrechas se conserva el símbolo en cabecera para no reducir el te
 
 ## Compatibilidad e identidad
 
-El nombre visible y el ejecutable de escritorio cambian a Culinary Restaurant/CulinaryRestaurant. Se mantienen la carpeta del proyecto MesaNexoNativo, namespaces, identificadores de contratos, paquete Android/iOS `mx.mesanexo.nativeclient`, claves de almacenamiento seguro y nombre del paquete Debian `mesanexo-native`. Esto evita convertir el cambio de marca en una instalación lógica distinta o perder credenciales/datos existentes. La versión es 0.1.1 (versión móvil interna 2).
+El nombre visible y el ejecutable de escritorio cambian a Culinary Restaurant/CulinaryRestaurant. Se mantienen la carpeta del proyecto MesaNexoNativo, namespaces, identificadores de contratos, paquete Android/iOS `mx.mesanexo.nativeclient` (cambiado a `mx.culinaryrestaurant.mobile` en 0.3.3), claves de almacenamiento seguro y nombre del paquete Debian `mesanexo-native`. Esto evita convertir el cambio de marca en una instalación lógica distinta o perder credenciales/datos existentes. La versión es 0.1.1 (versión móvil interna 2).
 
 Las publicaciones nuevas están bajo `artifacts/0.1.1/`; los paquetes y ZIP previos 0.1.0 se conservaron. No se modificó el prototipo ni se instalaron paquetes en la VM. Las capturas nuevas en evidence son renderizados nativos con datos de pruebas, no evidencia de ejecución en teléfono o Debian. iOS sigue sin compilarse por falta de Mac/Xcode.
 

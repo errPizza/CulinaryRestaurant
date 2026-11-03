@@ -28,7 +28,7 @@ public sealed partial class Restaurant {
             "openAccounts", s.Related("visit", "status", "open").Count());
 
     }
-    DateTimeOffset LastZ(BranchState s) => DateTimeOffset.TryParse(s.Meta.S("lastZAt"), out var at) ? at : new DateTimeOffset(MexicoNow().Date, MexicoNow().Offset);
+    DateTimeOffset LastZ(BranchState s) => DateTimeOffset.TryParse(s.Meta.S("lastZAt"), out var at) ? at : new DateTimeOffset(BranchNow(s).Date, BranchNow(s).Offset);
     long PortionCost(BranchState s, JsonObject product) {
 
         if (product.S("recipeVersionId") == "") return -1;

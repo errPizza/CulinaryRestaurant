@@ -65,7 +65,19 @@ Esa pantalla sólo sale cuando la app termina o deja de enviar señales durante 
 sudo tail -n 60 /home/operador/.local/state/culinary-restaurant/kiosk.log
 ```
 
-En X11, Ctrl+C es una tecla y no llega como SIGINT: la app corre en su propia sesión, sin terminal. Una señal `SIGSEGV` o `SIGABRT` apunta a WebKitGTK o al controlador gráfico. La sesión desactiva el renderizador DMA-BUF de WebKitGTK por eso.
+En X11, Ctrl+C es una tecla y no llega como SIGINT: la app corre en su propia sesión, sin terminal. Una señal `SIGSEGV` o `SIGABRT` apunta a WebKitGTK o al controlador gráfico.
+
+## Dibujo con GPU
+
+Con gráficos Intel o AMD, WebKitGTK dibuja con la GPU (DMA-BUF). Sin DMA-BUF apaga la aceleración por completo y el procesador dibuja cada cuadro: la interfaz va más lenta y gasta más pila. Las VM y `nouveau` siguen en ese modo, porque ahí no hay GPU fiable.
+
+Si la app se cae con una señal de fallo (`SIGSEGV`, `SIGABRT`…) o se congela mientras usa la GPU, la sesión crea `/home/operador/.local/state/culinary-restaurant/cpu-rendering` y desde ahí dibuja con el procesador en ese equipo; `kiosk.log` lo registra. Para volver a probar la GPU, o para forzar el procesador si la pantalla queda en blanco sin que la app falle, desde TTY2:
+
+```sh
+sudo rm /home/operador/.local/state/culinary-restaurant/cpu-rendering    # volver a probar la GPU
+sudo -u operador touch /home/operador/.local/state/culinary-restaurant/cpu-rendering    # forzar el procesador
+sudo systemctl restart lightdm
+```
 
 ## Pila y UPS
 

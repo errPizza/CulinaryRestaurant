@@ -63,7 +63,7 @@ public sealed partial class Restaurant {
 
         }
         var receiver = FiscalReceiver(p);
-        result = Add(s, "fiscal", J.O("visitId", v.S("id"), "status", "pending", "receiver", receiver, "version", "4.0", "folio", J.Id(), "issuedLocal", TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("America/Mexico_City")).ToString("yyyy-MM-ddTHH:mm:ss"), "totals", Totals(s, v), "at", J.Now(), "actor", u.S("id"), "message", "Pendiente de validación y PAC configurado; no hay timbre fiscal"));
+        result = Add(s, "fiscal", J.O("visitId", v.S("id"), "status", "pending", "receiver", receiver, "version", "4.0", "folio", J.Id(), "issuedLocal", BranchNow(s).ToString("yyyy-MM-ddTHH:mm:ss"), "totals", Totals(s, v), "at", J.Now(), "actor", u.S("id"), "message", "Pendiente de validación y PAC configurado; no hay timbre fiscal"));
         return true;
 
     }

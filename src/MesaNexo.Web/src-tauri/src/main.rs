@@ -6,7 +6,7 @@ struct Bridge { child: Child, input: ChildStdin, replies: mpsc::Receiver<String>
 impl Bridge {
     fn start() -> Result<Self,String> {
         let exe=std::env::current_exe().map_err(|e|e.to_string())?;
-        let mut path=exe.parent().ok_or("Directorio de aplicaciÃ³n invÃ¡lido")?.join(if cfg!(windows){"culinary-bridge.exe"}else{"culinary-bridge"});
+        let mut path=exe.parent().ok_or("Directorio de aplicación inválido")?.join(if cfg!(windows){"culinary-bridge.exe"}else{"culinary-bridge"});
         if cfg!(debug_assertions) && !path.exists() {
             path=std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("binaries").join(if cfg!(windows){"culinary-bridge-x86_64-pc-windows-msvc.exe"}else{"culinary-bridge-x86_64-unknown-linux-gnu"});
         }
@@ -24,8 +24,8 @@ impl Bridge {
         let line=json!({"id":id,"command":command,"args":args}).to_string();
         if line.len()>2_000_000{return Err("Solicitud demasiado grande".into());}
         writeln!(self.input,"{}",line).map_err(|_|"Transporte seguro desconectado")?;self.input.flush().map_err(|_|"No se pudo enviar la solicitud")?;
-        let reply=self.replies.recv_timeout(Duration::from_secs(120)).map_err(|_|"Transporte sin respuesta. Reinicia la app y reconcilia antes de repetir la operaciÃ³n.")?;
-        let response:Value=serde_json::from_str(&reply).map_err(|_|"Respuesta nativa invÃ¡lida")?;
+        let reply=self.replies.recv_timeout(Duration::from_secs(120)).map_err(|_|"Transporte sin respuesta. Reinicia la app y reconcilia antes de repetir la operación.")?;
+        let response:Value=serde_json::from_str(&reply).map_err(|_|"Respuesta nativa inválida")?;
         if response["id"]!=id{return Err("Respuesta nativa fuera de secuencia; reinicia y reconcilia".into());}
         Ok(response)
     }

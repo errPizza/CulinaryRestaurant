@@ -4,7 +4,7 @@ namespace MesaNexo.Core;
 // Stage 3: price lists, customer wallet with cashback, and employee meals charged to payroll.
 public sealed partial class Restaurant {
     static readonly string[] PriceChannels = ["dine-in", "quick", "pickup", "delivery"];
-    static DateTimeOffset MexicoNow() => TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("America/Mexico_City"));
+    DateTimeOffset BranchNow(BranchState s) => TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, Zone(s));
     static string VisitChannel(JsonObject v) => v.S("tableId") != "" ? "dine-in" : v.S("channel") is "delivery" or "pickup" ? v.S("channel") : "quick";
     long WalletBalance(BranchState s, string customerId) => s.Related("walletmove", "customerId", customerId).Sum(x => x.L("amount"));
     // A visit can pin a list ("base" = catalog price); otherwise the first active automatic list for its channel and hour applies.
@@ -13,7 +13,7 @@ public sealed partial class Restaurant {
         var pinned = v.S("priceListId");
         if (pinned == "base") return null;
         if (pinned != "") return s.Related("pricelist", "id", pinned).FirstOrDefault(x => x.B("active"));
-        var hour = MexicoNow().Hour;
+        var hour = BranchNow(s).Hour;
         var channel = VisitChannel(v);
         return s.List("pricelist").Where(x => x.B("active") && x.B("auto") && x.A("channels").Strings().Contains(channel) && hour >= x.L("startHour") && hour < x.L("endHour", 24)).OrderBy(x => x.L("priority")).ThenBy(x => x.S("id"), StringComparer.Ordinal).FirstOrDefault();
 
@@ -47,7 +47,7 @@ public sealed partial class Restaurant {
         v["loyaltyEarned"] = v.L("loyaltyEarned") + earned;
 
     }
-    string MonthKey() => MexicoNow().ToString("yyyy-MM");
+    string MonthKey(BranchState s) => BranchNow(s).ToString("yyyy-MM");
     long StaffMonthly(BranchState s, string employeeId, string month) => s.Related("staffcharge", "employeeId", employeeId).Where(x => x.S("month") == month).Sum(x => x.L("amount"));
     bool TryLoyalty(BranchState s, JsonObject u, string type, JsonObject p, out JsonObject result) {
 
@@ -165,7 +165,7 @@ public sealed partial class Restaurant {
                     if (config.L("discountBps") > 0) v["discount"] = J.O("kind", "percent", "value", config.L("discountBps") / 100m, "reason", "Consumo de empleado", "staff", true);
                     var total = Totals(s, v).L("total");
                     string paymentId = "";
-                    if (total > 0 && settle == "payroll") { var month = MonthKey(); var limit = config.L("monthlyLimit"); Need(limit == 0 || StaffMonthly(s, employee.S("id"), month) + total <= limit, "Supera el tope mensual de consumo de " + employee.S("name")); paymentId = InternalPayment(s, u, v, total, "payroll").S("id"); Add(s, "staffcharge", J.O("employeeId", employee.S("id"), "visitId", v.S("id"), "amount", total, "month", month, "status", "open", "at", J.Now())); } else if (total > 0) paymentId = Act(s, u, "payment.add", J.O("visitId", v.S("id"), "amount", total, "method", settle)).S("id");
+                    if (total > 0 && settle == "payroll") { var month = MonthKey(s); var limit = config.L("monthlyLimit"); Need(limit == 0 || StaffMonthly(s, employee.S("id"), month) + total <= limit, "Supera el tope mensual de consumo de " + employee.S("name")); paymentId = InternalPayment(s, u, v, total, "payroll").S("id"); Add(s, "staffcharge", J.O("employeeId", employee.S("id"), "visitId", v.S("id"), "amount", total, "month", month, "status", "open", "at", J.Now())); } else if (total > 0) paymentId = Act(s, u, "payment.add", J.O("visitId", v.S("id"), "amount", total, "method", settle)).S("id");
                     v["prepaid"] = true;
                     result = J.O("visitId", v.S("id"), "total", total, "paymentId", paymentId, "settle", settle);
                     break;

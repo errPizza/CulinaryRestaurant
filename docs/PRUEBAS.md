@@ -1,6 +1,6 @@
 # Reproducir validación
 
-Requisitos: SDK 10.0.301, restore NuGet, Python con `requirements-lab.txt` (PyNaCl 1.6.2) y sesión Windows con gráficos para las pruebas Avalonia/DPAPI. El Python de CulinaryOS instalado ya cumplía las dependencias; no se instala sobre ese directorio. Para otra máquina, usar entorno virtual propio.
+Requisitos: SDK 10.0.402 (`global.json`), restore NuGet, Python con `requirements-lab.txt` (PyNaCl 1.6.2) y sesión Windows con gráficos para las pruebas Avalonia/DPAPI. El Python de CulinaryOS instalado ya cumplía las dependencias; no se instala sobre ese directorio. Para otra máquina, usar entorno virtual propio.
 
 Desde la raíz:
 

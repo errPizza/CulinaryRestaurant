@@ -20,6 +20,7 @@ src/MesaNexo.Web/src-tauri/target/
 src/MesaNexo.Web/src-tauri/binaries/
 src/MesaNexo.Web/test-results/
 .taste-skill/
+*.Backup.tmp
 
 # Llaves privadas: nunca en el repositorio
 *private*.pem

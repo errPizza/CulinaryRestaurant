@@ -2,7 +2,7 @@ name: Pruebas
 
 on:
   push:
-    branches: [postgresql, estado-en-memoria]
+    branches: [main, postgresql, estado-en-memoria]
   pull_request:
 
 jobs:
@@ -36,6 +36,8 @@ jobs:
         run: ./tools/Test.ps1 -Python (Get-Command python).Source
       - name: Instalador
         run: python -B tests/test_culinaryos_install.py
+      - name: Métricas del panel
+        run: python -B tests/test_owner_stats_vectors.py
       - name: Interfaz
         shell: pwsh
         working-directory: src/MesaNexo.Web

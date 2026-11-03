@@ -17,6 +17,13 @@ APP = "/opt/culinaryos-app/client/CulinaryRestaurant"
 CONFIG = "/opt/culinaryos-app/kiosk/openbox.xml"
 LOG_LIMIT = 256 * 1024
 TAIL_BYTES = 4096
+GPU_DRIVERS = {"i915", "xe", "amdgpu", "radeon"}
+CRASH_SIGNALS = {4, 6, 7, 8, 11}  # Linux: SIGILL, SIGABRT, SIGBUS, SIGFPE, SIGSEGV
+
+
+def gpu_ready(drm=Path("/sys/class/drm")):
+    """Intel and AMD render nodes. VMs and nouveau stay on the CPU path, where the kiosk is already proven."""
+    return any((node / "device/driver").resolve().name in GPU_DRIVERS for node in drm.glob("renderD*"))
 
 
 def valid_ready(raw, pid, nonce):
@@ -136,6 +143,9 @@ class Session:
         self.runtime = runtime
         state = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local/state")
         self.log = Path(state) / "culinary-restaurant/kiosk.log"
+        self.cpu_only = self.log.with_name("cpu-rendering")
+        self.faults = self.log.with_name("faults.jsonl")
+        self.on_gpu = False
         self.child = None
         self.wm = None
         self.guard = None
@@ -189,10 +199,12 @@ class Session:
     def start(self, now):
         self.nonce = secrets.token_hex(32)
         env = dict(os.environ, CULINARY_RESTAURANT_KIOSK="1",
-                   CULINARY_RESTAURANT_KIOSK_NONCE=self.nonce,
-                   # WebKitGTK's DMA-BUF path fails on some real GPUs and never runs on the
-                   # software renderer of the test VMs, where shortcuts do work.
-                   WEBKIT_DISABLE_DMABUF_RENDERER="1")
+                   CULINARY_RESTAURANT_KIOSK_NONCE=self.nonce)
+        # Without DMA-BUF WebKitGTK draws every frame on the CPU: slow and hard on the battery.
+        # The GPU is used until it fails once on this machine (see recover).
+        self.on_gpu = gpu_ready() and not self.cpu_only.exists()
+        if not self.on_gpu:
+            env["WEBKIT_DISABLE_DMABUF_RENDERER"] = "1"
         output_path = self.runtime / "app-output.log"
         output_path.write_bytes(b"")
         with output_path.open("ab") as output:
@@ -204,11 +216,27 @@ class Session:
         when = time.strftime("%Y-%m-%d %H:%M:%S")
         append_log(self.log, f"{when} Recuperando: {reason}, {now - self.guard.started:.0f} s "
                              f"despues de abrir\n{tail(self.runtime / 'app-output.log')}\n")
+        # The app picks this up on its next start and sends it on to the branch.
+        append_log(self.faults, json.dumps({"what": f"La aplicación del kiosco se detuvo: {reason}",
+                                            "affected": "La pantalla quedó fuera de servicio hasta que el kiosco la reinició",
+                                            "detail": tail(self.runtime / "app-output.log"),
+                                            "seconds": str(int(now - self.guard.started))}) + "\n")
+
+    def give_up_gpu(self):
+        """A crash or a frozen renderer on the GPU path. An update or a stop ends the app too: that is not the GPU."""
+        code = self.child.poll() if self.child else 0
+        if self.on_gpu and (code is None or (code < 0 and -code in CRASH_SIGNALS)):
+            try:
+                self.cpu_only.touch()
+            except OSError:
+                pass
+            append_log(self.log, "Desde ahora este equipo dibuja con el procesador\n")
 
     def recover(self, now, reason=None):
         self.show_loading("Recuperando Culinary Restaurant…")
         if self.guard is not None:
             self.record_failure(now, reason or exit_cause(self.child and self.child.poll()))
+        self.give_up_gpu()
         terminate(self.child)
         self.child = None
         self.retries += 1

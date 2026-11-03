@@ -26,7 +26,13 @@ sealed class FakeCulinaryServer: IAsyncDisposable {
     public JsonObject? Fingerprint;
     public string? CentralCertificate;
     public DateTimeOffset Expires = DateTimeOffset.UtcNow.AddDays(30);
-    public readonly List<JsonObject> Tickets = [];
+    public readonly List<JsonObject> Tickets = [], Faults = [];
+    // What /branch/v1/stats holds per business day, as the Worker will: a lower revision never replaces a higher one.
+    public readonly List<JsonObject> StatsPosts = [];
+    public readonly Dictionary<string, JsonObject> StatsDays = [];
+    public bool StatsDown, StatsMissing;
+    public readonly HashSet<string> StatsRefused = [];
+    public JsonObject Published = [];
     public JsonObject? Update;
     // Update offers as the Worker sends them: authorization from the license intermediate, manifest from the release one.
     public TestLicense.Key UpdateSigner = TestLicense.Intermediate(TestLicense.LicenseUses), ReleaseSigner = TestLicense.Intermediate(TestLicense.ReleaseUses);
@@ -102,6 +108,28 @@ sealed class FakeCulinaryServer: IAsyncDisposable {
         App.MapPost("/branch/v1/tickets", async (HttpContext c) => { if (await Signed(c) is not { } r) return Error(401, "unauthorized", "Firma inválida"); var t = J.O("id", Guid.NewGuid().ToString("D"), "subject", r.Body.S("subject"), "status", "open", "messages", new[] { J.O("id", Guid.NewGuid().ToString("D"), "author", "branch", "body", r.Body.S("message"), "createdAt", Iso(DateTimeOffset.UtcNow)) }); Tickets.Add(t); return Results.Json(J.O("ticket", t), statusCode: 201); });
         App.MapPost("/branch/v1/tickets/{id}/messages", async (HttpContext c, string id) => { if (await Signed(c) is not { } r) return Error(401, "unauthorized", "Firma inválida"); var t = Tickets.Single(x => x.S("id") == id); t.A("messages").Add(J.O("id", Guid.NewGuid().ToString("D"), "author", "branch", "body", r.Body.S("message"), "createdAt", Iso(DateTimeOffset.UtcNow))); t["status"] = "open"; return Results.Json(J.O("ticket", t.DeepClone()), statusCode: 201); });
         App.MapGet("/branch/v1/tickets", async (HttpContext c) => await Signed(c) is null ? Error(401, "unauthorized", "Firma inválida") : Results.Json(J.O("tickets", new JsonArray(Tickets.Select(x => x.DeepClone()).ToArray()))));
+        App.MapPost("/branch/v1/updates/latest", async (HttpContext c) => await Signed(c) is null ? Error(401, "unauthorized", "Firma inválida") : Results.Json(J.O("releases", Published)));
+        App.MapPost("/branch/v1/stats", async (HttpContext c) => {
+
+            if (StatsMissing) return Error(404, "not_found", "Ruta desconocida");
+            if (StatsDown) return Error(503, "unavailable", "Servicio no disponible");
+            if (await Signed(c) is not { } r) return Error(401, "unauthorized", "Firma inválida");
+            StatsPosts.Add((JsonObject)r.Body.DeepClone());
+            var accepted = new List<string>();
+            var ignored = new List<string>();
+            foreach (var day in r.Body.A("days").Objects()) {
+
+                var date = day.S("businessDate");
+                if (StatsRefused.Contains(date)) continue;
+                if (StatsDays.TryGetValue(date, out var held) && held.L("revision") >= day.L("revision")) { ignored.Add(date); continue; }
+                StatsDays[date] = (JsonObject)day.DeepClone();
+                accepted.Add(date);
+
+            }
+            return Results.Json(J.O("accepted", accepted, "ignored", ignored, "rejected", StatsRefused.ToArray()));
+
+        });
+        App.MapPost("/branch/v1/faults", async (HttpContext c) => { if (await Signed(c) is not { } r) return Error(401, "unauthorized", "Firma inválida"); Faults.AddRange(r.Body.A("faults").Objects().Select(x => (JsonObject)x.DeepClone())); return Results.Json(J.O("received", r.Body.A("faults").Count)); });
         App.MapPost("/branch/v1/updates/check", async (HttpContext c) => {
 
             if (await Signed(c) is not { } r) return Error(401, "unauthorized", "Firma inválida");
@@ -209,7 +237,9 @@ static class LicenseTests {
         Check(fake.Renewals == 1 && string.CompareOrdinal((await service.LicenseStatus()).S("validatedAt"), before) > 0, "renewal with a signed challenge refreshes validatedAt");
         Check(await service.RegisterCentral() && fake.CentralCertificate!.Length == 64, "branch registers its central mTLS certificate fingerprint");
         var ticket = await Act("ticket.create", J.O("subject", "No imprime", "message", "La impresora de cocina no responde"));
+        Check(await service.SupportDue(TimeSpan.Zero), "an unsent support message is due at once");
         await service.SyncSupport();
+        Check(!await service.SupportDue(TimeSpan.FromSeconds(5)) && await service.SupportDue(TimeSpan.FromSeconds(30)), "an open ticket looks for replies every 30 seconds");
         Check(fake.Tickets.Single().S("subject") == "No imprime", "a local support ticket reaches CulinaryServer");
         fake.Tickets[0].A("messages").Add(J.O("id", Guid.NewGuid().ToString("D"), "author", "admin", "adminId", "a", "body", "Reinicia el servicio de impresión", "createdAt", J.Now()));
         fake.Tickets[0]["status"] = "answered";
@@ -238,6 +268,22 @@ static class LicenseTests {
             await Deny(() => Updates.Verify(update, package, "win-x64"), "a changed installer is rejected by the terminal");
 
         }
+        // CulinaryOS: root installs only what the installed backend verifies from the files the kiosk user left.
+        var windows = fake.Update;
+        fake.Update = (JsonObject)windows.DeepClone();
+        fake.Update["platform"] = "linux-x64";
+        fake.Update["filename"] = "culinary-9.0.0.deb";
+        var linuxOffer = await service.CheckUpdate(J.O("siteId", site, "deviceId", deviceId, "deviceSecret", deviceSecret, "platform", "linux-x64", "currentVersion", "0.2.0"));
+        var offerFile = Path.Combine(folder, "updates", "offer.json");
+        var debFile = Path.Combine(folder, "updates", "package.deb");
+        await File.WriteAllTextAsync(offerFile, J.O("update", linuxOffer.S("update"), "release", linuxOffer.S("release"), "keyFloor", linuxOffer.S("keyFloor")).ToJsonString());
+        await File.WriteAllBytesAsync(debFile, fake.Package);
+        await UpdateCheck.Run(offerFile, debFile, site);
+        Check(true, "the root updater accepts a signed package for this site");
+        await Deny(() => UpdateCheck.Run(offerFile, debFile, "other-site"), "the root updater refuses an offer for another site", 403);
+        await File.AppendAllTextAsync(debFile, "x");
+        await Deny(() => UpdateCheck.Run(offerFile, debFile, site), "the root updater refuses changed package bytes");
+        fake.Update = windows;
         // The online license intermediate cannot vouch for bytes: the manifest must come from the release intermediate.
         Task<JsonObject> CheckAgain() => service.CheckUpdate(J.O("siteId", site, "deviceId", deviceId, "deviceSecret", deviceSecret, "platform", "win-x64", "currentVersion", "0.2.0"));
         fake.ReleaseOverride = (JsonObject)fake.Update.DeepClone();
@@ -249,6 +295,17 @@ static class LicenseTests {
         await Deny(CheckAgain, "the license intermediate cannot sign a release manifest", 403);
         fake.ReleaseSigner = releaseSigner;
         Check((await CheckAgain()).S("version") == "9.0.0", "manifest and authorization from their own intermediates are accepted");
+        // Inside the app a manager looks and downloads with the sessions still open, and sees what would stop the install.
+        var inside = (await SignIn()).S("token");
+        var look = await service.LookForUpdate(inside, J.O("platform", "win-x64", "currentVersion", "0.2.0"));
+        Check(look.S("version") == "9.0.0" && look.S("notes") == fake.Update.S("notes") && look.S("blocked") == "" && look.L("otherSessions") == 0, "a signed-in manager sees the offer and that nothing blocks it");
+        await service.CheckUpdate(J.O("platform", "win-x64", "currentVersion", "0.2.0"), inside);
+        using (var download = await service.DownloadUpdate(J.O("releaseId", fake.Update.S("releaseId")), inside)) Check(download.IsSuccessStatusCode, "the same session downloads the installer without being closed first");
+        // What the provider published reaches the state of a manager, whatever the platform of the branch server.
+        fake.Published = J.O("linux-x64", J.O("version", "9.0.0", "notes", "Novedades"));
+        await service.LookForReleases();
+        Check((await service.State(inside)).Obj("connection").Obj("updates").Obj("linux-x64").S("version") == "9.0.0", "a published version reaches the managers of the branch");
+        await service.Action(inside, J.O("operationId", J.Id(), "type", "session.logout", "payload", new JsonObject()));
         fake.Update = null;
         // A lower revision never replaces a higher one.
         fake.Revision = 3;
@@ -319,6 +376,11 @@ static class LicenseTests {
         await Deny(() => service.Report(open, "", "", null), "an open session exports no report once the license expired", 423);
         await Deny(() => service.State(open), "an open session loses the state once the license expired", 423);
         Check(!(await service.CanInstall(device)).B("allowed"), "an expired license blocks client updates");
+        service.Faults.Record("worker", "critical", "La bitácora no coincide", "Puntos de control", "traza");
+        await service.SendFaults();
+        Check(fake.Faults is [var sent] && sent.S("what") == "La bitácora no coincide" && sent.S("version") != "" && sent.S("firstAt") != "" && service.Faults.Pending().Length == 0, "a fault reaches CulinaryServer signed by the branch and leaves the log");
+        await service.SendFaults();
+        Check(fake.Faults.Count == 1, "with nothing to tell the branch stays quiet");
         var during = (await service.Load()).Committed;
         Check(unlocked.Records.Where(x => x.Key is not ("mn_license_current" or "mn_meta_site")).All(x => during.TryGet(x.Key, out var kept) && kept.Version == x.Value.Version && kept.Data.ToJsonString() == x.Value.Data.ToJsonString()) && KeyFiles() == keyFiles, "a lock leaves every record and key file as it was");
         // The provider renews: the next renewal unlocks without losing data.

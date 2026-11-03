@@ -1,8 +1,7 @@
 using MesaNexo.Core;
 using Microsoft.AspNetCore.SignalR;
 namespace MesaNexo.Api;
-// One authority/site per process. Hints are scoped to an authenticated site group.
-// Every snapshot reauthenticates the user, role, device and session in durable storage.
+
 public sealed class LiveHub(BranchService service): Hub {
     public static string SiteGroup(string site) => "authorized-site:" + site;
     string Token() { var c = Context.GetHttpContext()!; var h = c.Request.Headers.Authorization.ToString(); var token = h.StartsWith("Bearer ") ? h[7..] : c.Request.Query["access_token"].ToString(); Rules.Need(token.Length is > 10 and < 200, "Sesión requerida", 401); return token; }

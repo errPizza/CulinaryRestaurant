@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RISKS = {
-    'Dinero': ['money', 'approvals', 'boundaries', 'live-integrations', 'fiscal-sandbox'],
+    'Dinero': ['money', 'owner-stats', 'approvals', 'boundaries', 'live-integrations', 'fiscal-sandbox'],
     'Inventario': ['inventory', 'backoffice'],
     'Seguridad': ['licenses', 'checkpoints', 'approvals', 'privacy', 'tenants'],
     'Restauración': ['store-outbox', 'checkpoints', 'boundaries'],

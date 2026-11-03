@@ -1,0 +1,8 @@
+[Unit]
+Description=Paquete de Culinary Restaurant listo para instalar
+
+[Path]
+PathExists=/var/lib/culinary-update/inbox/ready
+
+[Install]
+WantedBy=multi-user.target

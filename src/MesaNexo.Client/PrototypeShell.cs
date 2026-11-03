@@ -80,9 +80,9 @@ public sealed partial class MainView {
         var profileBody = Horizontal(avatar);
         if (!mobile) { var details = Stack(Text(user.S("name"), 12, Brushes.White, true), Text(Label(user.S("role")) + " · Cerrar sesión", 10, Pale)); details.Spacing = 2; details.MaxWidth = 110; foreach (var text in details.Children.OfType<TextBlock>()) { text.TextWrapping = TextWrapping.NoWrap; text.TextTrimming = TextTrimming.CharacterEllipsis; } profileBody.Children.Add(details); }
         profileButton.Content = profileBody;
-        var version = TextButton("Culinary Restaurant 0.2.0", About);
+        var version = TextButton("Culinary Restaurant 0.3.0", About);
         version.Classes.Add("nav");
-        version.Content = Horizontal(Text(mobile ? "0.2.0" : "0.2.0", 10, Pale), Brand.Icon("cloud", Pale, 14));
+        version.Content = Horizontal(Text(mobile ? "0.3.0" : "0.3.0", 10, Pale), Brand.Icon("cloud", Pale, 14));
         version.Foreground = Pale;
         version.Padding = new Thickness(10, 8);
         version.BorderThickness = new Thickness(1, 0, 0, 0);
@@ -124,7 +124,7 @@ public sealed partial class MainView {
 
         var image = Brand.Image(true, 360, 216);
         image.HorizontalAlignment = HorizontalAlignment.Center;
-        var rows = Stack(image, Text(Brand.Name, 22, Graphite, true), Text("Versión 0.2.0", 13, Muted), Text("Aplicación interna · Datos persistentes", 13, Muted));
+        var rows = Stack(image, Text(Brand.Name, 22, Graphite, true), Text("Versión 0.3.0", 13, Muted), Text("Aplicación interna · Datos persistentes", 13, Muted));
         var reduced = new CheckBox { Content = "Reducir movimiento", IsChecked = PrototypeMotion.ReduceMotion, MinHeight = 44 };
         reduced.IsCheckedChanged += async (_, _) => { PrototypeMotion.ReduceMotion = reduced.IsChecked == true; await vault.Write("motion.reduced", PrototypeMotion.ReduceMotion ? "true" : "false"); };
         rows.Children.Add(reduced);
@@ -177,7 +177,7 @@ public sealed partial class MainView {
         fieldsLogin.Children.Add(login);
         fieldsLogin.Children.Add(TextButton("Configurar dirección del backend", Configure));
         fieldsLogin.Children.Add(TextButton("Ver último catálogo guardado", async () => { var raw = await vault.Read("last_catalog_" + (site.Text?.Trim() ?? "")); Rules.Need(raw is not null, "Este dispositivo aún no tiene un catálogo guardado"); var cached = JsonNode.Parse(raw!)!; var rows = Stack(Text("Catálogo guardado · sólo consulta", 20, Graphite, true), Text("Actualizado " + DateLabel(cached.S("at")) + ". Inicia sesión con el servidor local para confirmar pedidos.", 12, Muted)); foreach (var p in cached.A("products").Objects().Where(x => x.B("visible"))) rows.Children.Add(Text(p.S("name") + " · " + Money(p.L("price")))); ShowModal("Catálogo local", rows); }));
-        fieldsLogin.Children.Add(Text("Versión 0.2.0 · " + (profile?.ServerUrl ?? "Configura la conexión"), 11, Muted));
+        fieldsLogin.Children.Add(Text("Versión 0.3.0 · " + (profile?.ServerUrl ?? "Configura la conexión"), 11, Muted));
         fieldsLogin.MaxWidth = 380;
         fieldsLogin.Width = ViewWidth <= 650 ? Math.Max(0, ViewWidth - 48) : 380;
         fieldsLogin.HorizontalAlignment = HorizontalAlignment.Center;
@@ -226,7 +226,7 @@ public sealed partial class MainView {
         body.Children.Add(view);
         var footer = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(0, 4, 0, 0) };
         footer.Children.Add(Text(Brand.Name + " · " + "Aplicación interna", 10, Muted));
-        var stamp = Text("Datos persistentes · Versión 0.2.0", 10, Muted);
+        var stamp = Text("Datos persistentes · Versión 0.3.0", 10, Muted);
         if (ViewWidth > 500) { Grid.SetColumn(stamp, 1); footer.Children.Add(stamp); }
         body.Children.Add(new Border { BorderBrush = Line, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 22, 0, 0), Child = footer });
         content.Content = new ScrollViewer { Content = body, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };

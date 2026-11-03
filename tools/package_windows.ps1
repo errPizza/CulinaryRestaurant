@@ -2,9 +2,9 @@ param([string]$NsisCompiler)
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
 if(!$NsisCompiler){throw 'Indica la ruta del compilador oficial makensis.exe con -NsisCompiler.'}
-$published=Join-Path $projectRoot 'artifacts\0.2.0\win-x64'
+$published=Join-Path $projectRoot 'artifacts\0.3.0\win-x64'
 if(!(Test-Path -LiteralPath (Join-Path $published 'CulinaryRestaurant.exe'))){throw 'Publica primero el cliente win-x64.'}
-$destination=Join-Path $projectRoot 'artifacts\CulinaryRestaurant-0.2.0-dev-win-x64.exe'
+$destination=Join-Path $projectRoot 'artifacts\CulinaryRestaurant-0.3.0-dev-win-x64.exe'
 $files=Get-ChildItem -LiteralPath $published -File -Recurse
 $body=New-Object System.Collections.Generic.List[string]
 $body.Add('Unicode true')
@@ -14,10 +14,10 @@ $body.Add('Name "Culinary Restaurant (desarrollo)"')
 $body.Add('OutFile "'+$destination+'"')
 $body.Add('InstallDir "$LOCALAPPDATA\Programs\MesaNexoNative"')
 $body.Add('RequestExecutionLevel user')
-$body.Add('VIProductVersion "0.2.0.0"')
+$body.Add('VIProductVersion "0.3.0.0"')
 $body.Add('VIAddVersionKey /LANG=1033 "ProductName" "Culinary Restaurant"')
 $body.Add('VIAddVersionKey /LANG=1033 "FileDescription" "Culinary Restaurant - instalador de desarrollo"')
-$body.Add('VIAddVersionKey /LANG=1033 "FileVersion" "0.2.0"')
+$body.Add('VIAddVersionKey /LANG=1033 "FileVersion" "0.3.0"')
 $body.Add('VIAddVersionKey /LANG=1033 "LegalCopyright" "Culinary Restaurant"')
 $body.Add('SetCompressor /SOLID lzma')
 $body.Add('Page instfiles')

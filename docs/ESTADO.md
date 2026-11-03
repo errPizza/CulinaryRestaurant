@@ -1,5 +1,7 @@
 # Estado de entrega — 16 de octubre de 2026
 
+> Registro histórico de esa entrega. El estado vigente está en [ESTADO-COMERCIAL.md](ESTADO-COMERCIAL.md) y los resultados actuales en `evidence/INFORME.md`.
+
 ## Migración a React/CSS y Tauri
 
 Cliente Windows nuevo en `artifacts/desktop-css/CulinaryRestaurant.exe`, con sidecar .NET autocontenido. Prototipo grafito/ámbar, logos y animaciones DOM/CSS. Se mantienen el backend, la bóveda y los recibos de operaciones; el puente añade reconocimiento del renderer para cubrir pérdidas de respuesta IPC. Regresión existente: 312 comprobaciones aprobadas. Evidencia y alcance actualizado en [MIGRACION-TAURI.md](MIGRACION-TAURI.md). Linux requiere compilación/QA en Linux y Android/iOS conservan Avalonia hasta portar el puente móvil. Las secciones siguientes documentan las entregas previas.
@@ -55,3 +57,9 @@ Corregidos fuente/plantillas de botón, cabecera compacta, iconos vectoriales y 
 ## Botones actualizados
 
 Bordes redondeados completos, sombra suave, hover y rebote de clic implementados con reducción de movimiento. Pasaron 143 comprobaciones de interfaz, incluidas 14 de botones y activación única con ratón/Enter/Espacio. Nueva publicación Windows en artifacts/desktop-actual; se conserva el instalador anterior. Detalles: [DISENO-NATIVO-Y-CSS.md](DISENO-NATIVO-Y-CSS.md).
+
+## Actualización y fallos (0.3.03)
+
+- **Actualizar desde la app:** en el menú de cuenta, **Versión** abre la búsqueda de actualización. Sólo un gerente puede buscar e instalar. Con una cuenta o una caja abierta se indica cuál bloquea y no se descarga nada. Al confirmar se descarga y comprueba el instalador con las sesiones abiertas; al final se cierran las de todos los dispositivos y la app se cierra para instalar.
+- **Aviso de versión publicada:** la sucursal pregunta a CulinaryServer cada 15 minutos qué se publicó para su licencia. Los gerentes ven el aviso si su cliente tiene una versión anterior; tras instalar, la app dice una vez qué llegó.
+- **Fallos:** los errores del servidor, los procesos en segundo plano, el puente, la interfaz y el kiosco quedan en `faults.json` (sobreviven a un reinicio) y salen a CulinaryServer cada minuto hacia la sección **Fallos** de Culinary Admin. Antes de salir se quitan contraseñas, tokens, correos, números largos, carpetas de usuario y cadenas de consulta. Un error de negocio (409, licencia, permisos) no es un fallo.

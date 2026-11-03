@@ -1,0 +1,9 @@
+[Unit]
+Description=Instalar el paquete firmado de Culinary Restaurant
+
+[Service]
+Type=oneshot
+RuntimeDirectory=culinary-update
+Environment=DOTNET_BUNDLE_EXTRACT_BASE_DIR=/run/culinary-update
+Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+ExecStart=/usr/bin/python3 /usr/local/lib/culinary-update/apply.py

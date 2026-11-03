@@ -55,21 +55,21 @@
     "version": "1.56.0",
     "workers": 1,
     "webServer": {
-      "command": "npx vite preview --host 127.0.0.1 --strictPort --port 1431",
-      "url": "http://127.0.0.1:1431",
+      "command": "npx vite preview --host 127.0.0.1 --strictPort --port 1420",
+      "url": "http://127.0.0.1:1420",
       "reuseExistingServer": false,
       "timeout": 30000
     }
   },
   "suites": [
     {
-      "title": "hybrid.spec.ts",
-      "file": "hybrid.spec.ts",
+      "title": "topbar.spec.ts",
+      "file": "topbar.spec.ts",
       "column": 0,
       "line": 0,
       "specs": [
         {
-          "title": "integrations run in simulation: terminal, platform order, PAC stamp, outbox and locked live mode",
+          "title": "the manager sets the time zone and the end of the business day",
           "ok": true,
           "tags": [],
           "tests": [
@@ -84,12 +84,12 @@
                   "workerIndex": 0,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 32030,
+                  "duration": 1913,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-10-31T04:09:35.384Z",
+                  "startTime": "2026-11-03T01:59:26.407Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -97,9 +97,9 @@
               "status": "expected"
             }
           ],
-          "id": "f473bc6d32c46bbb9ff6-3ffe3557f5ee0fd151c6",
-          "file": "hybrid.spec.ts",
-          "line": 1161,
+          "id": "7e16cd89f00713821375-18838b2a01a0b5957844",
+          "file": "topbar.spec.ts",
+          "line": 703,
           "column": 1
         }
       ]
@@ -107,8 +107,8 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-10-31T04:09:30.096Z",
-    "duration": 57898.144,
+    "startTime": "2026-11-03T01:59:21.524Z",
+    "duration": 7344.294999999999,
     "expected": 1,
     "skipped": 0,
     "unexpected": 0,

@@ -67,6 +67,7 @@ static class Program {
         if (args.Contains("--license-only")) { try { await LicenseTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "licenses.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--checkpoint-only")) { try { await CheckpointTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "checkpoints.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--inventory-only")) { try { await InventoryTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "inventory.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
+        if (args.Contains("--owner-stats-only")) { try { await OwnerStatsTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "owner-stats.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--money-only")) { try { await MoneyTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "money.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--approval-only")) { try { await ApprovalTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "approvals.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--boundary-only")) { try { await BoundaryTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "boundaries.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
@@ -215,6 +216,7 @@ static class Program {
             await Suite("checkpoints", () => CheckpointTests.Run(root, evidence));
             await Suite("inventory", () => InventoryTests.Run(root, evidence));
             await Suite("money", () => MoneyTests.Run(root, evidence));
+            await Suite("owner-stats", () => OwnerStatsTests.Run(root, evidence));
             await Suite("approvals", () => ApprovalTests.Run(root, evidence));
             await Suite("boundaries", () => BoundaryTests.Run(root, evidence));
             await Suite("privacy", () => PrivacyTests.Run(root, evidence));

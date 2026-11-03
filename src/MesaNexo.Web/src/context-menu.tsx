@@ -79,7 +79,7 @@ export function ContextMenu({ label, children, text, icon, align = "right" }: { 
         }}
 
         >
-            <button ref={trigger} type="button" className={text ? "ui-button ghost menu-trigger" : "context-trigger"} aria-label={text ? undefined : label} title={label} aria-expanded={open} aria-controls={open ? "menu-" + label.replace(/\W/g, "-") : undefined} onClick={() => setOpen(!open)} onKeyDown={(event) => {
+            <button ref={trigger} type="button" className={text ? "ui-button ghost menu-trigger" : "context-trigger"} aria-label={text ? undefined : label} aria-expanded={open} aria-controls={open ? "menu-" + label.replace(/\W/g, "-") : undefined} onClick={() => setOpen(!open)} onKeyDown={(event) => {
 
                 if (event.key === "ArrowDown" && !open) {
 

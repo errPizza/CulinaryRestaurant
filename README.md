@@ -37,7 +37,7 @@ Windows instala únicamente el cliente por usuario; necesita un servidor de sucu
 
 ## Probar en Windows
 
-Se requiere SDK .NET 10.0.301 y Python con PyNaCl; el Python ya instalado de CulinaryOS cumple esas dependencias. No se modifican servicios ni datos de CulinaryOS:
+Se requiere SDK .NET 10.0.402 y Python con PyNaCl; el Python ya instalado de CulinaryOS cumple esas dependencias. No se modifican servicios ni datos de CulinaryOS:
 
 ```powershell
 cd C:\Users\kikin\Desktop\MesaNexoNativo
@@ -70,7 +70,7 @@ Si ya hay un servidor en el puerto, el iniciador valida TLS, CA, nombre e identi
 El proyecto no se declara listo para producción ni se considera la validación headless equivalente a probar dispositivos, instaladores o una actualización real.
 La reserva ocurre al enviar a cocina; el consumo durable se crea al liquidar. Cancelar libera sólo lo no preparado. Los pedidos públicos esperan revisión y commit del gerente local. Por decisión del usuario los adaptadores externos permanecen aislados, sin rutas ni comandos de activación; no hay emisión fiscal, cobro online, impresión, AMI, geocodificación ni push reales.
 
-Validación final: **303 comprobaciones de integración/interfaz y 19 del runtime aprobadas**. Windows: arranque del cliente publicado comprobado; Android: compilación y firma debug verificadas. Linux es publicación cruzada; iOS permanece sin compilar. La revisión visual interactiva del portal queda pendiente por falta de navegador disponible.
+Validación actual: **976 comprobaciones de integración/interfaz y 28 del runtime aprobadas** (31 de octubre de 2026, `evidence/integration.json` y `evidence/runtime.json`). Lo que se puede prometer está en [ESTADO-COMERCIAL.md](docs/ESTADO-COMERCIAL.md). Windows: arranque del cliente publicado comprobado; Android: compilación y firma debug verificadas. Linux es publicación cruzada; iOS permanece sin compilar. La revisión visual interactiva del portal queda pendiente por falta de navegador disponible.
 
 
 Integración con CulinaryOS: [instalación en VirtualBox e inicio automático de la app](docs/CULINARYOS-INSTALACION.md).

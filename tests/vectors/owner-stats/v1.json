@@ -1,0 +1,110 @@
+{
+  "description": "Dos días de una sucursal en UTC-6 con corte del día a las 04:00. Cifras de expected calculadas a mano; ver docs/METRICAS-PANEL.md.",
+  "branch": { "timeZone": "America/Mexico_City", "utcOffsetMinutes": -360, "businessDayCutoffMinutes": 240, "currency": "MXN" },
+  "products": {
+    "pizza": { "name": "Pizza", "category": "Platos", "unitCost": 7000 },
+    "refresco": { "name": "Refresco", "category": "Bebidas", "unitCost": null }
+  },
+  "staff": { "w1": "Ana", "w2": "Luis" },
+  "visits": [
+    { "id": "v1", "note": "Cena con descuento del 10 % y un postre cancelado", "waiterId": "w1", "people": 3, "channel": "", "deliveryFee": 0, "discount": { "kind": "percent", "value": 10 }, "closedAt": "2026-10-31T02:30:00Z" },
+    { "id": "v2", "note": "Cruza medianoche: se cierra a la 01:30 local y pertenece al día anterior", "waiterId": "w1", "people": 2, "channel": "", "deliveryFee": 0, "discount": {}, "closedAt": "2026-10-31T07:30:00Z" },
+    { "id": "v3", "note": "Domicilio a las 04:30 local, ya en el día siguiente", "waiterId": "w2", "people": 1, "channel": "delivery", "deliveryFee": 3000, "discount": { "kind": "fixed", "value": 1000 }, "closedAt": "2026-10-31T10:30:00Z" },
+    { "id": "v4", "note": "Cerrada antes del Z1 y reabierta después: quedó contada en ambos cortes", "waiterId": "w2", "people": 2, "channel": "", "deliveryFee": 0, "discount": {}, "firstClosedAt": "2026-10-31T02:00:00Z", "closedAt": "2026-10-31T20:00:00Z" },
+    { "id": "v5", "note": "Comida de empleado con cortesía total", "waiterId": "w2", "people": 1, "channel": "staff", "deliveryFee": 0, "discount": { "kind": "percent", "value": 100 }, "closedAt": "2026-10-31T21:00:00Z" }
+  ],
+  "units": [
+    { "id": "u1", "visitId": "v1", "productId": "pizza", "price": 20000, "taxBps": 1600, "status": "delivered" },
+    { "id": "u2", "visitId": "v1", "productId": "pizza", "price": 20000, "taxBps": 1600, "status": "delivered" },
+    { "id": "u3", "visitId": "v1", "productId": "refresco", "price": 4000, "taxBps": 1600, "status": "delivered" },
+    { "id": "u4", "visitId": "v1", "productId": "postre", "price": 6000, "taxBps": 1600, "status": "cancelled" },
+    { "id": "u5", "visitId": "v2", "productId": "pizza", "price": 20000, "taxBps": 1600, "status": "delivered" },
+    { "id": "u6", "visitId": "v3", "productId": "refresco", "price": 4000, "taxBps": 1600, "status": "delivered" },
+    { "id": "u7", "visitId": "v4", "productId": "pizza", "price": 20000, "taxBps": 1600, "status": "delivered" },
+    { "id": "u8", "visitId": "v5", "productId": "refresco", "price": 4000, "taxBps": 1600, "status": "delivered" }
+  ],
+  "payments": [
+    { "id": "p1", "visitId": "v1", "method": "card", "amount": 39600, "tip": 5000, "at": "2026-10-31T02:29:00Z" },
+    { "id": "p2", "visitId": "v2", "method": "cash", "amount": 20000, "tip": 0, "at": "2026-10-31T07:29:00Z" },
+    { "id": "p3", "visitId": "v3", "method": "transfer", "amount": 6000, "tip": 0, "at": "2026-10-31T10:29:00Z" },
+    { "id": "p4", "visitId": "v4", "method": "cash", "amount": 20000, "tip": 0, "at": "2026-10-31T01:59:00Z" }
+  ],
+  "refunds": [
+    { "id": "r1", "visitId": "v1", "method": "card", "amount": 5000, "at": "2026-10-31T18:00:00Z" }
+  ],
+  "movements": [
+    { "id": "m1", "type": "withdrawal", "amount": 30000, "at": "2026-10-31T03:00:00Z" }
+  ],
+  "stockMovements": [
+    { "id": "s1", "type": "waste", "cost": -2500, "at": "2026-10-31T19:00:00Z" }
+  ],
+  "cashCloses": [
+    { "cashId": "c1", "closedAt": "2026-10-31T09:00:00Z", "blind": true, "initial": 100000, "counted": 109900, "expected": 110000, "cardCounted": 44600, "cardExpected": 44600, "transferCounted": 0, "transferExpected": 0 }
+  ],
+  "zReports": [
+    { "number": 1, "from": "2026-10-30T06:00:00Z", "to": "2026-10-31T09:30:00Z", "tickets": 3, "people": 7, "gross": 84000, "discounts": 4400, "net": 79600, "tax": 10981, "payments": 79600, "tips": 5000, "refunds": 0, "voidedCount": 1, "voidedAmount": 6000, "comps": 0, "staffMeals": 0 },
+    { "number": 2, "from": "2026-10-31T09:30:00Z", "to": "2026-11-01T09:00:00Z", "tickets": 3, "people": 4, "gross": 31000, "discounts": 5000, "net": 26000, "tax": 3232, "payments": 6000, "tips": 0, "refunds": 5000, "voidedCount": 0, "voidedAmount": 0, "comps": 1, "staffMeals": 1 }
+  ],
+  "expected": {
+    "days": [
+      {
+        "businessDate": "2026-10-30",
+        "hours": [
+          { "hour": 1, "z": 1, "tickets": 1, "people": 2, "gross": 20000, "discounts": 0, "net": 20000, "tax": 2759, "deliveryFees": 0, "voidedCount": 0, "voidedAmount": 0, "comps": 0, "staffMeals": 0 },
+          { "hour": 20, "z": 1, "tickets": 1, "people": 3, "gross": 44000, "discounts": 4400, "net": 39600, "tax": 5463, "deliveryFees": 0, "voidedCount": 1, "voidedAmount": 6000, "comps": 0, "staffMeals": 0 }
+        ],
+        "payments": [
+          { "hour": 1, "method": "cash", "amount": 20000, "tips": 0, "count": 1 },
+          { "hour": 19, "method": "cash", "amount": 20000, "tips": 0, "count": 1 },
+          { "hour": 20, "method": "card", "amount": 39600, "tips": 5000, "count": 1 }
+        ],
+        "refunds": [],
+        "channels": [ { "channel": "table", "tickets": 2, "net": 59600 } ],
+        "products": [
+          { "productId": "pizza", "name": "Pizza", "category": "Platos", "quantity": 3, "revenue": 60000, "unitCost": 7000 },
+          { "productId": "refresco", "name": "Refresco", "category": "Bebidas", "quantity": 1, "revenue": 4000, "unitCost": null }
+        ],
+        "staff": [ { "staffId": "w1", "name": "Ana", "tickets": 2, "net": 59600, "tips": 5000 } ],
+        "cash": { "income": 0, "expense": 0, "withdrawal": 30000 },
+        "cashCloses": [ { "cashId": "c1", "closedAt": "2026-10-31T09:00:00Z", "blind": true, "cashDifference": -100, "cardDifference": 0, "transferDifference": 0, "adjustments": 0 } ],
+        "inventory": { "waste": 0, "shortage": 0, "surplus": 0 },
+        "summary": { "tickets": 2, "net": 59600, "averageTicket": 29800, "averagePerson": 11920 }
+      },
+      {
+        "businessDate": "2026-10-31",
+        "hours": [
+          { "hour": 4, "z": 2, "tickets": 1, "people": 1, "gross": 7000, "discounts": 1000, "net": 6000, "tax": 473, "deliveryFees": 3000, "voidedCount": 0, "voidedAmount": 0, "comps": 0, "staffMeals": 0 },
+          { "hour": 14, "z": 2, "tickets": 1, "people": 2, "gross": 20000, "discounts": 0, "net": 20000, "tax": 2759, "deliveryFees": 0, "voidedCount": 0, "voidedAmount": 0, "comps": 0, "staffMeals": 0 },
+          { "hour": 15, "z": 2, "tickets": 1, "people": 1, "gross": 4000, "discounts": 4000, "net": 0, "tax": 0, "deliveryFees": 0, "voidedCount": 0, "voidedAmount": 0, "comps": 1, "staffMeals": 1 }
+        ],
+        "payments": [ { "hour": 4, "method": "transfer", "amount": 6000, "tips": 0, "count": 1 } ],
+        "refunds": [ { "method": "card", "amount": 5000, "count": 1 } ],
+        "channels": [
+          { "channel": "delivery", "tickets": 1, "net": 6000 },
+          { "channel": "staff", "tickets": 1, "net": 0 },
+          { "channel": "table", "tickets": 1, "net": 20000 }
+        ],
+        "products": [
+          { "productId": "pizza", "name": "Pizza", "category": "Platos", "quantity": 1, "revenue": 20000, "unitCost": 7000 },
+          { "productId": "refresco", "name": "Refresco", "category": "Bebidas", "quantity": 2, "revenue": 8000, "unitCost": null }
+        ],
+        "staff": [ { "staffId": "w2", "name": "Luis", "tickets": 3, "net": 26000, "tips": 0 } ],
+        "cash": { "income": 0, "expense": 0, "withdrawal": 0 },
+        "cashCloses": [],
+        "inventory": { "waste": 2500, "shortage": 0, "surplus": 0 },
+        "summary": { "tickets": 3, "net": 26000, "averageTicket": 8666, "averagePerson": 6500 }
+      }
+    ],
+    "reconciliation": [
+      { "z": 1, "frozenNet": 79600, "panelNet": 59600, "reopenedNet": 20000, "frozenTickets": 3, "panelTickets": 2, "reopenedTickets": 1 },
+      { "z": 2, "frozenNet": 26000, "panelNet": 26000, "reopenedNet": 0, "frozenTickets": 3, "panelTickets": 3, "reopenedTickets": 0 }
+    ],
+    "consolidated": {
+      "businessDate": "2026-10-30",
+      "otherBranch": { "tickets": 3, "net": 10001 },
+      "tickets": 5,
+      "net": 69601,
+      "averageTicket": 13920
+    }
+  }
+}

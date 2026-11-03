@@ -21,7 +21,7 @@ public sealed partial class BranchService {
         var hasMore = page.Length > 100;
         page = page.Take(100).ToArray();
         var rows = page.Select(v => { var c = (JsonObject)v.DeepClone(); c.Remove("trackingKey"); foreach (var value in Domain.Totals(s, v)) c[value.Key] = value.Value?.DeepClone(); return c; }).ToArray();
-        return J.O("from", from, "until", until, "basis", "visit-opened-at", "count", visits.Length, "after", hasMore ? rows.Last().S("id") : null, "visits", rows, "total", money.Sum(x => x.L("total")), "paid", payments.Sum(x => x.L("amount")), "tips", payments.Sum(x => x.L("tip")), "balance", money.Sum(x => x.L("balance")));
+        return J.O("from", from, "until", until, "basis", "visit-opened-at", "count", visits.Length, "sales", new JsonArray(visits.Select((v, i) => (JsonNode?)J.O("at", v.S("openedAt"), "total", money[i].L("total"))).ToArray()), "after", hasMore ? rows.Last().S("id") : null, "visits", rows, "total", money.Sum(x => x.L("total")), "paid", payments.Sum(x => x.L("amount")), "tips", payments.Sum(x => x.L("tip")), "balance", money.Sum(x => x.L("balance")));
 
     }
 }

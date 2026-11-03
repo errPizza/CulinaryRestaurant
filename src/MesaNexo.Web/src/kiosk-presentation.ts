@@ -11,6 +11,7 @@ export function startKioskPresentation() {
         await document.fonts.ready;
         if (disposed) return;
         const result = await native('window.present');
+        document.documentElement.dataset.cpuDrawing = String(!!result.cpuDrawing);
         if (!result.enabled || disposed) return;
         await frame();
         await frame();
