@@ -1,0 +1,1334 @@
+{
+  "generatedAt": "2026-11-04T01:00:15.6880151+00:00",
+  "scenario": {
+    "waiters": 6,
+    "kitchen": 2,
+    "manager": 1,
+    "tables": 24,
+    "pollMs": 2000,
+    "thinkMs": 600,
+    "plannedMinutes": 15,
+    "deltaState": true,
+    "ticket": "2 tacos + 1 agua, cobro en efectivo o tarjeta"
+  },
+  "store": "PostgreSQL del laboratorio (PostgresBranchStore, registros sellados con el llavero), en el mismo equipo que el backend y los clientes simulados. No es el hardware de la sucursal.",
+  "environment": {
+    "machine": "DESKTOP-JABLP8E",
+    "os": "Microsoft Windows 10.0.19045",
+    "cores": 8,
+    "memoryMiB": 32691,
+    "dotnet": "10.0.13"
+  },
+  "verdict": "completó la duración prevista",
+  "elapsedSeconds": 916,
+  "windows": [
+    {
+      "seconds": 30,
+      "records": 1496,
+      "internalLoadMs": 0,
+      "ticketsClosed": 91,
+      "ticketsInWindow": 91,
+      "state": {
+        "requests": 117,
+        "ok": 117,
+        "errors": 0,
+        "p50Ms": 16,
+        "p95Ms": 62,
+        "p99Ms": 99,
+        "maxMs": 101,
+        "avgBytes": 38719,
+        "outcomes": {
+          "ok": 117
+        }
+      },
+      "actions": {
+        "requests": 1121,
+        "ok": 1121,
+        "errors": 0,
+        "p50Ms": 9,
+        "p95Ms": 25,
+        "p99Ms": 50,
+        "maxMs": 138,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1121
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 6.6,
+      "backendMiB": 166,
+      "postgresMiB": 810,
+      "databaseMiB": 18
+    },
+    {
+      "seconds": 60,
+      "records": 2397,
+      "internalLoadMs": 0,
+      "ticketsClosed": 182,
+      "ticketsInWindow": 91,
+      "state": {
+        "requests": 124,
+        "ok": 124,
+        "errors": 0,
+        "p50Ms": 11,
+        "p95Ms": 40,
+        "p99Ms": 46,
+        "maxMs": 52,
+        "avgBytes": 42917,
+        "outcomes": {
+          "ok": 124
+        }
+      },
+      "actions": {
+        "requests": 1083,
+        "ok": 1083,
+        "errors": 0,
+        "p50Ms": 8,
+        "p95Ms": 32,
+        "p99Ms": 56,
+        "maxMs": 100,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1083
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 5.2,
+      "backendMiB": 234,
+      "postgresMiB": 838,
+      "databaseMiB": 28
+    },
+    {
+      "seconds": 90,
+      "records": 3335,
+      "internalLoadMs": 0,
+      "ticketsClosed": 276,
+      "ticketsInWindow": 94,
+      "state": {
+        "requests": 128,
+        "ok": 128,
+        "errors": 0,
+        "p50Ms": 13,
+        "p95Ms": 37,
+        "p99Ms": 49,
+        "maxMs": 52,
+        "avgBytes": 46469,
+        "outcomes": {
+          "ok": 128
+        }
+      },
+      "actions": {
+        "requests": 1125,
+        "ok": 1125,
+        "errors": 0,
+        "p50Ms": 9,
+        "p95Ms": 34,
+        "p99Ms": 48,
+        "maxMs": 76,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1125
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 5.8,
+      "backendMiB": 294,
+      "postgresMiB": 864,
+      "databaseMiB": 38
+    },
+    {
+      "seconds": 120,
+      "records": 4229,
+      "internalLoadMs": 0,
+      "ticketsClosed": 367,
+      "ticketsInWindow": 91,
+      "state": {
+        "requests": 127,
+        "ok": 127,
+        "errors": 0,
+        "p50Ms": 18,
+        "p95Ms": 47,
+        "p99Ms": 52,
+        "maxMs": 54,
+        "avgBytes": 51382,
+        "outcomes": {
+          "ok": 127
+        }
+      },
+      "actions": {
+        "requests": 1077,
+        "ok": 1077,
+        "errors": 0,
+        "p50Ms": 11,
+        "p95Ms": 36,
+        "p99Ms": 56,
+        "maxMs": 199,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1077
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 5.7,
+      "backendMiB": 356,
+      "postgresMiB": 888,
+      "databaseMiB": 48
+    },
+    {
+      "seconds": 150,
+      "records": 5127,
+      "internalLoadMs": 1,
+      "ticketsClosed": 455,
+      "ticketsInWindow": 88,
+      "state": {
+        "requests": 127,
+        "ok": 127,
+        "errors": 0,
+        "p50Ms": 17,
+        "p95Ms": 45,
+        "p99Ms": 61,
+        "maxMs": 68,
+        "avgBytes": 56321,
+        "outcomes": {
+          "ok": 127
+        }
+      },
+      "actions": {
+        "requests": 1074,
+        "ok": 1074,
+        "errors": 0,
+        "p50Ms": 11,
+        "p95Ms": 36,
+        "p99Ms": 57,
+        "maxMs": 127,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1074
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 6.5,
+      "backendMiB": 446,
+      "postgresMiB": 913,
+      "databaseMiB": 57
+    },
+    {
+      "seconds": 180,
+      "records": 6059,
+      "internalLoadMs": 0,
+      "ticketsClosed": 549,
+      "ticketsInWindow": 94,
+      "state": {
+        "requests": 128,
+        "ok": 128,
+        "errors": 0,
+        "p50Ms": 22,
+        "p95Ms": 51,
+        "p99Ms": 66,
+        "maxMs": 67,
+        "avgBytes": 61426,
+        "outcomes": {
+          "ok": 128
+        }
+      },
+      "actions": {
+        "requests": 1120,
+        "ok": 1120,
+        "errors": 0,
+        "p50Ms": 11,
+        "p95Ms": 29,
+        "p99Ms": 42,
+        "maxMs": 163,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1120
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 6.7,
+      "backendMiB": 538,
+      "postgresMiB": 947,
+      "databaseMiB": 68
+    },
+    {
+      "seconds": 211,
+      "records": 6971,
+      "internalLoadMs": 0,
+      "ticketsClosed": 640,
+      "ticketsInWindow": 91,
+      "state": {
+        "requests": 129,
+        "ok": 129,
+        "errors": 0,
+        "p50Ms": 21,
+        "p95Ms": 62,
+        "p99Ms": 81,
+        "maxMs": 81,
+        "avgBytes": 63562,
+        "outcomes": {
+          "ok": 129
+        }
+      },
+      "actions": {
+        "requests": 1094,
+        "ok": 1094,
+        "errors": 0,
+        "p50Ms": 12,
+        "p95Ms": 35,
+        "p99Ms": 54,
+        "maxMs": 138,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1094
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 6.8,
+      "backendMiB": 609,
+      "postgresMiB": 982,
+      "databaseMiB": 77
+    },
+    {
+      "seconds": 241,
+      "records": 7868,
+      "internalLoadMs": 1,
+      "ticketsClosed": 730,
+      "ticketsInWindow": 90,
+      "state": {
+        "requests": 120,
+        "ok": 120,
+        "errors": 0,
+        "p50Ms": 23,
+        "p95Ms": 70,
+        "p99Ms": 94,
+        "maxMs": 2089,
+        "avgBytes": 63510,
+        "outcomes": {
+          "ok": 120
+        }
+      },
+      "actions": {
+        "requests": 1077,
+        "ok": 1077,
+        "errors": 0,
+        "p50Ms": 11,
+        "p95Ms": 32,
+        "p99Ms": 58,
+        "maxMs": 120,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1077
+        }
+      },
+      "retries": 0,
+      "cpuPercent": -9.9,
+      "backendMiB": 671,
+      "postgresMiB": 755,
+      "databaseMiB": 87
+    },
+    {
+      "seconds": 271,
+      "records": 8784,
+      "internalLoadMs": 1,
+      "ticketsClosed": 819,
+      "ticketsInWindow": 89,
+      "state": {
+        "requests": 120,
+        "ok": 120,
+        "errors": 0,
+        "p50Ms": 23,
+        "p95Ms": 56,
+        "p99Ms": 75,
+        "maxMs": 76,
+        "avgBytes": 65601,
+        "outcomes": {
+          "ok": 120
+        }
+      },
+      "actions": {
+        "requests": 1094,
+        "ok": 1094,
+        "errors": 0,
+        "p50Ms": 12,
+        "p95Ms": 46,
+        "p99Ms": 146,
+        "maxMs": 2078,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1094
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 7.1,
+      "backendMiB": 708,
+      "postgresMiB": 800,
+      "databaseMiB": 96
+    },
+    {
+      "seconds": 301,
+      "records": 9747,
+      "internalLoadMs": 0,
+      "ticketsClosed": 917,
+      "ticketsInWindow": 98,
+      "state": {
+        "requests": 129,
+        "ok": 129,
+        "errors": 0,
+        "p50Ms": 22,
+        "p95Ms": 53,
+        "p99Ms": 71,
+        "maxMs": 89,
+        "avgBytes": 68204,
+        "outcomes": {
+          "ok": 129
+        }
+      },
+      "actions": {
+        "requests": 1159,
+        "ok": 1159,
+        "errors": 0,
+        "p50Ms": 11,
+        "p95Ms": 32,
+        "p99Ms": 47,
+        "maxMs": 60,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1159
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 7.3,
+      "backendMiB": 707,
+      "postgresMiB": 833,
+      "databaseMiB": 107
+    },
+    {
+      "seconds": 331,
+      "records": 10675,
+      "internalLoadMs": 0,
+      "ticketsClosed": 1010,
+      "ticketsInWindow": 93,
+      "state": {
+        "requests": 127,
+        "ok": 127,
+        "errors": 0,
+        "p50Ms": 24,
+        "p95Ms": 55,
+        "p99Ms": 65,
+        "maxMs": 72,
+        "avgBytes": 69507,
+        "outcomes": {
+          "ok": 127
+        }
+      },
+      "actions": {
+        "requests": 1114,
+        "ok": 1114,
+        "errors": 0,
+        "p50Ms": 11,
+        "p95Ms": 33,
+        "p99Ms": 52,
+        "maxMs": 203,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1114
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 7.1,
+      "backendMiB": 739,
+      "postgresMiB": 860,
+      "databaseMiB": 117
+    },
+    {
+      "seconds": 362,
+      "records": 11567,
+      "internalLoadMs": 0,
+      "ticketsClosed": 1098,
+      "ticketsInWindow": 88,
+      "state": {
+        "requests": 121,
+        "ok": 121,
+        "errors": 0,
+        "p50Ms": 30,
+        "p95Ms": 58,
+        "p99Ms": 74,
+        "maxMs": 81,
+        "avgBytes": 71855,
+        "outcomes": {
+          "ok": 121
+        }
+      },
+      "actions": {
+        "requests": 1068,
+        "ok": 1068,
+        "errors": 0,
+        "p50Ms": 13,
+        "p95Ms": 40,
+        "p99Ms": 67,
+        "maxMs": 99,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1068
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 7.3,
+      "backendMiB": 795,
+      "postgresMiB": 881,
+      "databaseMiB": 127
+    },
+    {
+      "seconds": 392,
+      "records": 12465,
+      "internalLoadMs": 0,
+      "ticketsClosed": 1188,
+      "ticketsInWindow": 90,
+      "state": {
+        "requests": 128,
+        "ok": 128,
+        "errors": 0,
+        "p50Ms": 32,
+        "p95Ms": 78,
+        "p99Ms": 94,
+        "maxMs": 95,
+        "avgBytes": 63169,
+        "outcomes": {
+          "ok": 128
+        }
+      },
+      "actions": {
+        "requests": 1078,
+        "ok": 1078,
+        "errors": 0,
+        "p50Ms": 11,
+        "p95Ms": 32,
+        "p99Ms": 53,
+        "maxMs": 135,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1078
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 7.1,
+      "backendMiB": 799,
+      "postgresMiB": 902,
+      "databaseMiB": 135
+    },
+    {
+      "seconds": 422,
+      "records": 13356,
+      "internalLoadMs": 1,
+      "ticketsClosed": 1278,
+      "ticketsInWindow": 90,
+      "state": {
+        "requests": 127,
+        "ok": 127,
+        "errors": 0,
+        "p50Ms": 33,
+        "p95Ms": 66,
+        "p99Ms": 108,
+        "maxMs": 129,
+        "avgBytes": 70951,
+        "outcomes": {
+          "ok": 127
+        }
+      },
+      "actions": {
+        "requests": 1069,
+        "ok": 1069,
+        "errors": 0,
+        "p50Ms": 12,
+        "p95Ms": 32,
+        "p99Ms": 45,
+        "maxMs": 82,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1069
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 7.6,
+      "backendMiB": 901,
+      "postgresMiB": 918,
+      "databaseMiB": 145
+    },
+    {
+      "seconds": 452,
+      "records": 14267,
+      "internalLoadMs": 0,
+      "ticketsClosed": 1370,
+      "ticketsInWindow": 92,
+      "state": {
+        "requests": 125,
+        "ok": 125,
+        "errors": 0,
+        "p50Ms": 28,
+        "p95Ms": 59,
+        "p99Ms": 84,
+        "maxMs": 96,
+        "avgBytes": 67233,
+        "outcomes": {
+          "ok": 125
+        }
+      },
+      "actions": {
+        "requests": 1097,
+        "ok": 1097,
+        "errors": 0,
+        "p50Ms": 12,
+        "p95Ms": 33,
+        "p99Ms": 64,
+        "maxMs": 95,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1097
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 7.3,
+      "backendMiB": 905,
+      "postgresMiB": 935,
+      "databaseMiB": 155
+    },
+    {
+      "seconds": 482,
+      "records": 15147,
+      "internalLoadMs": 0,
+      "ticketsClosed": 1457,
+      "ticketsInWindow": 87,
+      "state": {
+        "requests": 123,
+        "ok": 123,
+        "errors": 0,
+        "p50Ms": 31,
+        "p95Ms": 79,
+        "p99Ms": 96,
+        "maxMs": 110,
+        "avgBytes": 72015,
+        "outcomes": {
+          "ok": 123
+        }
+      },
+      "actions": {
+        "requests": 1054,
+        "ok": 1054,
+        "errors": 0,
+        "p50Ms": 12,
+        "p95Ms": 32,
+        "p99Ms": 47,
+        "maxMs": 2077,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1054
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 7.2,
+      "backendMiB": 1030,
+      "postgresMiB": 950,
+      "databaseMiB": 165
+    },
+    {
+      "seconds": 512,
+      "records": 16015,
+      "internalLoadMs": 0,
+      "ticketsClosed": 1543,
+      "ticketsInWindow": 86,
+      "state": {
+        "requests": 124,
+        "ok": 124,
+        "errors": 0,
+        "p50Ms": 38,
+        "p95Ms": 81,
+        "p99Ms": 95,
+        "maxMs": 99,
+        "avgBytes": 69343,
+        "outcomes": {
+          "ok": 124
+        }
+      },
+      "actions": {
+        "requests": 1039,
+        "ok": 1039,
+        "errors": 0,
+        "p50Ms": 13,
+        "p95Ms": 39,
+        "p99Ms": 88,
+        "maxMs": 139,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1039
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 7.9,
+      "backendMiB": 1025,
+      "postgresMiB": 965,
+      "databaseMiB": 173
+    },
+    {
+      "seconds": 542,
+      "records": 16909,
+      "internalLoadMs": 0,
+      "ticketsClosed": 1634,
+      "ticketsInWindow": 91,
+      "state": {
+        "requests": 120,
+        "ok": 120,
+        "errors": 0,
+        "p50Ms": 32,
+        "p95Ms": 61,
+        "p99Ms": 89,
+        "maxMs": 2088,
+        "avgBytes": 73146,
+        "outcomes": {
+          "ok": 120
+        }
+      },
+      "actions": {
+        "requests": 1077,
+        "ok": 1077,
+        "errors": 0,
+        "p50Ms": 13,
+        "p95Ms": 41,
+        "p99Ms": 75,
+        "maxMs": 115,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1077
+        }
+      },
+      "retries": 0,
+      "cpuPercent": -19.9,
+      "backendMiB": 1024,
+      "postgresMiB": 766,
+      "databaseMiB": 182
+    },
+    {
+      "seconds": 572,
+      "records": 17830,
+      "internalLoadMs": 0,
+      "ticketsClosed": 1726,
+      "ticketsInWindow": 92,
+      "state": {
+        "requests": 132,
+        "ok": 132,
+        "errors": 0,
+        "p50Ms": 33,
+        "p95Ms": 80,
+        "p99Ms": 92,
+        "maxMs": 93,
+        "avgBytes": 71170,
+        "outcomes": {
+          "ok": 132
+        }
+      },
+      "actions": {
+        "requests": 1105,
+        "ok": 1105,
+        "errors": 0,
+        "p50Ms": 10,
+        "p95Ms": 31,
+        "p99Ms": 44,
+        "maxMs": 88,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1105
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 7.7,
+      "backendMiB": 1031,
+      "postgresMiB": 794,
+      "databaseMiB": 193
+    },
+    {
+      "seconds": 603,
+      "records": 18699,
+      "internalLoadMs": 0,
+      "ticketsClosed": 1813,
+      "ticketsInWindow": 87,
+      "state": {
+        "requests": 120,
+        "ok": 120,
+        "errors": 0,
+        "p50Ms": 38,
+        "p95Ms": 66,
+        "p99Ms": 100,
+        "maxMs": 106,
+        "avgBytes": 73380,
+        "outcomes": {
+          "ok": 120
+        }
+      },
+      "actions": {
+        "requests": 1043,
+        "ok": 1043,
+        "errors": 0,
+        "p50Ms": 15,
+        "p95Ms": 38,
+        "p99Ms": 57,
+        "maxMs": 86,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1043
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 7.8,
+      "backendMiB": 1094,
+      "postgresMiB": 878,
+      "databaseMiB": 202
+    },
+    {
+      "seconds": 633,
+      "records": 19605,
+      "internalLoadMs": 0,
+      "ticketsClosed": 1902,
+      "ticketsInWindow": 89,
+      "state": {
+        "requests": 126,
+        "ok": 126,
+        "errors": 0,
+        "p50Ms": 34,
+        "p95Ms": 78,
+        "p99Ms": 90,
+        "maxMs": 94,
+        "avgBytes": 70484,
+        "outcomes": {
+          "ok": 126
+        }
+      },
+      "actions": {
+        "requests": 1084,
+        "ok": 1084,
+        "errors": 0,
+        "p50Ms": 13,
+        "p95Ms": 36,
+        "p99Ms": 51,
+        "maxMs": 103,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1084
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 7.9,
+      "backendMiB": 1104,
+      "postgresMiB": 905,
+      "databaseMiB": 212
+    },
+    {
+      "seconds": 663,
+      "records": 20499,
+      "internalLoadMs": 0,
+      "ticketsClosed": 1993,
+      "ticketsInWindow": 91,
+      "state": {
+        "requests": 124,
+        "ok": 124,
+        "errors": 0,
+        "p50Ms": 35,
+        "p95Ms": 68,
+        "p99Ms": 92,
+        "maxMs": 99,
+        "avgBytes": 78729,
+        "outcomes": {
+          "ok": 124
+        }
+      },
+      "actions": {
+        "requests": 1076,
+        "ok": 1076,
+        "errors": 0,
+        "p50Ms": 12,
+        "p95Ms": 34,
+        "p99Ms": 53,
+        "maxMs": 112,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1076
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 8,
+      "backendMiB": 1117,
+      "postgresMiB": 928,
+      "databaseMiB": 222
+    },
+    {
+      "seconds": 693,
+      "records": 21397,
+      "internalLoadMs": 1,
+      "ticketsClosed": 2081,
+      "ticketsInWindow": 88,
+      "state": {
+        "requests": 124,
+        "ok": 124,
+        "errors": 0,
+        "p50Ms": 35,
+        "p95Ms": 65,
+        "p99Ms": 91,
+        "maxMs": 129,
+        "avgBytes": 79919,
+        "outcomes": {
+          "ok": 124
+        }
+      },
+      "actions": {
+        "requests": 1074,
+        "ok": 1074,
+        "errors": 0,
+        "p50Ms": 11,
+        "p95Ms": 33,
+        "p99Ms": 44,
+        "maxMs": 73,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1074
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 7.7,
+      "backendMiB": 1214,
+      "postgresMiB": 948,
+      "databaseMiB": 230
+    },
+    {
+      "seconds": 723,
+      "records": 22285,
+      "internalLoadMs": 0,
+      "ticketsClosed": 2170,
+      "ticketsInWindow": 89,
+      "state": {
+        "requests": 120,
+        "ok": 120,
+        "errors": 0,
+        "p50Ms": 36,
+        "p95Ms": 74,
+        "p99Ms": 132,
+        "maxMs": 159,
+        "avgBytes": 79226,
+        "outcomes": {
+          "ok": 120
+        }
+      },
+      "actions": {
+        "requests": 1066,
+        "ok": 1066,
+        "errors": 0,
+        "p50Ms": 14,
+        "p95Ms": 41,
+        "p99Ms": 62,
+        "maxMs": 201,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1066
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 8.3,
+      "backendMiB": 1209,
+      "postgresMiB": 965,
+      "databaseMiB": 239
+    },
+    {
+      "seconds": 753,
+      "records": 23207,
+      "internalLoadMs": 0,
+      "ticketsClosed": 2262,
+      "ticketsInWindow": 92,
+      "state": {
+        "requests": 125,
+        "ok": 125,
+        "errors": 0,
+        "p50Ms": 38,
+        "p95Ms": 71,
+        "p99Ms": 87,
+        "maxMs": 142,
+        "avgBytes": 75304,
+        "outcomes": {
+          "ok": 125
+        }
+      },
+      "actions": {
+        "requests": 1105,
+        "ok": 1105,
+        "errors": 0,
+        "p50Ms": 13,
+        "p95Ms": 37,
+        "p99Ms": 60,
+        "maxMs": 104,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1105
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 8.7,
+      "backendMiB": 1220,
+      "postgresMiB": 980,
+      "databaseMiB": 250
+    },
+    {
+      "seconds": 783,
+      "records": 24106,
+      "internalLoadMs": 1,
+      "ticketsClosed": 2352,
+      "ticketsInWindow": 90,
+      "state": {
+        "requests": 126,
+        "ok": 126,
+        "errors": 0,
+        "p50Ms": 39,
+        "p95Ms": 68,
+        "p99Ms": 85,
+        "maxMs": 93,
+        "avgBytes": 73491,
+        "outcomes": {
+          "ok": 126
+        }
+      },
+      "actions": {
+        "requests": 1080,
+        "ok": 1080,
+        "errors": 0,
+        "p50Ms": 14,
+        "p95Ms": 33,
+        "p99Ms": 51,
+        "maxMs": 73,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1080
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 8.2,
+      "backendMiB": 1257,
+      "postgresMiB": 995,
+      "databaseMiB": 260
+    },
+    {
+      "seconds": 814,
+      "records": 24989,
+      "internalLoadMs": 0,
+      "ticketsClosed": 2441,
+      "ticketsInWindow": 89,
+      "state": {
+        "requests": 118,
+        "ok": 118,
+        "errors": 0,
+        "p50Ms": 40,
+        "p95Ms": 77,
+        "p99Ms": 92,
+        "maxMs": 103,
+        "avgBytes": 85102,
+        "outcomes": {
+          "ok": 118
+        }
+      },
+      "actions": {
+        "requests": 1061,
+        "ok": 1061,
+        "errors": 0,
+        "p50Ms": 14,
+        "p95Ms": 36,
+        "p99Ms": 54,
+        "maxMs": 95,
+        "avgBytes": 180,
+        "outcomes": {
+          "ok": 1061
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 8.4,
+      "backendMiB": 1290,
+      "postgresMiB": 1007,
+      "databaseMiB": 269
+    },
+    {
+      "seconds": 844,
+      "records": 25878,
+      "internalLoadMs": 0,
+      "ticketsClosed": 2530,
+      "ticketsInWindow": 89,
+      "state": {
+        "requests": 129,
+        "ok": 129,
+        "errors": 0,
+        "p50Ms": 44,
+        "p95Ms": 82,
+        "p99Ms": 122,
+        "maxMs": 128,
+        "avgBytes": 75663,
+        "outcomes": {
+          "ok": 129
+        }
+      },
+      "actions": {
+        "requests": 1067,
+        "ok": 1067,
+        "errors": 0,
+        "p50Ms": 15,
+        "p95Ms": 38,
+        "p99Ms": 53,
+        "maxMs": 109,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1067
+        }
+      },
+      "retries": 0,
+      "cpuPercent": -24.6,
+      "backendMiB": 1299,
+      "postgresMiB": 822,
+      "databaseMiB": 279
+    },
+    {
+      "seconds": 874,
+      "records": 26765,
+      "internalLoadMs": 0,
+      "ticketsClosed": 2618,
+      "ticketsInWindow": 88,
+      "state": {
+        "requests": 121,
+        "ok": 121,
+        "errors": 0,
+        "p50Ms": 46,
+        "p95Ms": 84,
+        "p99Ms": 121,
+        "maxMs": 2106,
+        "avgBytes": 79009,
+        "outcomes": {
+          "ok": 121
+        }
+      },
+      "actions": {
+        "requests": 1063,
+        "ok": 1063,
+        "errors": 0,
+        "p50Ms": 15,
+        "p95Ms": 42,
+        "p99Ms": 58,
+        "maxMs": 95,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1063
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 8.6,
+      "backendMiB": 1337,
+      "postgresMiB": 867,
+      "databaseMiB": 287
+    },
+    {
+      "seconds": 904,
+      "records": 27655,
+      "internalLoadMs": 0,
+      "ticketsClosed": 2707,
+      "ticketsInWindow": 89,
+      "state": {
+        "requests": 120,
+        "ok": 120,
+        "errors": 0,
+        "p50Ms": 45,
+        "p95Ms": 90,
+        "p99Ms": 155,
+        "maxMs": 161,
+        "avgBytes": 83771,
+        "outcomes": {
+          "ok": 120
+        }
+      },
+      "actions": {
+        "requests": 1068,
+        "ok": 1068,
+        "errors": 0,
+        "p50Ms": 18,
+        "p95Ms": 44,
+        "p99Ms": 69,
+        "maxMs": 156,
+        "avgBytes": 179,
+        "outcomes": {
+          "ok": 1068
+        }
+      },
+      "retries": 0,
+      "cpuPercent": 9,
+      "backendMiB": 1332,
+      "postgresMiB": 897,
+      "databaseMiB": 297
+    }
+  ],
+  "totals": {
+    "state": {
+      "requests": 3729,
+      "ok": 3729,
+      "errors": 0,
+      "p50Ms": 31,
+      "p95Ms": 69,
+      "p99Ms": 93,
+      "maxMs": 2106,
+      "avgBytes": 67964,
+      "outcomes": {
+        "ok": 3729
+      }
+    },
+    "actions": {
+      "requests": 32514,
+      "ok": 32514,
+      "errors": 0,
+      "p50Ms": 12,
+      "p95Ms": 36,
+      "p99Ms": 57,
+      "maxMs": 2078,
+      "avgBytes": 179,
+      "outcomes": {
+        "ok": 32514
+      }
+    },
+    "byType": {
+      "command.send": {
+        "requests": 2710,
+        "ok": 2710,
+        "errors": 0,
+        "p50Ms": 16,
+        "p95Ms": 47,
+        "p99Ms": 69,
+        "maxMs": 2078,
+        "avgBytes": 301,
+        "outcomes": {
+          "ok": 2710
+        }
+      },
+      "payment.add": {
+        "requests": 2708,
+        "ok": 2708,
+        "errors": 0,
+        "p50Ms": 13,
+        "p95Ms": 39,
+        "p99Ms": 60,
+        "maxMs": 197,
+        "avgBytes": 456,
+        "outcomes": {
+          "ok": 2708
+        }
+      },
+      "state": {
+        "requests": 3729,
+        "ok": 3729,
+        "errors": 0,
+        "p50Ms": 31,
+        "p95Ms": 69,
+        "p99Ms": 93,
+        "maxMs": 2106,
+        "avgBytes": 67964,
+        "outcomes": {
+          "ok": 3729
+        }
+      },
+      "state-check": {
+        "requests": 245,
+        "ok": 245,
+        "errors": 0,
+        "p50Ms": 41,
+        "p95Ms": 66,
+        "p99Ms": 105,
+        "maxMs": 273,
+        "avgBytes": 1570664,
+        "outcomes": {
+          "ok": 245
+        }
+      },
+      "table.clean": {
+        "requests": 2708,
+        "ok": 2708,
+        "errors": 0,
+        "p50Ms": 11,
+        "p95Ms": 34,
+        "p99Ms": 54,
+        "maxMs": 100,
+        "avgBytes": 109,
+        "outcomes": {
+          "ok": 2708
+        }
+      },
+      "unit.state": {
+        "requests": 16260,
+        "ok": 16260,
+        "errors": 0,
+        "p50Ms": 10,
+        "p95Ms": 31,
+        "p99Ms": 51,
+        "maxMs": 2077,
+        "avgBytes": 109,
+        "outcomes": {
+          "ok": 16260
+        }
+      },
+      "visit.close": {
+        "requests": 2708,
+        "ok": 2708,
+        "errors": 0,
+        "p50Ms": 14,
+        "p95Ms": 40,
+        "p99Ms": 60,
+        "maxMs": 132,
+        "avgBytes": 109,
+        "outcomes": {
+          "ok": 2708
+        }
+      },
+      "visit.deliverAll": {
+        "requests": 2710,
+        "ok": 2710,
+        "errors": 0,
+        "p50Ms": 12,
+        "p95Ms": 30,
+        "p99Ms": 47,
+        "maxMs": 138,
+        "avgBytes": 109,
+        "outcomes": {
+          "ok": 2710
+        }
+      },
+      "visit.open": {
+        "requests": 2710,
+        "ok": 2710,
+        "errors": 0,
+        "p50Ms": 14,
+        "p95Ms": 42,
+        "p99Ms": 65,
+        "maxMs": 412,
+        "avgBytes": 421,
+        "outcomes": {
+          "ok": 2710
+        }
+      }
+    }
+  },
+  "retries": 0,
+  "duplicateReplies": 0,
+  "deltaChecks": 118,
+  "deltaMismatches": 0,
+  "mismatchKeys": [],
+  "failures": {},
+  "verification": {
+    "ticketsVerified": 2708,
+    "notClosed": 0,
+    "unitMismatch": 0,
+    "paymentMismatch": 0,
+    "visitsWithDuplicatedUnits": 0,
+    "ledgerPaid": 88010000,
+    "storePaidForLedger": 88010000,
+    "abortedTickets": 2,
+    "auditValid": true,
+    "auditRecords": 32570,
+    "durableRecords": 27655,
+    "durableLoadMs": 2511,
+    "integrity": true
+  }
+}

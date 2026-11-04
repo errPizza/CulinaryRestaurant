@@ -8,6 +8,7 @@ public sealed partial class Restaurant {
     bool TryPrivacy(BranchState s, JsonObject u, string type, JsonObject p, out JsonObject result) {
 
         result = new();
+        if (type == "privacy.purge") { Role(u, "manager"); result = Purge(s, u, Amount(p, "days", 30, 3650)); return true; }
         if (type is not ("customer.export" or "customer.erase")) return false;
         Role(u, "manager");
         var customer = s.Get("customer", p.S("id"));
@@ -42,6 +43,35 @@ public sealed partial class Restaurant {
         foreach (var m in messages) { m["to"] = ""; m["body"] = ""; m["values"] = new JsonArray(); }
         result = Add(s, "erasure", J.O("customerId", id, "reason", reason, "actor", u.S("id"), "at", erased, "fiscalRetained", fiscal.Length));
         return true;
+
+    }
+    // Retention for data kept only to serve one visit: reservations after their date, calls, messages and platform orders.
+    // They are anonymized in place, a batch at a time, and each run leaves a `purge` record with counts and no personal
+    // data. Customers, wallet, fiscal receivers and audit are never touched here: they have their own legal periods.
+    const int PurgeBatch = 200;
+    static readonly string[] OrderPersonal = ["customerName", "customerPhone", "phone", "address", "deliveryAddress", "notes"];
+    JsonObject Purge(BranchState s, JsonObject u, long days) {
+
+        var cutoff = DateTimeOffset.UtcNow.AddDays(-days);
+        bool Old(JsonObject x, string field) => x.S("purgedAt") == "" && DateTimeOffset.TryParse(x.S(field), out var at) && at < cutoff;
+        var counts = new JsonObject();
+        var left = PurgeBatch;
+        var now = J.Now();
+        void Each(string kind, string field, Action<JsonObject> clear) {
+
+            var rows = s.List(kind).Where(x => Old(x, field)).Take(left).ToArray();
+            foreach (var row in rows) { clear(row); row["purgedAt"] = now; }
+            counts[kind] = (long)rows.Length;
+            left -= rows.Length;
+
+        }
+        Each("reservation", "start", r => { r["name"] = "Reservación depurada"; r["contact"] = ""; r["notes"] = ""; });
+        Each("call", "at", c => { c["number"] = ""; c["name"] = ""; });
+        Each("message", "at", m => { m["to"] = ""; m["body"] = ""; m["values"] = new JsonArray(); });
+        Each("aggregatororder", "receivedAt", o => { foreach (var key in OrderPersonal) if (o.ContainsKey(key)) o[key] = ""; });
+        var total = PurgeBatch - left;
+        if (total > 0) Add(s, "purge", J.O("days", days, "counts", counts, "actor", u.S("id"), "at", now));
+        return J.O("purged", total, "counts", counts, "more", left == 0);
 
     }
 }

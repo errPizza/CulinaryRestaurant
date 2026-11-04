@@ -12,7 +12,17 @@ namespace MesaNexo.Api;
 
 public sealed record ApiOptions(string SiteId, int Port = 8443, string Bind = "0.0.0.0", string Socket = "/run/culinaryos-data/store.sock", string? Credentials = null, string? LabPython = null, string? LabScript = null, string? LabDirectory = null, string? ReadySocket = "/run/culinaryos-app/ready.sock", string? SetupCode = null);
 public static class ApiHost {
-    public static WebApplication Build(ApiOptions options, IBranchStore store, X509Certificate2 cert, LicenseOptions? licensing = null, CloudOptions? cloud = null, IPrintDriver? printer = null, FiscalOptions? fiscal = null, IntegrationConfig? integrations = null, ObjectBucket? checkpoints = null, ObjectBucket? backups = null) {
+    public static JsonArray TrustBundle(string? directory) {
+
+        if (directory is null) return [];
+        var file = new[] { "restaurant-ca-bundle.pem", "restaurant-ca.crt" }.Select(x => Path.Combine(directory, x)).FirstOrDefault(File.Exists);
+        if (file is null) return [];
+        var cas = new X509Certificate2Collection();
+        cas.ImportFromPemFile(file);
+        return new JsonArray(cas.Select(x => (JsonNode)x.ExportCertificatePem()).ToArray());
+
+    }
+    public static WebApplication Build(ApiOptions options, IBranchStore store, X509Certificate2 cert, LicenseOptions? licensing = null, CloudOptions? cloud = null, IPrintDriver? printer = null, FiscalOptions? fiscal = null, IntegrationConfig? integrations = null, ObjectBucket? checkpoints = null, ObjectBucket? backups = null, PrivacyPurge? purge = null) {
 
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions{ Args = [], ContentRootPath = AppContext.BaseDirectory });
         builder.Logging.ClearProviders();
@@ -37,7 +47,7 @@ public static class ApiHost {
         if (checkpoints is not null && licensing is not null) builder.Services.AddSingleton<IHostedService>(sp => new CheckpointWorker(sp.GetRequiredService<BranchService> (), checkpoints, sp.GetRequiredService<ILogger<CheckpointWorker>> ()));
         if (backups is not null && store is PostgresBranchStore offsite) builder.Services.AddSingleton<IHostedService>(sp => new OffsiteBackupWorker(sp.GetRequiredService<BranchService> (), offsite, backups, options.LabDirectory ?? "/var/lib/culinaryos-app", sp.GetRequiredService<ILogger<OffsiteBackupWorker>> ()));
         builder.Services.AddSignalR(o => { o.MaximumReceiveMessageSize = 16 * 1024; o.EnableDetailedErrors = false; });
-        builder.Services.AddHostedService<InventoryWorker> (); builder.Services.AddHostedService<InventoryBalanceWorker> (); builder.Services.AddHostedService<OutboxWorker> ();
+        builder.Services.AddHostedService<InventoryWorker> (); builder.Services.AddHostedService<InventoryBalanceWorker> (); builder.Services.AddHostedService<OutboxWorker> (); if (purge is not null) builder.Services.AddSingleton<IHostedService> (sp => new PrivacyPurgeWorker(sp.GetRequiredService<BranchService> (), purge, sp.GetRequiredService<ILogger<PrivacyPurgeWorker>> ()));
         if (store is PostgresBranchStore branchStore && options.Credentials is not null) builder.Services.AddSingleton<IHostedService> (sp => new CentralSyncWorker(branchStore, "/etc/culinaryos/branch.json", options.Credentials, sp.GetRequiredService<ILogger<CentralSyncWorker>> ()));
         
         if (printer is not null) builder.Services.AddSingleton<IHostedService> (sp => new PrintWorker(sp.GetRequiredService<BranchService> (), printer, sp.GetRequiredService<ILogger<PrintWorker>> ()));
@@ -71,6 +81,9 @@ public static class ApiHost {
         app.MapHub<LiveHub>("/live");
         var hub = app.Services.GetRequiredService<Microsoft.AspNetCore.SignalR.IHubContext<LiveHub>> ();
         service.RevisionChanged += revision => { _ = hub.Clients.Group(LiveHub.SiteGroup(service.SiteId)).SendCoreAsync("revision", new object?[]{ revision }); };
+        // The CAs terminals should trust: during a rotation, the old and the new one (deploy/culinaryos/rotate-ca.py).
+        var trustDirectory = options.Credentials is not null ? "/etc/culinaryos" : options.LabDirectory;
+        app.MapGet("/api/trust", () => J.O("cas", TrustBundle(trustDirectory)));
         app.MapGet("/api/identity", () => J.O("name", "Culinary Restaurant", "siteId", options.SiteId, "protocol", Contract.Api, "schema", Contract.Schema, "events", Contract.Events));
         app.MapGet("/api/health", async(CancellationToken ct) => await service.Ready(ct) ? Results.Json(J.O("ready", true, "site_id", options.SiteId)): Results.StatusCode(503));
         app.MapPost("/api/login", async(HttpContext c, CancellationToken ct) => { var p = await Body(c, ct); Rules.Need(p.S("siteId") == options.SiteId, "Sucursal equivocada", 403); return await service.Login(p, ct); }).RequireRateLimiting("login");

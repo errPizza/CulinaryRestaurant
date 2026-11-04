@@ -66,6 +66,15 @@ public sealed partial class BranchService {
         return alerts;
 
     }
+    // The outbox as the manager reads it. Nothing in it is dropped; these say when a person has to act.
+    public static JsonObject? OutboxAlert(JsonObject status) => status["alert"]?.GetValue<string>() switch {
+        "blocked" => J.O("level", "critical", "message", "Sincronización detenida: la central rechaza un evento (" + status.Obj("head").S("error") + ") tras " + status.Obj("head").L("attempts") + " intentos y los " + status.L("pending") + " pendientes esperan detrás de él. No se pierde nada; llama a soporte para revisarlo."),
+        "auth" => J.O("level", "critical", "message", "La central no acepta el certificado de la sucursal. Los eventos se guardan y se enviarán al resolverlo; llama a soporte."),
+        "held" => J.O("level", "notice", "message", status.L("held") + " evento(s) apartado(s) por soporte siguen sin llegar a la central. Se conservan hasta que soporte los libere."),
+        "size" => J.O("level", "notice", "message", "Hay " + status.L("pending") + " eventos sin enviar a la central y ocupan mucho espacio. Revisa el internet del servidor."),
+        "age" => J.O("level", "notice", "message", "La central lleva más de un día sin confirmar eventos. Revisa el internet del servidor; si sigue, llama a soporte."),
+        _ => null
+    };
     JsonArray ServerAlerts() {
 
         var now = DateTimeOffset.UtcNow;

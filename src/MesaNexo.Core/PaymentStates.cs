@@ -16,7 +16,10 @@ public sealed partial class Restaurant {
         ["uncertain"] = ["waiting", "approved", "declined", "refund-queued", "reversed"],
         ["approved"] = ["refund-queued"],
         ["refund-queued"] = ["refunding"],
-        ["refunding"] = ["refunded", "refund-failed", "refund-manual", "uncertain"]
+        ["refunding"] = ["refunded", "refund-failed", "refund-manual", "uncertain"],
+        // A refused refund can be asked again; one left to a person ends when a manager confirms it (refund.settle).
+        ["refund-failed"] = ["refund-queued"],
+        ["refund-manual"] = ["refunded"]
     };
     public void ChargeTransitions(BranchState s, string actor) {
 

@@ -35,7 +35,13 @@ Esto debe decirse con precisión en el aviso:
 4. **Central.** La eliminación viaja como un cambio más. Lo que la central ya recibió se reemplaza, no se borra de su historial.
 5. **Bitácora.** Es inmutable. No guarda clientes ni direcciones, pero sí puede conservar el nombre de un registro de llamada.
 6. **Terceros.** Plataformas, PAC, WhatsApp y Google tienen sus propias copias.
-7. **Reservaciones y pedidos de plataforma.** No están ligados al cliente, así que `customer.erase` no los toca. Tampoco existe todavía la purga automática a 90 días de la tabla de arriba.
+7. **Reservaciones y pedidos de plataforma.** No están ligados al cliente, así que `customer.erase` no los toca. Los alcanza la purga por plazo de la siguiente sección.
+
+## Purga por plazo
+
+Las reservaciones (después de su fecha), las llamadas, los mensajes y los pedidos de plataforma se anonimizan en su lugar al pasar el plazo, en lotes de 200 y una vez al día (`privacy.purge`, `PrivacyPurgeWorker`). Conservan importes y estado; pierden nombre, contacto, notas y texto. Cada corrida deja un registro `purge` con los conteos, sin datos personales. Clientes, monedero, receptores fiscales, ventas y bitácora no se tocan: tienen su propio plazo legal.
+
+**Está apagada.** Sólo corre si existe `/etc/culinaryos/privacy.json` con `{"purge": {"enabled": true, "days": 90}}`. El plazo acepta de 30 a 3650 días. Se enciende cuando el abogado apruebe los plazos de la tabla. Una sucursal sin conexión purga igual: es local, y el cambio llega a la central como cualquier otro. Lo que ya salió en copias externas, en el historial sellado o con terceros sigue los puntos 2 a 6.
 
 ## Respuesta a incidentes
 

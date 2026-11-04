@@ -380,6 +380,7 @@ def install(bundle, client, server):
     write_new(APP / 'culinary-restaurant-installing.json', b'{"version":"0.3.0"}\n')
     write_new(APP / 'hardware-identity.py', (bundle / 'deploy/culinaryos/hardware-identity.py').read_bytes(), 0o755)
     write_new(APP / 'renew-tls.py', (bundle / 'deploy/culinaryos/renew-tls.py').read_bytes(), 0o755)
+    write_new(APP / 'rotate-ca.py', (bundle / 'deploy/culinaryos/rotate-ca.py').read_bytes(), 0o755)
     copy_files(bundle / 'payload/backend', APP / 'backend')
     copy_files(bundle / 'payload/bridge', APP / 'client')
     write_new(APP / 'client/culinary-restaurant', binary, 0o755)

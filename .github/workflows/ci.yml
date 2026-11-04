@@ -36,6 +36,8 @@ jobs:
         run: ./tools/Test.ps1 -Python (Get-Command python).Source
       - name: Instalador
         run: python -B tests/test_culinaryos_install.py
+      - name: Actualización interrumpida
+        run: python -B tests/test_update_apply.py
       - name: Métricas del panel
         run: python -B tests/test_owner_stats_vectors.py
       - name: Interfaz

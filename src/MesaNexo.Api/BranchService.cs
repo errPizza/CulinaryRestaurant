@@ -248,7 +248,7 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
         connection["terminals"] = Domain.LiveCatalog.A("terminals").DeepClone();
         if (CertificateWarning(u.S("role")) is { } certificate) connection["certificate"] = certificate;
         if (auditAlert is { } alert && u.S("role") == "manager") connection["auditAlert"] = alert.DeepClone();
-        if (u.S("role") == "manager") connection["server"] = ServerAlerts();
+        if (u.S("role") == "manager") { var server = ServerAlerts(); if (OutboxAlert((JsonObject)cached.Item2) is { } outbox) server.Add(outbox); connection["server"] = server; }
         if (u.S("role") == "manager") connection["updates"] = Volatile.Read(ref releases).DeepClone();
         result["connection"] = connection;
         return result;

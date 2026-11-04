@@ -169,6 +169,8 @@ static class StoreTests {
         public readonly List<string> Committed = [];
         public int Posts;
         public string? LoseAnswerTo, FailOnce;
+        // Answers by event id: an HTTP status, or 0 for a connection that drops. Removed when the central is fixed.
+        public readonly Dictionary<string, int> Refuse = [];
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) {
 
             Posts++;
@@ -177,12 +179,108 @@ static class StoreTests {
             var eventId = wire.S("event_id");
             var digest = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(raw));
             if (eventId == FailOnce) { FailOnce = null; throw new HttpRequestException("refused"); }
+            if (Refuse.TryGetValue(eventId, out var refusal)) return refusal == 0 ? throw new HttpRequestException("down") : Task.FromResult(new HttpResponseMessage((System.Net.HttpStatusCode)refusal));
             if (wire.S("site_id") != site || request.Headers.GetValues("Idempotency-Key").Single() != eventId || request.Headers.GetValues("X-CulinaryOs-SHA256").Single() != digest) return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.BadRequest));
             if (!Committed.Contains(eventId)) Committed.Add(eventId);
             if (eventId == LoseAnswerTo) { LoseAnswerTo = null; throw new HttpRequestException("answer lost"); }
             return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(J.O("site_id", site, "event_id", eventId, "sha256", digest, "status", "committed").ToJsonString()) });
 
         }
+    }
+    // An event the central keeps refusing holds back every later one. Link failures only wait; a refusal of the event
+    // itself becomes an alert after five tries, and support can set it aside with a recorded reason so the rest flows.
+    // Nothing is acknowledged, skipped or removed without a person, and the set-aside event still reaches the central.
+    public static async Task Blocking(string root, List<JsonObject> evidence) {
+
+        void Check(bool ok, string name) { if (!ok) throw new Exception("FAIL: " + name); evidence.Add(J.O("test", name, "result", "passed")); Console.WriteLine("PASS " + name); }
+        async Task<string> Fails(Task action) { try { await action; return "none"; } catch (StoreException e) { return e.Code; } catch (BusinessException e) { return e.Status.ToString(); } }
+        const string site = "block-site";
+        var folder = Path.Combine(root, ".lab", "outbox-block-" + J.Id());
+        using var store = LabPostgres.Test(root, folder, site);
+        async Task Sql(string sql) { await using var db = await store.Data.OpenConnectionAsync(); await using var cmd = new NpgsqlCommand(sql, db); await cmd.ExecuteNonQueryAsync(); }
+        async Task<JsonObject> Status() => (JsonObject)(await store.CallAsync(J.O("op", "outbox_status_v1")))!;
+        long meta = 0;
+        async Task<string> Commit(string record, JsonObject data) {
+
+            var eventId = J.Id();
+            await store.CallAsync(J.O("op", "transaction_v1", "protocol", 1, "event_id", eventId, "receipt", J.O("actor", "block-test", "fingerprint", eventId), "changes", new JsonArray(J.O("record_id", "mn_meta_site", "expected_version", meta, "data", J.O("revision", meta + 1)), J.O("record_id", record, "expected_version", 0, "data", data))));
+            meta++;
+            return eventId;
+
+        }
+        var order = new List<string>();
+        for (var i = 0; i < 12; i++) order.Add(await Commit("mn_visit_" + i, J.O("total", i)));
+        File.WriteAllText(Path.Combine(folder, "branch.json"), J.O("version", 1, "site_id", site, "central", J.O("url", "https://central.test/v1/events")).ToJsonString());
+        var central = new FakeCentral(site);
+        using var sync = new CentralSyncWorker(store, Path.Combine(folder, "branch.json"), folder, Microsoft.Extensions.Logging.Abstractions.NullLogger<CentralSyncWorker>.Instance, central);
+        // A failed event waits for its backoff; the test does not.
+        async Task Round() { await sync.DeliverOnce(); await Sql("UPDATE events SET next_attempt = 0"); }
+
+        Check(CentralSyncWorker.Classify(503) == "temporary" && CentralSyncWorker.Classify(429) == "temporary" && CentralSyncWorker.Classify(401) == "auth" && CentralSyncWorker.Classify(400) == "validation" && CentralSyncWorker.Classify(409) == "conflict" && CentralSyncWorker.Classify(404) == "incompatible" && CentralSyncWorker.Classify(200) == "ack", "each answer of the central falls in one class: temporary, auth, validation, conflict, incompatible or ack");
+        // Network and server errors on the oldest event: retries with backoff, never the blocking alert.
+        central.Refuse[order[0]] = 0;
+        for (var i = 0; i < 6; i++) await Round();
+        central.Refuse[order[0]] = 503;
+        for (var i = 0; i < 6; i++) await Round();
+        var waiting = await Status();
+        Check(waiting.Obj("head").S("error") == "temporary" && waiting.Obj("head").L("attempts") == 12 && waiting.S("alert") != "blocked" && central.Committed.Count == 0, "twelve network and server failures keep retrying the oldest event and raise no blocking alert");
+        central.Refuse.Remove(order[0]);
+        await Round();
+        Check((await Status()).L("pending") == 0 && central.Committed.SequenceEqual(order), "once the central answers, the waiting events arrive once each and in order");
+
+        // The central refuses one event for its content.
+        var more = new List<string>();
+        for (var i = 0; i < 6; i++) more.Add(await Commit("mn_unit_" + i, J.O("price", i)));
+        var poison = more[1];
+        central.Refuse[poison] = 422;
+        for (var i = 0; i < 4; i++) await Round();
+        Check((await Status()).S("alert") != "blocked", "four refusals are not yet a blocking alert");
+        await Round();
+        var blocked = await Status();
+        Check(blocked.S("alert") == "blocked" && blocked.Obj("head").S("event_id") == poison && blocked.Obj("head").S("error") == "validation" && blocked.L("pending") == 5 && central.Committed.Count == order.Count + 1, "after five refusals the outbox reports the event that blocks the other four");
+        var message = BranchService.OutboxAlert(blocked)!;
+        Check(message.S("level") == "critical" && message.S("message").Contains("5 pendientes"), "the manager sees a critical alert with how many events wait behind it");
+        var listed = await store.OutboxEvents(10);
+        Check(listed.Count == 5 && listed[0]!.S("event_id") == poison && listed[0]!.S("error") == "validation" && listed[0]!.L("attempts") == 5 && listed[0]!["data"] is null, "support lists the pending events with their last failure and without their content");
+
+        Check(await Fails(store.Intervene(poison, "hold", "soporte", "corto")) == "400" && await Fails(store.Intervene(poison, "hold", "", "la central rechaza el formato del evento")) == "400" && await Fails(store.Intervene(poison, "drop", "soporte", "la central rechaza el formato del evento")) == "400", "an intervention needs a known action, who acts and a reason; there is no action that drops an event");
+        Check(await Fails(store.Intervene(J.Id(), "hold", "soporte", "la central rechaza el formato del evento")) == "404" && await Fails(store.Intervene(order[0], "hold", "soporte", "ya confirmado por la central antes")) == "404", "only a pending event can be acted on");
+        await store.Intervene(poison, "hold", "soporte-ana", "la central rechaza el formato; se revisa con desarrollo");
+        Check(await Fails(store.Intervene(poison, "hold", "soporte-ana", "la central rechaza el formato; otra vez")) == "409", "an event set aside cannot be set aside twice");
+        for (var i = 0; i < 3; i++) await Round();
+        var flowing = await Status();
+        Check(flowing.L("pending") == 1 && flowing.L("held") == 1 && flowing.S("alert") == "held" && central.Committed.Count == order.Count + 5 && !central.Committed.Contains(poison), "set aside, the event stays pending and the four after it reach the central");
+        Check(BranchService.OutboxAlert(flowing)!.S("message").Contains("apartado"), "while an event is set aside the manager keeps a notice");
+        Check((await store.VerifyOutbox()).B("valid"), "the outbox still verifies with an event set aside after later ones were confirmed");
+
+        // Development fixes the central; support puts the event back in line.
+        central.Refuse.Remove(poison);
+        await store.Intervene(poison, "release", "soporte-ana", "la central ya acepta el formato corregido");
+        await Round();
+        var done = await Status();
+        Check(done.L("pending") == 0 && done.L("held") == 0 && done["alert"] is null && central.Committed.Count(x => x == poison) == 1 && central.Committed.Count == order.Count + more.Count, "released, the event reaches the central exactly once and nothing is left pending");
+        var trail = await store.Interventions();
+        Check(trail.Count == 2 && trail[0]!.S("action") == "hold" && trail[1]!.S("action") == "release" && trail.All(x => x!.S("actor") == "soporte-ana" && x.S("event_id") == poison && x.S("reason").Length >= 10), "both interventions are recorded with the event, who acted and why");
+
+        // A central that stops trusting the branch is reported at once, apart from a blocked event.
+        var last = await Commit("mn_unit_last", J.O("price", 77777));
+        central.Refuse[last] = 403;
+        await Round();
+        var auth = await Status();
+        Check(auth.S("alert") == "auth" && BranchService.OutboxAlert(auth)!.S("level") == "critical", "a refused certificate is a critical alert after the first try");
+
+        // Pending events leave the disk sealed, and come back only into the same branch and keyring.
+        var file = Path.Combine(folder, "pending.jsonl");
+        await using (var output = File.Create(file)) Check(await store.ExportPending(output) == 1, "export writes every pending event");
+        Check(!File.ReadAllText(file).Contains("77777"), "the exported events stay sealed");
+        using (var again = File.OpenText(file)) Check((await store.ImportPending(again)).L("added") == 0, "importing events the store has adds nothing");
+        await Sql($"DELETE FROM events WHERE id = '{last}'");
+        using (var back = File.OpenText(file)) Check((await store.ImportPending(back)).L("added") == 1 && (await Status()).L("pending") == 1 && (await store.VerifyOutbox()).B("valid"), "a lost pending event comes back from the export and the outbox verifies");
+        var other = JsonNode.Parse(File.ReadAllText(file))!.AsObject(); other["site_id"] = "other-site";
+        Check(await Fails(store.ImportPending(new StringReader(other.ToJsonString()))) == "400", "events of another branch are refused");
+        var line = JsonNode.Parse(File.ReadAllText(file))!.AsObject(); var sealedBytes = Convert.FromBase64String(line.S("envelope")); sealedBytes[^1] ^= 1; line["envelope"] = Convert.ToBase64String(sealedBytes);
+        Check(await Fails(store.ImportPending(new StringReader(line.ToJsonString()))) == "COS-DATA-INTEGRITY", "an altered event is refused before anything is written");
+
     }
     // Thirty days without a central, then the central appears: every event arrives once and in order, and nothing is
     // dropped on the way.

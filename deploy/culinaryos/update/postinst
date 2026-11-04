@@ -5,6 +5,7 @@ set -e
 systemd-tmpfiles --create culinary-update.conf
 systemctl daemon-reload
 systemctl enable --now culinary-update.path
+systemctl enable culinary-update-recover.service culinary-update-health.service
 # Restarting only the app would leave the kiosk supervisor running its old code. A full restart loads everything
 # new and stops PostgreSQL cleanly; the delay lets dpkg finish first. Branch data is not part of this package.
 systemd-run --on-active=5 /usr/bin/systemctl reboot || true
