@@ -58,12 +58,13 @@ static class LiveIntegrationTests {
         var mpStatus = "at_terminal";
         var mpOrders = new Dictionary<string, string>();
         var dropNextCreate = false;
+        var refuseRefund = false;
         var mp = new FakeApi((r, body) => {
 
             var path = r.RequestUri!.AbsolutePath;
             if (r.Method == HttpMethod.Post && path == "/v1/orders") { var key = r.Headers.GetValues("X-Idempotency-Key").Single(); if (!mpOrders.TryGetValue(key, out var id)) { id = "ORD-" + (mpOrders.Count + 1); mpOrders[key] = id; } if (dropNextCreate) { dropNextCreate = false; throw new HttpRequestException("connection reset after the order was created"); } return FakeApi.Json(J.O("id", id, "status", "created"), HttpStatusCode.Created); }
             if (path.EndsWith("/cancel")) return FakeApi.Json(J.O("id", path.Split('/')[3], "status", "canceled"));
-            if (path.EndsWith("/refund")) return FakeApi.Json(J.O("id", path.Split('/')[3], "status", "refunded"));
+            if (path.EndsWith("/refund")) return refuseRefund ? FakeApi.Json(J.O("message", "refund window closed"), HttpStatusCode.BadRequest) : FakeApi.Json(J.O("id", path.Split('/')[3], "status", "refunded"));
             return FakeApi.Json(J.O("id", path.Split('/').Last(), "status", mpStatus, "transactions", J.O("payments", new JsonArray(J.O("id", "PAY-1", "status", mpStatus == "processed" ? "processed" : "created", "payment_method", J.O("id", "visa", "type", "credit_card"))))));
 
         });
@@ -172,9 +173,24 @@ static class LiveIntegrationTests {
         foreach (var unit in (await service.Load()).Related("unit", "visitId", crashVisit).Select(x => x.S("id")).ToArray()) foreach (var status in new[] { "preparing", "ready", "delivered" }) await Act("unit.state", J.O("id", unit, "status", status));
         await Act("visit.close", J.O("id", crashVisit));
         await Deny(() => Act("payment.refund", J.O("id", recovered.S("paymentId"), "amount", 1, "reason", "Parcial")), "completo", "a provider's charge goes back whole");
+        async Task<JsonObject> MoneyTrail() => await Act("visit.trail", J.O("id", crashVisit));
         var returned = await Act("payment.refund", J.O("id", recovered.S("paymentId"), "reason", "Cobrado por error"));
         Check(returned.S("route") == "provider" && (await Get("terminaltxn", crashed.S("id"))).S("status") == "refund-queued", "a refund queues the provider's charge");
+        var asked = await MoneyTrail();
+        Check(asked.A("refunds").Objects().Single().S("outcome") == "pending" && asked.L("refunded") == 0 && asked.L("refundsPending") == 3000, "until the provider confirms, the refund is pending and is not counted as money returned");
+        await Deny(() => Act("payment.refund", J.O("id", recovered.S("paymentId"), "reason", "Otra vez")), "devolver", "a pending refund cannot be asked twice");
+        // The provider refuses: the refund is failed, nothing counts as returned, and it can be asked again.
+        refuseRefund = true;
+        Check(await RefundTerminal() && (await Get("terminaltxn", crashed.S("id"))).S("status") == "refund-failed", "a refund the provider refuses is recorded as failed");
+        var failed = await MoneyTrail();
+        Check(failed.A("refunds").Objects().Single().S("outcome") == "failed" && failed.L("refunded") == 0 && failed.L("refundsPending") == 0, "a failed refund is neither returned nor pending");
+        refuseRefund = false;
+        await Act("payment.refund", J.O("id", recovered.S("paymentId"), "reason", "Cobrado por error, segundo intento"));
         Check(await RefundTerminal() && (await Get("terminaltxn", crashed.S("id"))).S("status") == "refunded" && await Paid(crashVisit) == 3000, "the provider returns the charge, and the payment keeps its history");
+        var done = await MoneyTrail();
+        Check(done.L("refunded") == 3000 && done.L("refundsPending") == 0 && done.A("refunds").Objects().Select(x => x.S("outcome")).SequenceEqual(["failed", "done"]), "once confirmed the refund counts once, and the failed attempt stays in the trail");
+        Check((await Get("terminaltxn", crashed.S("id"))).A("trail").Objects().Select(x => x.S("to")).TakeLast(6).SequenceEqual(["refund-queued", "refunding", "refund-failed", "refund-queued", "refunding", "refunded"]), "every step of both refund attempts stays in the charge's trail");
+        await Deny(() => Act("refund.settle", J.O("id", done.A("refunds").Objects().Last().S("id"), "reference", "x")), "a mano", "only a refund left to a person can be confirmed by hand");
         var posts = clip.Calls.Count(c => c.Request.Method == HttpMethod.Post);
         var clipCrashVisit = await Account();
         var clipCrash = await Act("terminal.charge", J.O("visitId", clipCrashVisit, "amount", 3000, "terminalId", "barra"));
@@ -184,6 +200,18 @@ static class LiveIntegrationTests {
         await Deny(() => Act("terminal.charge", J.O("visitId", clipCrashVisit, "amount", 3000, "terminalId", "barra")), "en curso", "an uncertain charge blocks a new one on the account");
         await Act("terminal.reconcile", J.O("id", clipCrash.S("id"), "outcome", "charged", "authCode", "ab12", "last4", "8356", "brand", "Visa"));
         Check((await Get("terminaltxn", clipCrash.S("id"))).S("status") == "approved" && await Paid(clipCrashVisit) == 3000, "the manager's capture applies the charge once");
+        // Clip cannot refund through its API: the refund waits for a person, and only a manager's confirmation closes it.
+        foreach (var unit in (await service.Load()).Related("unit", "visitId", clipCrashVisit).Select(x => x.S("id")).ToArray()) foreach (var status in new[] { "preparing", "ready", "delivered" }) await Act("unit.state", J.O("id", unit, "status", status));
+        await Act("visit.close", J.O("id", clipCrashVisit));
+        var clipRefund = await Act("payment.refund", J.O("id", (await Get("terminaltxn", clipCrash.S("id"))).S("paymentId"), "reason", "Cliente inconforme"));
+        Check(await RefundTerminal() && (await Get("terminaltxn", clipCrash.S("id"))).S("status") == "refund-manual", "a Clip refund is left to a person");
+        var manual = await Act("visit.trail", J.O("id", clipCrashVisit));
+        Check(manual.A("refunds").Objects().Single().S("outcome") == "manual" && manual.L("refunded") == 0 && manual.L("refundsPending") == 3000, "a refund left to a person is pending, not returned");
+        await Deny(() => Act("refund.settle", J.O("id", clipRefund.S("id"))), "reference", "confirming it by hand needs the provider's reference");
+        await Act("refund.settle", J.O("id", clipRefund.S("id"), "reference", "Portal Clip R-778"));
+        var settled = await Act("visit.trail", J.O("id", clipCrashVisit));
+        Check(settled.L("refunded") == 3000 && settled.L("refundsPending") == 0 && (await Get("terminaltxn", clipCrash.S("id"))).A("trail").Objects().Last().S("to") == "refunded" && (await Get("terminaltxn", clipCrash.S("id"))).S("message").Contains("R-778"), "the manager's confirmation closes it once, with the reference in the charge's trail");
+        await Deny(() => Act("refund.settle", J.O("id", clipRefund.S("id"), "reference", "otra vez")), "a mano", "a confirmed refund is not confirmed twice");
         Check(TerminalService.Capabilities("mercadopago") is { Idempotent: true, Lookup: true, Reverse: true } && TerminalService.Capabilities("clip") is { Idempotent: false, Lookup: true, Reverse: false } && TerminalService.Capabilities("bbva") is { Idempotent: false, Lookup: false, Reverse: false } && StripeCheckout.Capabilities.Idempotent, "each adapter declares what it can prove after a lost answer");
 
         // ---------- Stripe Checkout + WhatsApp ----------
