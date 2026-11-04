@@ -1,0 +1,12 @@
+[Unit]
+Description=Confirmar que la version instalada de Culinary Restaurant arranca, o volver a la anterior
+After=culinaryos-backend.service
+Wants=culinaryos-backend.service
+
+[Service]
+Type=oneshot
+TimeoutStartSec=900
+ExecStart=/usr/bin/python3 /usr/local/lib/culinary-update/apply.py --health
+
+[Install]
+WantedBy=multi-user.target

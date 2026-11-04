@@ -26,6 +26,8 @@ def payload():
         ('usr/local/lib/culinary-update/apply.py', text(DEPLOY / 'update/apply.py'), 0o755),
         ('etc/systemd/system/culinary-update.path', text(DEPLOY / 'update/culinary-update.path'), 0o644),
         ('etc/systemd/system/culinary-update.service', text(DEPLOY / 'update/culinary-update.service'), 0o644),
+        ('etc/systemd/system/culinary-update-recover.service', text(DEPLOY / 'update/culinary-update-recover.service'), 0o644),
+        ('etc/systemd/system/culinary-update-health.service', text(DEPLOY / 'update/culinary-update-health.service'), 0o644),
         ('usr/lib/tmpfiles.d/culinary-update.conf', text(DEPLOY / 'update/culinary-update.tmpfiles'), 0o644),
     ]
     for file in sorted((DEPLOY / 'kiosk').iterdir()):

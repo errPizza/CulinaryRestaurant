@@ -1,0 +1,12 @@
+[Unit]
+Description=Terminar o deshacer una actualizacion interrumpida de Culinary Restaurant
+DefaultDependencies=no
+After=local-fs.target
+Before=culinaryos-backend.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/culinary-update/apply.py --recover
+
+[Install]
+WantedBy=multi-user.target
