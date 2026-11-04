@@ -34,7 +34,7 @@ function Head({ title, note, close, busy }: { title: string; note?: string; clos
 
 }
 
-type Line = { key: string; ingredientId: string; quantity: string; unit: string; cost: string };
+type Line = { key: string; ingredientId: string; quantity: string; unit: string; cost: string; expiresOn?: string };
 function PurchaseDialog({ state: s, mode, order, ctx, action }: { state: any; mode: 'order' | 'receive' | 'direct'; order?: Row; ctx: Ctx; action: Props['action'] }) {
 
     const ingredients = list(s, 'ingredient'), suppliers = list(s, 'supplier').filter(x => x.active || x.id === order?.supplierId), warehouses = list(s, 'warehouse');
@@ -50,7 +50,7 @@ function PurchaseDialog({ state: s, mode, order, ctx, action }: { state: any; mo
     const ordered = (id: string) => order?.lines.find((l: Row) => l.ingredientId === id);
     const send = () => ctx.submit(async () => {
 
-        const payloadLines = lines.filter(l => l.ingredientId).map(l => ({ ingredientId: l.ingredientId, quantity: receiving && mode === 'receive' && String(l.quantity).trim() === '' ? '0' : decimal(l.quantity), unit: l.unit, cost: pesos(l.cost) }));
+        const payloadLines = lines.filter(l => l.ingredientId).map(l => ({ ingredientId: l.ingredientId, quantity: receiving && mode === 'receive' && String(l.quantity).trim() === '' ? '0' : decimal(l.quantity), unit: l.unit, cost: pesos(l.cost), ...(receiving && l.expiresOn ? { expiresOn: l.expiresOn } : {}) }));
         if (!payloadLines.length) throw new Error('Agrega al menos un insumo');
         const extra = receiving ? { invoice: invoice.trim(), dueDays: Number(dueDays) || 0, payNow, source, method: source === 'bank' ? 'transfer' : 'cash' } : { notes };
         if (receiving && !invoice.trim()) throw new Error('Escribe el folio de la factura o remisión');
@@ -78,6 +78,7 @@ function PurchaseDialog({ state: s, mode, order, ctx, action }: { state: any; mo
                         <Select aria-label="Unidad" value={l.unit} onChange={e => patch(l.key, { unit: e.target.value })}>{units(family(l.ingredientId)).map(([v, t]) => <option key={v} value={v}>{t}</option>)}</Select>
                         <span className="affix"><span aria-hidden="true">$</span><input aria-label={'Costo de ' + nameOf(s, 'ingredient', l.ingredientId)} type="number" inputMode="decimal" min={0} step="0.01" value={l.cost} placeholder="0.00" onFocus={e => e.target.select()} onChange={e => patch(l.key, { cost: e.target.value })} /></span>
                         <Button type="button" className="ghost icon-only sm" icon="close" aria-label="Quitar renglón" disabled={lines.length === 1} onClick={() => setLines(ls => ls.filter(x => x.key !== l.key))}>{''}</Button>
+                        {receiving && <label className="po-expiry">Caducidad<input type="date" aria-label={'Caducidad de ' + nameOf(s, 'ingredient', l.ingredientId)} value={l.expiresOn || ''} onChange={e => patch(l.key, { expiresOn: e.target.value })} /></label>}
                         {diff && <small className="po-diff">Pedido: {qty(o.quantity, family(l.ingredientId))}</small>}
                     </div>;
 

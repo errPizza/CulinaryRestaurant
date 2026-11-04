@@ -3,11 +3,11 @@ import { UiIcon, Switch } from './ui';
 
 type Props = {
     name: string; role: string; scope: string; theme: 'light' | 'dark'; reduced: boolean; version: string; api: string; busy: boolean;
-    onTheme: (theme: 'light' | 'dark') => void; onReduced: () => void; onVersion: () => void; onConnection: () => void; onLogout: () => void; onPin?: () => void
+    onTheme: (theme: 'light' | 'dark') => void; onReduced: () => void; onVersion: () => void; onConnection: () => void; onLogout: () => void; onPin?: () => void; clockedIn?: boolean; onClock?: () => void
 };
 
 // Account menu in the top bar: appearance, motion, version, connection and sign-out.
-export function ProfileMenu({ name, role, scope, theme, reduced, version, api, busy, onTheme, onReduced, onVersion, onConnection, onLogout, onPin }: Props) {
+export function ProfileMenu({ name, role, scope, theme, reduced, version, api, busy, onTheme, onReduced, onVersion, onConnection, onLogout, onPin, clockedIn, onClock }: Props) {
 
     const [open, setOpen] = useState(false);
     const root = useRef<HTMLDivElement>(null);
@@ -30,6 +30,7 @@ export function ProfileMenu({ name, role, scope, theme, reduced, version, api, b
             <div className="menu-row"><span className="mi-ic"><UiIcon name="motion" /></span><span className="mi-t" style={{ flex: 1 }}><b>Reducir animaciones</b><small>Menos movimiento en pantalla</small></span><Switch checked={reduced} label="Reducir animaciones" hideLabel onChange={onReduced} disabled={busy} /></div>
             <button type="button" role="menuitem" className="menu-item version-button" onClick={choose(onVersion)}><span className="mi-ic"><UiIcon name="cloud" /></span><span className="mi-t"><b>Versión {version}</b><small>Acerca de la aplicación</small></span></button>
             <button type="button" role="menuitem" className="menu-item" onClick={choose(onConnection)}><span className="mi-ic"><UiIcon name="wifi" /></span><span className="mi-t"><b>Conexión segura</b><small>{api || 'Sin configurar'}</small></span></button>
+            {onClock && <button type="button" role="menuitem" className="menu-item" disabled={busy} onClick={choose(onClock)}><span className="mi-ic"><UiIcon name="clock" /></span><span className="mi-t"><b>{clockedIn ? 'Registrar salida' : 'Registrar entrada'}</b><small>{clockedIn ? 'Estás en turno' : 'Reloj checador'}</small></span></button>}
             {onPin && <button type="button" role="menuitem" className="menu-item" onClick={choose(onPin)}><span className="mi-ic"><UiIcon name="key" /></span><span className="mi-t"><b>Mi PIN de autorización</b><small>Para autorizar en el dispositivo de otro</small></span></button>}<hr />
             <button type="button" role="menuitem" className="menu-item danger" aria-label={'Cerrar sesión de ' + name} disabled={busy} onClick={choose(onLogout)}><span className="mi-ic"><UiIcon name="exit" /></span><span className="mi-t"><b>Cerrar sesión</b><small>Los borradores se conservan</small></span></button>
         </div>}

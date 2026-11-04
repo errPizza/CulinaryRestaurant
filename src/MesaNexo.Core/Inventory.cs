@@ -177,13 +177,13 @@ public sealed partial class Restaurant {
         return Add(s, "stockmovement", movement);
 
     }
-    void ReceiveStock(BranchState s, string warehouse, string ingredient, long quantity, long cost, string type, string source, string actor) {
+    void ReceiveStock(BranchState s, string warehouse, string ingredient, long quantity, long cost, string type, string source, string actor, string expiresOn = "") {
 
         var stock = Stock(s, warehouse, ingredient);
         stock["quantity"] = checked(stock.L("quantity") + quantity);
         stock["value"] = checked(stock.L("value") + cost);
         s.Meta["layerOrder"] = s.Meta.L("layerOrder") + 1;
-        var layer = Add(s, "stocklayer", J.O("warehouseId", warehouse, "ingredientId", ingredient, "received", quantity, "remaining", quantity, "originalCost", cost, "remainingCost", cost, "order", s.Meta.L("layerOrder"), "sourceId", source, "at", J.Now()));
+        var layer = Add(s, "stocklayer", J.O("warehouseId", warehouse, "ingredientId", ingredient, "received", quantity, "remaining", quantity, "originalCost", cost, "remainingCost", cost, "order", s.Meta.L("layerOrder"), "sourceId", source, "expiresOn", expiresOn, "at", J.Now()));
         Add(s, "stockmovement", J.O("warehouseId", warehouse, "ingredientId", ingredient, "quantity", quantity, "cost", cost, "type", type, "sourceId", source, "layerId", layer.S("id"), "actor", actor, "at", J.Now()));
 
     }
@@ -230,7 +230,7 @@ public sealed partial class Restaurant {
 
                 }
             case "recipe.bind": { var product = s.Get("product", p.S("productId")); var recipe = s.Get("recipe", p.S("recipeId")); product["recipeVersionId"] = recipe.S("versionId"); result = product; break; }
-            case "stock.receive": { var i = s.Get("ingredient", p.S("ingredientId")); ValidateIngredientUnit(i, p.S("unit", "base")); var qty = ExactQuantity(p); var reference = Text(p, "reference", 200); ReceiveStock(s, p.S("warehouseId"), i.S("id"), qty, Amount(p, "cost"), "receipt", reference, u.S("id")); break; }
+            case "stock.receive": { var i = s.Get("ingredient", p.S("ingredientId")); ValidateIngredientUnit(i, p.S("unit", "base")); var qty = ExactQuantity(p); var reference = Text(p, "reference", 200); ReceiveStock(s, p.S("warehouseId"), i.S("id"), qty, Amount(p, "cost"), "receipt", reference, u.S("id"), ExpiryDate(p)); break; }
             case "stock.waste": { var i = s.Get("ingredient", p.S("ingredientId")); ValidateIngredientUnit(i, p.S("unit", "base")); result = Consume(s, p.S("warehouseId"), i.S("id"), ExactQuantity(p), "waste", Text(p, "reason"), u.S("id")); break; }
             case "stock.return": {
 

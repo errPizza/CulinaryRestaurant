@@ -18,12 +18,12 @@ El negocio debe informar a su personal que sus ventas y propinas aparecen en el 
 **Qué datos usamos.**
 
 - De tu cuenta: tu correo, tu contraseña guardada sólo como huella cifrada, la clave de tu autenticador, las sesiones abiertas y los intentos fallidos de entrada.
-- De las sucursales a las que tienes acceso: resúmenes por día de ventas, cobros, caja, productos e inventario. No incluyen clientes, tickets individuales ni datos de pago.
-- Del personal: en las ventas por mesero, el identificador interno y el nombre visible de cada persona, con sus cuentas, ventas y propinas del periodo.
+- De las sucursales a las que tienes acceso: resúmenes por día de ventas, cobros, caja, productos, inventario, tiempos de cocina, devoluciones, calificaciones y gastos. De los clientes, sólo cifras: cuántos regresan, cada cuánto y cuánto gastan en promedio. No incluyen nombres ni teléfonos de clientes, tickets individuales ni datos de pago.
+- Del personal: el identificador interno, el nombre visible y el rol de cada persona, con sus cuentas, ventas, propinas, mesas y comensales atendidos, minutos trabajados y su costo según el reloj checador, y el número de cancelaciones, descuentos, reaperturas y aperturas de cajón que pidió. Del equipo de cada sucursal, altas y bajas por mes, sin nombres.
 
 **Para qué.** Para darte acceso, comprobar que eres tú, mostrarte las cifras de tus sucursales y avisarte si una deja de reportar. No usamos estos datos para publicidad ni los vendemos.
 
-**Con quién se comparten.** Con nadie fuera del proveedor, salvo con el servicio de nube donde corre CulinaryServer (Cloudflare) para guardarlos, y cuando una autoridad lo exija conforme a la ley. Un gerente sólo ve las sucursales que el negocio le asignó.
+**Con quién se comparten.** Con nadie fuera del proveedor, salvo con el servicio de nube donde corre CulinaryServer (Cloudflare) para guardarlos, con Open-Meteo, que recibe sólo las coordenadas de la ciudad que elijas para el pronóstico del clima, y cuando una autoridad lo exija conforme a la ley. Un gerente sólo ve las sucursales que el negocio le asignó.
 
 **Cuánto tiempo.** Los resúmenes por día se guardan 25 meses y el detalle de productos 13 meses; después se borran. Tu cuenta existe hasta que el negocio o el proveedor la eliminan, y al eliminarla se cierran sus sesiones.
 

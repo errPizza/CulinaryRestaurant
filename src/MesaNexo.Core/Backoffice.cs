@@ -40,7 +40,7 @@ public sealed partial class Restaurant {
         Need(lines.Count is > 0 and <= 30 && lines.Objects().Count() == lines.Count, "Compra: de 1 a 30 renglones");
         Need(lines.Objects().Select(x => x.S("ingredientId")).Distinct().Count() == lines.Count, "Insumo repetido en la compra");
         var result = new JsonArray();
-        foreach (var line in lines.Objects()) { var i = s.Get("ingredient", line.S("ingredientId")); var unit = line.S("unit", "base"); ValidateIngredientUnit(i, unit); var quantity = allowZero ? OptionalQuantity(line, "quantity", unit) : ExactQuantity(line); result.Add(J.O("ingredientId", i.S("id"), "quantity", quantity, "cost", Amount(line, "cost"))); }
+        foreach (var line in lines.Objects()) { var i = s.Get("ingredient", line.S("ingredientId")); var unit = line.S("unit", "base"); ValidateIngredientUnit(i, unit); var quantity = allowZero ? OptionalQuantity(line, "quantity", unit) : ExactQuantity(line); result.Add(J.O("ingredientId", i.S("id"), "quantity", quantity, "cost", Amount(line, "cost"), "expiresOn", ExpiryDate(line))); }
         return result;
 
     }
@@ -207,7 +207,7 @@ public sealed partial class Restaurant {
                     var lines = id != "" && p.A("lines").Count > 0 ? PurchaseLines(s, p.A("lines"), true) : order.A("lines");
                     var invoice = Text(p, "invoice", 60);
                     var supplier = s.Get("supplier", order.S("supplierId"));
-                    foreach (var line in lines.Objects().Where(x => x.L("quantity") > 0)) { ReceiveStock(s, order.S("warehouseId"), line.S("ingredientId"), line.L("quantity"), line.L("cost"), "purchase", order.S("id"), u.S("id")); s.Get("ingredient", line.S("ingredientId"))["lastCost"] = CostRate(line.L("cost"), line.L("quantity")); }
+                    foreach (var line in lines.Objects().Where(x => x.L("quantity") > 0)) { ReceiveStock(s, order.S("warehouseId"), line.S("ingredientId"), line.L("quantity"), line.L("cost"), "purchase", order.S("id"), u.S("id"), ExpiryDate(line)); s.Get("ingredient", line.S("ingredientId"))["lastCost"] = CostRate(line.L("cost"), line.L("quantity")); }
                     var total = lines.Objects().Sum(x => x.L("cost"));
                     Need(lines.Objects().Any(x => x.L("quantity") > 0), "Recibe al menos un insumo");
                     var ordered = order.A("lines").Objects().ToDictionary(x => x.S("ingredientId"), x => x.L("quantity"));

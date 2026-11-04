@@ -103,7 +103,7 @@ public sealed partial class Restaurant {
                     JsonNode? pickupAt = null;
                     if (mode == "pickup" && p.S("pickupAt") != "") { Need(DateTimeOffset.TryParse(p.S("pickupAt"), out var at) && at > DateTimeOffset.UtcNow.AddMinutes(-5) && at < DateTimeOffset.UtcNow.AddDays(7), "Hora de recogida inválida (hasta 7 días)"); pickupAt = at.ToUniversalTime().ToString("O"); }
                     v["customerName"] = customer.S("name");
-                    result = Add(s, "delivery", J.O("pickupAt", pickupAt, "pickupName", Sanitize(p.S("pickupName", customer.S("name")), 80), "visitId", v.S("id"), "customerId", customer.S("id"), "mode", mode, "addressSnapshot", address, "zoneId", zone?.S("id"), "fee", zone?.L("fee") ?? 0, "status", "accepted-local", "at", J.Now(), "responsibility", 0, "reconciled", 0));
+                    result = Add(s, "delivery", J.O("pickupAt", pickupAt, "pickupName", Sanitize(p.S("pickupName", customer.S("name")), 80), "visitId", v.S("id"), "customerId", customer.S("id"), "mode", mode, "addressSnapshot", address, "zoneId", zone?.S("id"), "fee", zone?.L("fee") ?? 0, "status", "accepted-local", "at", J.Now(), "responsibility", 0, "reconciled", 0, "promisedMinutes", p["promisedMinutes"] is null ? 0 : Amount(p, "promisedMinutes", 0, 240)));
                     break;
 
                 }

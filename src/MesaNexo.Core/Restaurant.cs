@@ -113,7 +113,7 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
         var visible = role == "mesero" ? s.Related("visit", "waiterId", me).Where(v => u.Obj("permissions").B("shiftReports", true) || v.S("status") == "open").Select(x => x.S("id")).ToHashSet() : null;
         bool Visible(string visitId) => visible is null || visible.Contains(visitId);
         var shown = s.Related("visit", "status", "open").Where(v => Visible(v.S("id"))).Concat(s.Latest("visit", 500, v => v.S("status") != "open" && Visible(v.S("id")))).ToArray();
-        foreach (var kind in new[] { "table", "product", "category", "visit", "command", "unit", "notification", "request", "payment", "reservation", "review", "cash", "movement", "promotion", "ticket", "grant", "audit", "device", "user", "session" }.Concat(EcosystemKinds)) {
+        foreach (var kind in new[] { "table", "product", "category", "visit", "command", "unit", "notification", "request", "payment", "reservation", "review", "cash", "movement", "promotion", "ticket", "grant", "audit", "device", "user", "session", "attendance", "kitchenreturn" }.Concat(EcosystemKinds)) {
 
             IEnumerable<JsonObject> values = kind switch {
                 "visit" => shown,
@@ -122,6 +122,10 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
                 "command" or "payment" when role == "mesero" => s.Latest(kind, 500, x => Visible(x.S("visitId"))),
                 "audit" or "command" or "notification" or "session" or "payment" or "movement" => s.Latest(kind, 500),
                 "request" when role == "mesero" => s.List(kind).Where(x => Visible(x.S("visitId"))),
+                // Everyone sees their own shifts to clock out; hours of the others are the manager's.
+                "attendance" when role != "manager" => s.Related(kind, "userId", me).TakeLast(50),
+                "attendance" => s.Latest(kind, 500),
+                "kitchenreturn" => s.Latest(kind, 200),
                 _ => s.List(kind)
             };
             if (role != "manager" && new[] { "review", "audit", "grant", "device", "ticket", "session" }.Contains(kind)) values = [];
@@ -482,7 +486,8 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
 
                     var name = Text(p, "name", 100);
                     Need(!s.Related("category", "name", name).Any(x => x.S("id") != id), "Categoría repetida");
-                    if (id != "") { var c = s.Get("category", id); var old = c.S("name"); c["name"] = name; foreach (var prod in s.Related("product", "category", old)) prod["category"] = name; } else result = Add(s, "category", J.O("name", name));
+                    var kind = p.S("kind") == "" ? "" : Choice(p, "kind", CategoryKinds);
+                    if (id != "") { var c = s.Get("category", id); var old = c.S("name"); c["name"] = name; if (kind != "" || p.ContainsKey("kind")) c["family"] = kind; foreach (var prod in s.Related("product", "category", old)) prod["category"] = name; } else result = Add(s, "category", J.O("name", name, "family", kind));
                     break;
 
                 }
@@ -530,7 +535,14 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
                     user["name"] = Text(p, "name", 100);
                     user["username"] = username;
                     user["role"] = role;
+                    var wasActive = id != "" && user.B("active", true);
                     user["active"] = p.B("active", true);
+                    // Hiring and leaving dates give the owner the staff turnover; the wage gives the labour cost of the hours clocked.
+                    if (p["hourlyWage"] is not null) user["hourlyWage"] = Amount(p, "hourlyWage", 0, 1_000_000);
+                    if (p.S("hiredAt") != "") { Need(DateOnly.TryParseExact(p.S("hiredAt"), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out _), "hiredAt: usa una fecha AAAA-MM-DD"); user["hiredAt"] = p.S("hiredAt"); }
+                    else if (id == "") user["hiredAt"] = BusinessDate(s, DateTimeOffset.UtcNow);
+                    if (wasActive && !user.B("active")) { user["endedAt"] = J.Now(); if (OpenShift(s, user.S("id")) is { } open) open["outAt"] = J.Now(); }
+                    if (!wasActive && id != "" && user.B("active") && user.S("endedAt") != "") { user.Remove("endedAt"); if (p.S("hiredAt") == "") user["hiredAt"] = BusinessDate(s, DateTimeOffset.UtcNow); }
                     if (p["approvalLimit"] is not null && p.L("approvalLimit") != user.L("approvalLimit")) { Need(user.S("id") != u.S("id"), "Tu límite de autorización lo cambia otro gerente", 403); user["approvalLimit"] = Amount(p, "approvalLimit"); }
                     var permissions = new JsonObject();
                     foreach (var key in UserPermissions) permissions[key] = p.Obj("permissions").B(key, true);

@@ -21,7 +21,7 @@ public sealed partial class Restaurant {
     }
     public string BusinessDate(BranchState s, DateTimeOffset at) => Place(s, at).Date;
     public JsonObject OwnerBranch(BranchState s, string version) => J.O("timeZone", s.Meta.S("timeZone", DefaultTimeZone), "businessDayCutoffMinutes", CutoffMinutes(s), "currency", "MXN", "appVersion", version, "lastZ", s.Meta.L("zNumber"));
-    public static JsonObject OwnerEmptyDay(string date) => J.O("businessDate", date, "complete", true, "hours", new JsonArray(), "payments", new JsonArray(), "refunds", new JsonArray(), "channels", new JsonArray(), "products", new JsonArray(), "staff", new JsonArray(), "cash", J.O("income", 0, "expense", 0, "withdrawal", 0), "cashCloses", new JsonArray(), "inventory", J.O("waste", 0, "shortage", 0, "surplus", 0), "zReports", new JsonArray());
+    public static JsonObject OwnerEmptyDay(string date) { var day = J.O("businessDate", date, "complete", true, "hours", new JsonArray(), "payments", new JsonArray(), "refunds", new JsonArray(), "channels", new JsonArray(), "products", new JsonArray(), "staff", new JsonArray(), "cash", J.O("income", 0, "expense", 0, "withdrawal", 0), "cashCloses", new JsonArray(), "inventory", J.O("waste", 0, "shortage", 0, "surplus", 0), "zReports", new JsonArray()); foreach (var (key, value) in EmptyInsights()) day[key] = value?.DeepClone(); return day; }
     static bool Within(string date, string? since) => since is null || string.CompareOrdinal(date, since) >= 0;
     // Every business day with activity, from `since` when given. `frozen` holds the unit costs already published per
     // day: a finished day is not revalued when stock costs move later.
@@ -65,6 +65,9 @@ public sealed partial class Restaurant {
         var open = s.Related("visit", "status", "open").SelectMany(v => new[] { "openedAt", "closedAt" }.Where(key => Moment(v, key) is not null).Select(key => At(v, key).Date)).ToHashSet();
         var today = Place(s, now).Date;
         var dates = new[] { sales, payments, refunds, movements, waste, closes, zDays }.SelectMany(x => x.Select(g => g.Key)).ToHashSet();
+        var insights = InsightDays(s, now, since);
+        var context = SaleContextOf(s, sales);
+        dates.UnionWith(insights.Keys);
         var days = new SortedDictionary<string, JsonObject>(StringComparer.Ordinal);
         foreach (var date in dates.Where(x => Within(x, since))) {
 
@@ -97,6 +100,9 @@ public sealed partial class Restaurant {
             long Spoiled(string type) => waste[date].Where(x => x.S("type") == type).Sum(x => Math.Abs(x.L("cost")));
             day["inventory"] = J.O("waste", Spoiled("waste"), "shortage", Spoiled("count-shortage"), "surplus", Spoiled("count-surplus"));
             day["zReports"] = Rows(zDays[date].Select(z => { var r = z.Obj("summary"); return J.O("number", z.L("number"), "from", z.S("from"), "to", z.S("to"), "tickets", r.L("tickets"), "people", r.L("people"), "gross", r.L("gross"), "discounts", r.L("discounts"), "net", r.L("net"), "tax", r.L("tax"), "payments", r.L("payments"), "tips", r.L("tips"), "refunds", r.L("refunds"), "digest", z.S("digest")); }));
+            var extra = insights.GetValueOrDefault(date);
+            if (extra.Day is not null) foreach (var (key, value) in extra.Day) day[key] = value?.DeepClone();
+            SaleInsights(s, day, date, figures, sold, extra.Team ?? new Dictionary<string, JsonObject>(StringComparer.Ordinal), context);
             days[date] = day;
 
         }
@@ -116,6 +122,9 @@ public sealed partial class Restaurant {
             if (Sum(day, "products", "revenue") + Sum(day, "hours", "deliveryFees") != Sum(day, "hours", "gross")) Fail(date, "productos más envío distintos de la venta bruta");
             if (day.A("hours").Objects().Any(x => x.L("gross") - x.L("discounts") != x.L("net"))) Fail(date, "bruta menos descuentos distinta de ventas");
             if (Sum(day, "payments", "tips") != Sum(day, "staff", "tips")) Fail(date, "propinas distintas por pago y por mesero");
+            if (net != Sum(day, "areas", "net")) Fail(date, "ventas distintas por hora y por área");
+            if (Sum(day, "products", "revenue") != Sum(day, "kinds", "revenue")) Fail(date, "productos distintos por tipo de categoría");
+            if (Sum(day, "labor", "minutes") != Sum(day, "team", "minutes") || Sum(day, "labor", "cost") != Sum(day, "team", "laborCost")) Fail(date, "costo laboral distinto por hora y por persona");
 
         }
         var hours = days.Values.SelectMany(day => day.A("hours").Objects()).ToLookup(x => x.L("z"));
@@ -135,7 +144,9 @@ public sealed partial class Restaurant {
         var accounts = s.Related("visit", "status", "open").ToArray();
         var incoming = s.Related("purchase", "status", "ordered").SelectMany(x => x.A("lines").Objects()).ToLookup(x => x.S("ingredientId"));
         var low = s.List("ingredient").Where(i => i.L("minStock") > 0).Select(i => { var stock = s.Related("stock", "ingredientId", i.S("id")).ToArray(); return (Row: i, Available: stock.Sum(x => x.L("quantity") - x.L("reserved")), Incoming: incoming[i.S("id")].Sum(x => x.L("quantity"))); }).Where(x => x.Available + x.Incoming <= x.Row.L("minStock")).OrderBy(x => x.Row.S("name"), StringComparer.Ordinal).Take(100);
-        return J.O("at", now.ToString("O"), "openAccounts", accounts.Length, "occupiedTables", s.Related("table", "status", "occupied").Count(), "openAmount", accounts.Sum(v => Totals(s, v).L("total")), "pendingRequests", s.Related("request", "status", "pending").Count(), "cashOpen", s.Related("cash", "status", "open").Any(), "lowStock", Rows(low.Select(x => J.O("ingredientId", x.Row.S("id"), "name", x.Row.S("name"), "unit", x.Row.S("unit"), "available", x.Available, "min", x.Row.L("minStock")))));
+        var live = J.O("at", now.ToString("O"), "openAccounts", accounts.Length, "occupiedTables", s.Related("table", "status", "occupied").Count(), "openAmount", accounts.Sum(v => Totals(s, v).L("total")), "pendingRequests", s.Related("request", "status", "pending").Count(), "cashOpen", s.Related("cash", "status", "open").Any(), "lowStock", Rows(low.Select(x => J.O("ingredientId", x.Row.S("id"), "name", x.Row.S("name"), "unit", x.Row.S("unit"), "available", x.Available, "min", x.Row.L("minStock")))));
+        LiveInsights(s, now, live, accounts);
+        return live;
 
     }
 }

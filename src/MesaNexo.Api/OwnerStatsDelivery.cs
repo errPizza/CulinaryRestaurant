@@ -51,7 +51,7 @@ public sealed class StatsLedger {
     }
 }
 public sealed partial class BranchService {
-    const int StatsSchema = 1, StatsBatchDays = 10, StatsHistoryDays = 762, StatsRecentDays = 14;
+    const int StatsSchema = Restaurant.OwnerStatsSchema, StatsBatchDays = 10, StatsHistoryDays = 762, StatsRecentDays = 14;
     public TimeSpan StatsPause { get; set; } = TimeSpan.FromSeconds(2);
     // The whole history takes seconds to add up. Old days change only through a reopening or new settings, so those wait for this.
     public TimeSpan StatsFullEvery { get; set; } = TimeSpan.FromHours(1);

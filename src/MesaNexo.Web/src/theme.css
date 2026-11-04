@@ -1120,6 +1120,8 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 .po-line.head{padding:0 4px 2px;color:var(--muted);font-size:11.5px;font-weight:600;letter-spacing:.02em;text-transform:uppercase}
 .po-line.diff{background:var(--amber-bg,rgba(245,188,59,.12))}
 .po-diff{grid-column:1/-1;margin:-2px 0 2px 6px;color:var(--amber);font-size:11.5px;font-weight:600}
+.po-expiry{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin:0 0 2px 6px;color:var(--muted);font-size:12px;font-weight:600}
+.po-expiry input{max-width:170px}
 .po-lines.count .po-line{grid-template-columns:minmax(0,1.5fr) 110px 110px 90px 120px}
 .po-lines.count .po-line .num{text-align:right;font-variant-numeric:tabular-nums}
 .po-line .w b{display:block;color:var(--ink);font-size:13px}

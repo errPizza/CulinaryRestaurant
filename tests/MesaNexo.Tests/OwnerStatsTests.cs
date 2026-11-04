@@ -45,7 +45,7 @@ static class OwnerStatsTests {
         Check(days.Count == 2, "the vector holds two business days");
         // The uploads CulinaryServer tests against (test/fixtures of that repository), so both sides keep one contract.
         var vectorDays = new JsonArray([.. days.Values.Select(day => { var sent = (JsonObject)day.DeepClone(); sent["revision"] = 1L; return (JsonNode?)sent; })]);
-        File.WriteAllText(Path.Combine(root, ".lab", "stats-vector.json"), J.O("schema", 1, "sentAt", later.ToString("O"), "branch", domain.OwnerBranch(seeded, "0.3.3"), "live", domain.OwnerLive(seeded, later), "days", vectorDays).ToJsonString());
+        File.WriteAllText(Path.Combine(root, ".lab", "stats-vector.json"), J.O("schema", Restaurant.OwnerStatsSchema, "sentAt", later.ToString("O"), "branch", domain.OwnerBranch(seeded, "0.3.3"), "live", domain.OwnerLive(seeded, later), "days", vectorDays).ToJsonString());
         Check(domain.OwnerErrors(seeded, days).Count == 0, "the vector meets every identity");
         foreach (var row in vector.Obj("expected").A("reconciliation").Objects()) {
 
@@ -74,6 +74,8 @@ static class OwnerStatsTests {
         finished["hours"] = new JsonArray();
         Check(!ledger.Holds(finished), "changed figures make the day pending again");
         Check(ledger.NextRevision(DateTimeOffset.UnixEpoch) == 1 && ledger.NextRevision(DateTimeOffset.UnixEpoch) == 2 && ledger.NextRevision(later) == later.ToUnixTimeSeconds(), "the revision grows even with the clock set back");
+
+        Insights(domain, later, Check);
 
         const string site = "owner-stats-site";
         var folder = Path.Combine(root, ".lab", "owner-stats-" + J.Id());
@@ -108,7 +110,7 @@ static class OwnerStatsTests {
         await service.SendStats();
         var post = fake.StatsPosts[^1];
         var today = post.A("days").Objects().Single();
-        Check(post.L("schema") == 1 && today.L("revision") > 0 && post.Obj("branch").S("timeZone") == "America/Mexico_City" && post.Obj("branch").L("businessDayCutoffMinutes") == 240 && post.Obj("live").B("cashOpen"), "the upload carries the day, the branch and what is live");
+        Check(post.L("schema") == Restaurant.OwnerStatsSchema && today.L("revision") > 0 && post.Obj("branch").S("timeZone") == "America/Mexico_City" && post.Obj("branch").L("businessDayCutoffMinutes") == 240 && post.Obj("live").B("cashOpen"), "the upload carries the day, the branch and what is live");
         Check(!today.B("complete"), "today is sent as not complete");
         Check(!post.ToJsonString().Contains("Mario") && !post.ToJsonString().Contains("5512345678") && !post.ToJsonString().Contains(first.S("visitId")), "no customer or ticket leaves the branch");
         await service.SendStats();
@@ -209,6 +211,98 @@ static class OwnerStatsTests {
         Check(fake.StatsDays[refused[^1].S("businessDate")].L("revision") > fake.StatsDays[refused[0].S("businessDate")].L("revision"), "a day the server refuses holds back no other");
         await service.SendStats();
         Check(fake.StatsPosts[^1].A("days").Objects().Single().S("businessDate") == refused[0].S("businessDate"), "the refused day stays pending");
+
+        // The data the panel needs that the branch did not capture before: the clock, returns, kinds, lots and hiring.
+        var me = (await service.Load()).List("user").Single(x => x.S("username") == "gerencia");
+        var shift = await Act("clock.in", new());
+        await Deny(() => Act("clock.in", new()), "a second entry while one is open is refused");
+        await Act("clock.out", new());
+        state = await service.Load();
+        Check(state.Get("attendance", shift.S("id")).S("outAt") != "" && state.Get("attendance", shift.S("id")).S("userId") == me.S("id"), "anyone clocks in and out by themselves");
+        await Deny(() => Act("clock.fix", J.O("id", shift.S("id"), "inAt", "2026-11-01T10:00:00Z", "outAt", "2026-11-01T18:00:00Z", "reason", "Olvido")), "a manager does not correct their own hours");
+        var cook = await Act("user.save", J.O("name", "Cocinera", "username", "cocinera", "role", "cocina", "password", "Cocina-" + J.Id(), "hourlyWage", 6500, "hiredAt", "2026-10-01"));
+        await Act("clock.in", J.O("userId", cook.S("id")));
+        await Act("user.save", J.O("id", cook.S("id"), "name", "Cocinera", "username", "cocinera", "role", "cocina", "active", false));
+        state = await service.Load();
+        Check(state.Get("user", cook.S("id")).L("hourlyWage") == 6500 && state.Get("user", cook.S("id")).S("hiredAt") == "2026-10-01" && state.Get("user", cook.S("id")).S("endedAt") != "" && state.Related("attendance", "userId", cook.S("id")).All(x => x.S("outAt") != ""), "a wage and hiring date are kept, and leaving records the exit and closes the shift");
+        await Deny(() => Act("catalog.category", J.O("name", "Vinos", "kind", "vino")), "an unknown category kind is refused");
+        var wines = await Act("catalog.category", J.O("name", "Vinos", "kind", "alcohol"));
+        await Act("catalog.category", J.O("id", wines.S("id"), "name", "Vinos tintos"));
+        Check((await service.Load()).Get("category", wines.S("id")).S("family") == "alcohol", "a category keeps its kind when renamed");
+        var table = await Act("table.save", J.O("name", "Terraza 1", "zone", "Terraza", "capacity", 4));
+        var waiter = await Act("user.save", J.O("name", "Mesera", "username", "mesera", "role", "mesero", "password", "Mesera-" + J.Id()));
+        var terrace = (await Act("visit.open", J.O("tableId", table.S("id"), "people", 2, "waiterId", waiter.S("id")))).S("id");
+        var unit = (await Act("command.send", J.O("visitId", terrace, "items", new[] { J.O("productId", taco.S("id"), "quantity", 1) }))).A("unitIds").Strings().Single();
+        await Deny(() => Act("unit.return", J.O("id", unit, "reason", "cold")), "only a delivered dish goes back");
+        foreach (var status in new[] { "preparing", "ready", "delivered" }) await Act("unit.state", J.O("id", unit, "status", status));
+        await Deny(() => Act("unit.return", J.O("id", unit, "reason", "feo")), "a return needs a known reason");
+        await Act("unit.return", J.O("id", unit, "reason", "cold", "notes", "Llegó tibio"));
+        state = await service.Load();
+        Check(state.Get("unit", unit).S("status") == "received" && state.Get("unit", unit).S("readyAt") == "" && state.List("kitchenreturn").Single().S("reason") == "cold", "a returned dish goes back to the kitchen and the return is recorded");
+        var warehouse = await Act("inventory.warehouse", J.O("name", "Lácteos", "costMethod", "average"));
+        var milk = await Act("inventory.ingredient", J.O("name", "Leche", "unit", "ml"));
+        await Deny(() => Act("stock.receive", J.O("warehouseId", warehouse.S("id"), "ingredientId", milk.S("id"), "quantity", 1000, "unit", "ml", "cost", 2500, "reference", "L1", "expiresOn", "04/11/2026")), "a lot date is a calendar date");
+        await Act("stock.receive", J.O("warehouseId", warehouse.S("id"), "ingredientId", milk.S("id"), "quantity", 1000, "unit", "ml", "cost", 2500, "reference", "L1", "expiresOn", DateTimeOffset.UtcNow.AddDays(1).ToString("yyyy-MM-dd")));
+        state = await service.Load();
+        Check(state.List("stocklayer").Single(x => x.S("ingredientId") == milk.S("id")).S("expiresOn") != "" && domain.OwnerLive(state, DateTimeOffset.UtcNow).A("expiring").Objects().Any(x => x.S("name") == "Leche"), "a lot with its expiry date shows as about to expire");
+        var live = domain.OwnerLive(state, DateTimeOffset.UtcNow);
+        Check(live.Obj("tables").L("total") >= 1 && live.Obj("tables").L("occupied") >= 1 && live.Obj("roster").A("months").Count == 12, "what is live counts tables and the roster of the year");
+        var sent = domain.OwnerDays(state, DateTimeOffset.UtcNow);
+        Check(domain.OwnerErrors(state, sent).Count == 0 && sent.Values.Any(d => d.A("returns").Count == 1) && sent.Values.Any(d => d.A("team").Objects().Any(x => x.S("staffId") == me.S("id"))), "the new sections travel with their days and meet every identity");
+
+    }
+    // The schema 2 sections against figures worked out by hand on a small day.
+    static void Insights(Restaurant domain, DateTimeOffset later, Action<bool, string> Check) {
+
+        var s = new BranchState();
+        s.Add("meta", J.O("id", "site", "siteId", "insights", "timeZone", "America/Mexico_City", "businessDayCutoffMinutes", 240L, "zNumber", 0L));
+        s.Add("user", J.O("id", "w1", "name", "Ana", "role", "mesero", "hourlyWage", 6000L, "hiredAt", "2026-09-01", "active", true));
+        s.Add("user", J.O("id", "m1", "name", "Gerencia", "role", "manager", "active", false, "hiredAt", "2026-01-10", "endedAt", "2026-10-15T18:00:00Z"));
+        s.Add("table", J.O("id", "t1", "name", "T1", "zone", "Terraza", "status", "free"));
+        s.Add("category", J.O("id", "c-b", "name", "Bebidas", "family", "drink"));
+        s.Add("product", J.O("id", "p1", "name", "Agua", "category", "Bebidas", "price", 2000L));
+        s.Add("product", J.O("id", "p2", "name", "Taco", "category", "Comida", "price", 3000L));
+        s.Add("visit", J.O("id", "v0", "status", "closed", "people", 1L, "waiterId", "w1", "tableId", "", "customerId", "cli", "closedAt", "2026-10-01T20:00:00Z"));
+        s.Add("unit", J.O("id", "u0", "visitId", "v0", "productId", "p1", "name", "Agua", "status", "delivered", "price", 2000L));
+        s.Add("visit", J.O("id", "v1", "status", "closed", "people", 2L, "waiterId", "w1", "tableId", "t1", "customerId", "cli", "closedAt", "2026-10-30T20:00:00Z"));
+        s.Add("unit", J.O("id", "u1", "visitId", "v1", "productId", "p1", "name", "Agua", "station", "Barra", "status", "delivered", "price", 2000L, "receivedAt", "2026-10-30T19:00:00Z", "startedAt", "2026-10-30T19:02:00Z", "readyAt", "2026-10-30T19:10:00Z", "deliveredAt", "2026-10-30T19:12:00Z"));
+        s.Add("unit", J.O("id", "u2", "visitId", "v1", "productId", "p2", "name", "Taco", "station", "Cocina", "status", "delivered", "price", 3000L, "receivedAt", "2026-10-30T19:00:00Z", "readyAt", "2026-10-30T19:10:00Z"));
+        s.Add("unit", J.O("id", "u3", "visitId", "v1", "productId", "p2", "name", "Taco", "station", "Cocina", "status", "cancelled", "price", 1500L, "receivedAt", "2026-10-30T19:00:00Z"));
+        s.Add("request", J.O("id", "r1", "visitId", "v1", "unitId", "u3", "actor", "w1", "type", "cancel", "status", "approved", "at", "2026-10-30T19:30:00Z"));
+        s.Add("attendance", J.O("id", "a1", "userId", "w1", "inAt", "2026-10-30T18:30:00Z", "outAt", "2026-10-30T20:00:00Z"));
+        s.Add("printjob", J.O("id", "j1", "type", "drawer", "actor", "m1", "at", "2026-10-30T23:00:00Z"));
+        s.Add("review", J.O("id", "rv", "visitId", "v1", "food", 3L, "service", 2L, "overall", 2L, "at", "2026-10-30T21:00:00Z"));
+        s.Add("kitchenreturn", J.O("id", "k1", "unitId", "u2", "productId", "p2", "name", "Taco", "reason", "cold", "at", "2026-10-30T19:20:00Z"));
+        s.Add("expenseaccount", J.O("id", "ea", "name", "Renta"));
+        s.Add("expense", J.O("id", "e1", "accountId", "ea", "amount", 50000L, "at", "2026-10-30T22:00:00Z"));
+        s.Add("delivery", J.O("id", "d1", "visitId", "v1", "mode", "pickup", "at", "2026-10-30T18:50:00Z", "pickupAt", "2026-10-30T19:05:00Z"));
+        s.Add("ingredient", J.O("id", "i1", "name", "Leche", "unit", "ml"));
+        s.Add("stocklayer", J.O("id", "l1", "ingredientId", "i1", "received", 1000L, "remaining", 0L, "originalCost", 2000L, "remainingCost", 0L, "order", 1L, "at", "2026-10-25T12:00:00Z"));
+        s.Add("stocklayer", J.O("id", "l2", "ingredientId", "i1", "received", 1000L, "remaining", 500L, "originalCost", 2600L, "remainingCost", 1300L, "order", 2L, "expiresOn", "2026-11-04", "at", "2026-11-01T12:00:00Z"));
+        s.Add("stockmovement", J.O("id", "sm1", "layerId", "l1", "type", "purchase", "ingredientId", "i1", "at", "2026-10-25T12:00:00Z"));
+        s.Add("stockmovement", J.O("id", "sm2", "layerId", "l2", "type", "purchase", "ingredientId", "i1", "at", "2026-11-01T12:00:00Z"));
+        var day = domain.OwnerDays(s, later)["2026-10-30"];
+        bool Is(string section, string json) { var same = JsonNode.DeepEquals(day[section], JsonNode.Parse(json)); if (!same) Console.WriteLine(section + ": " + day[section]?.ToJsonString()); return same; }
+        Check(Is("areas", """[{"area":"Terraza","tickets":1,"people":2,"net":5000}]"""), "sales split by the zone of the table");
+        Check(Is("kinds", """[{"kind":"","quantity":1,"revenue":3000},{"kind":"drink","quantity":1,"revenue":2000}]"""), "products split by the kind of their category");
+        Check(Is("labor", """[{"hour":12,"minutes":30,"cost":3000},{"hour":13,"minutes":60,"cost":6000}]"""), "a shift is cut at each hour of the branch's clock and priced at the wage");
+        var ana = day.A("team").Objects().Single(x => x.S("staffId") == "w1");
+        Check(ana.L("people") == 2 && ana.L("tables") == 1 && ana.L("voids") == 1 && ana.L("voidAmount") == 1500 && ana.L("minutes") == 90 && ana.L("laborCost") == 9000, "a waiter carries guests, tables, cancellations asked and hours worked");
+        Check(day.A("team").Objects().Single(x => x.S("staffId") == "m1").L("drawerOpens") == 1, "an opening of the drawer asked by hand belongs to who asked");
+        Check(Is("kitchen", """[{"productId":"p1","name":"Agua","station":"Barra","count":1,"waitSeconds":120,"prepSeconds":480,"maxSeconds":600,"passCount":1,"passSeconds":120},{"productId":"p2","name":"Taco","station":"Cocina","count":1,"waitSeconds":0,"prepSeconds":600,"maxSeconds":600,"passCount":0,"passSeconds":0}]"""), "kitchen times from received to ready and from ready to delivered");
+        Check(Is("returns", """[{"productId":"p2","name":"Taco","reason":"cold","count":1}]"""), "returns by dish and reason");
+        Check(Is("promises", """[{"mode":"pickup","count":1,"late":1,"promisedSeconds":900,"actualSeconds":1200}]"""), "a pickup ready after its time is late");
+        Check(Is("reviews", """{"count":1,"food":3,"service":2,"overall":2,"low":1}""") && day.A("reviewProducts").Count == 2, "reviews and what was eaten with them");
+        Check(Is("expenses", """[{"account":"Renta","amount":50000,"count":1}]"""), "expenses by account");
+        Check(Is("customers", """{"tickets":1,"net":5000,"first":0,"repeat":1}"""), "a known guest who came before counts as repeat");
+        Check(domain.OwnerErrors(s, domain.OwnerDays(s, later)).Count == 0, "the new sections meet the identities");
+        var live = domain.OwnerLive(s, later);
+        Check(live.A("expiring").Objects().Single().L("days") == 1 && live.A("expiring").Objects().Single().L("quantity") == 500, "what is left of a lot that expires tomorrow");
+        Check(live.A("costAlerts").Objects().Single().L("changeBps") == 3000 && live.A("costAlerts").Objects().Single().L("after") == 2600000, "a purchase 30 % dearer than the one before raises an alert");
+        var guests = live.Obj("customers");
+        Check(guests.L("identified") == 1 && guests.L("averageGapDays") == 29 && guests.L("lifetimeAverage") == 7000 && !live.ToJsonString().Contains("cli"), "guests go as counts, never as people");
+        var months = live.Obj("roster").A("months").Objects().ToDictionary(x => x.S("month"));
+        Check(months["2026-10"].L("exits") == 1 && months["2026-09"].L("hires") == 1 && months["2026-11"].L("headcount") == 1 && live.Obj("roster").L("active") == 1, "hires, exits and headcount by month");
 
     }
 }

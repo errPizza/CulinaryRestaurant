@@ -155,3 +155,42 @@ Sucursal y servidor las comprueban. Si fallan, el día no se publica y se abre u
 ## Envío en la sucursal
 
 `BranchService.SendStats`, en `src/MesaNexo.Api/OwnerStatsDelivery.cs`, corre dentro de `LicenseWorker`. No hay una cola aparte: `owner-stats.json` guarda el hash de cada día entregado, y todo día cuyas cifras difieran de ese hash está pendiente. Es un archivo y no un registro del almacén porque guardar cada envío llenaría la bitácora y despertaría a las terminales. Si se pierde, los días se reenvían, y los días terminados toman el costo actual en lugar del publicado.
+
+## Contrato 2: métricas avanzadas
+
+Desde el contrato 2 (`Restaurant.OwnerStatsSchema`, en `src/MesaNexo.Core/OwnerInsights.cs`) cada día lleva además las secciones siguientes. El servidor acepta 1 y 2, así que una sucursal sin actualizar sigue publicando; hay que desplegar CulinaryServer antes que la sucursal nueva.
+
+| Sección | Qué cuenta | Fecha |
+|---|---|---|
+| `areas` | Cuentas, comensales y ventas por zona de la mesa; vacío es sin mesa | Cierre de la cuenta |
+| `kinds` | Unidades e ingreso por tipo de categoría (`food`, `drink`, `alcohol`, `other`, vacío) | Cierre |
+| `team` | Por persona: comensales, mesas, cancelaciones y descuentos que pidió, solicitudes rechazadas, reaperturas, aperturas de cajón a mano, minutos y costo del reloj checador | Cada hecho en su momento; el reloj, por hora |
+| `labor` | Minutos y costo del reloj checador por hora del reloj de la sucursal | Por hora |
+| `couriers` | Entregas y ventas por repartidor | Cierre |
+| `kitchen` | Por producto: espera (recibido a iniciado), preparación (iniciado a listo), máximo y paso al cliente (listo a entregado) | Listo |
+| `returns` | Platillos devueltos por producto y motivo (`unit.return`) | Devolución |
+| `promises` | Pedidos con hora prometida: cuántos, tarde, tiempo prometido y real | Hora prometida |
+| `reviews`, `reviewProducts` | Calificaciones del día y, por producto, las de las cuentas que lo pidieron | Calificación |
+| `expenses` | Gastos por cuenta y salidas de caja sin cuenta ni devolución | Gasto |
+| `customers` | Cuentas y ventas con cliente, primeras visitas y clientes que regresan | Cierre |
+
+Identidades nuevas: ventas por área = ventas por hora; ingreso por tipo = ingreso de productos; minutos y costo de `labor` = los de `team`. Los minutos y el costo se redondean por persona y hora, así que las dos sumas coinciden al centavo.
+
+`live` añade `tables`, `partial` (cuentas con pago parcial), `onClock`, `customers` (sólo cifras: identificados, activos y recurrentes en 90 días, días entre visitas, valor de vida, frecuentes y frecuentes sin volver en 21 días), `expiring` (lotes con caducidad en 3 días o menos, con lo que queda por capas FIFO), `costAlerts` (compra recibida 10 % o más cara que la anterior del mismo insumo, con los platillos que lo usan) y `roster` (altas, bajas y plantilla de 12 meses). Con plan Lite el servidor sólo muestra `tables` y `partial`.
+
+Datos nuevos que captura la sucursal: tipo de categoría (`family`), sueldo por hora y fecha de ingreso del empleado (la baja se fecha al desactivarlo), reloj checador (`clock.in`, `clock.out`, `clock.fix`; otro gerente corrige las horas de un gerente), devolución de un platillo entregado (`unit.return`, sin cambiar lo cobrado), caducidad del lote al recibir (`expiresOn`) y minutos prometidos de un pedido a domicilio.
+
+## Lo que calcula el servidor
+
+Con los ajustes del dueño (`/owner/v1/settings`: turnos, metas, gastos fijos, metas de costo de alimentos y laboral, si se restan las horas del reloj y la ubicación para el clima):
+
+- **Turnos y áreas** en el resumen, también para Lite.
+- **Tendencia** por semana, mes o año contra el mismo tramo del año anterior.
+- **Metas** diarias, mensuales y anuales con avance, ritmo y proyección.
+- **Ingeniería de menú** (Kasavana y Smith): popular si su parte de unidades llega al 70 % de una parte pareja; rentable si su margen por unidad llega al promedio. Sólo productos con receta en todas sus unidades. Precio sugerido para volver a la meta de costo de alimentos, días flojos y horas pico.
+- **Rentabilidad**: ventas sin IVA menos costo de recetas, merma neta, gastos, horas del reloj y gastos fijos prorrateados.
+- **Personal**: eficiencia, costo laboral por hora, propinas repartidas por minutos trabajados (residuo mayor), personal sugerido por día y hora con las ventas de 8 semanas, rotación, y patrones para revisar (al menos 3 y el doble de la mediana de su sucursal; sólo el dueño).
+- **Cocina**, **clientes** y **alertas**.
+- **Pronóstico** de 7 días: promedio ponderado del mismo día de la semana en 8 semanas sin festivos, tendencia de 4 contra 4 semanas (raíz, entre 0.85 y 1.15), festivos de México con el efecto propio del año anterior cuando existe, y lluvia de Open-Meteo al ver una sola sucursal con ubicación (efecto aprendido con 3 días lluviosos o más; si no, 0.93). Muestra el error medio de los últimos 14 días.
+
+No se usan tráfico, eventos ni reseñas externas: requieren servicios de pago o aprobación. El panel no cambia precios: sólo sugiere.
