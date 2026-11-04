@@ -42,7 +42,7 @@ public sealed class BridgeHost(ISecureVault vault): IDisposable {
     async Task<JsonObject> SignIn(ConnectionProfile p, string username, string password, string enrollment) {
 
         var candidate = new NativeSession(p, vault) { DeferConfirmation = true };
-        try { var result = await candidate.Login(username, password, Environment.MachineName, enrollment); session = candidate; try { await candidate.StartLive(() => Task.CompletedTask); } catch { } var safe = (JsonObject)result.DeepClone(); safe.Remove("token"); return safe; } catch { candidate.Dispose(); throw; }
+        try { var result = await candidate.Login(username, password, Environment.MachineName, enrollment); session = candidate; if (await candidate.RefreshTrust() is { } trusted && await vault.Read("profile") is not null) { await vault.Write("profile", System.Text.Json.JsonSerializer.Serialize(trusted)); profile = trusted; } try { await candidate.StartLive(() => Task.CompletedTask); } catch { } var safe = (JsonObject)result.DeepClone(); safe.Remove("token"); return safe; } catch { candidate.Dispose(); throw; }
 
     }
     async Task<ConnectionProfile?> Profile() {

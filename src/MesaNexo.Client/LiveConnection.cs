@@ -8,7 +8,7 @@ public sealed partial class NativeSession {
     public async Task StartLive(Func<Task> refresh, CancellationToken ct = default) {
 
         if (live is not null) return;
-        var root = X509CertificateLoader.LoadCertificateFromFile(profile.CaFile);
+        var roots = TrustedConnection.Roots(profile);
         live = new HubConnectionBuilder().WithUrl(profile.ServerUrl.TrimEnd('/') + "/live", o => {
 
             o.AccessTokenProvider = () => Task.FromResult<string?>(Token);
@@ -20,7 +20,7 @@ public sealed partial class NativeSession {
                     if (certificate is null || (errors & SslPolicyErrors.RemoteCertificateNameMismatch) != 0) return false;
                     using var chain = new X509Chain();
                     chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
-                    chain.ChainPolicy.CustomTrustStore.Add(root);
+                    chain.ChainPolicy.CustomTrustStore.AddRange(roots);
                     chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
                     chain.ChainPolicy.ApplicationPolicy.Add(new System.Security.Cryptography.Oid("1.3.6.1.5.5.7.3.1"));
                     return chain.Build(new X509Certificate2(certificate));

@@ -21,14 +21,52 @@ public static class TrustedConnection {
 
         var uri = new Uri(profile.ServerUrl);
         if (uri.Scheme != "https" || uri.UserInfo != "" || uri.Query != "" || uri.Fragment != "") throw new InvalidOperationException("La conexión requiere una dirección HTTPS sin credenciales");
-        var root = X509CertificateLoader.LoadCertificateFromFile(profile.CaFile);
-        var fingerprint = root.GetCertHashString(System.Security.Cryptography.HashAlgorithmName.SHA256);
-        if (!fingerprint.Equals(profile.CaSha256.Replace(":", "").Replace(" ", ""), StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("La huella de CA no coincide con el aprovisionamiento");
+        var policy = new X509ChainPolicy { TrustMode = X509ChainTrustMode.CustomRootTrust, RevocationMode = X509RevocationMode.NoCheck, ApplicationPolicy = { new System.Security.Cryptography.Oid("1.3.6.1.5.5.7.3.1") } };
+        policy.CustomTrustStore.AddRange(Roots(profile));
         var handler = new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false, PooledConnectionLifetime = TimeSpan.FromMinutes(5) };
-        handler.SslOptions = new SslClientAuthenticationOptions { EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13, CertificateChainPolicy = new X509ChainPolicy { TrustMode = X509ChainTrustMode.CustomRootTrust, RevocationMode = X509RevocationMode.NoCheck, CustomTrustStore = { root }, ApplicationPolicy = { new System.Security.Cryptography.Oid("1.3.6.1.5.5.7.3.1") } } };
+        handler.SslOptions = new SslClientAuthenticationOptions { EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13, CertificateChainPolicy = policy };
         // TLS still validates SAN/hostname, dates and serverAuth. Candidate addresses never set trust.
         if (profile.ConnectAddress is string address) { if (!IPAddress.TryParse(address, out var ip)) throw new InvalidOperationException("Candidato IP inválido"); handler.ConnectCallback = async (context, ct) => { var socket = new System.Net.Sockets.Socket(ip.AddressFamily, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp); try { await socket.ConnectAsync(new IPEndPoint(ip, uri.Port), ct); return new System.Net.Sockets.NetworkStream(socket, true); } catch { socket.Dispose(); throw; } }; }
         return handler;
+
+    }
+    // The CAs this terminal trusts. During a rotation the file holds the old and the new CA and CaSha256 lists both
+    // fingerprints, separated by commas; every CA in the file must be one of them.
+    public static X509Certificate2Collection Roots(ConnectionProfile profile) {
+
+        var pins = Pins(profile.CaSha256);
+        var roots = new X509Certificate2Collection();
+        if (File.ReadAllText(profile.CaFile).Contains("-----BEGIN")) roots.ImportFromPemFile(profile.CaFile); else roots.Add(X509CertificateLoader.LoadCertificateFromFile(profile.CaFile));
+        if (roots.Count == 0 || roots.Any(x => !pins.Contains(Sha(x)))) throw new InvalidOperationException("La huella de CA no coincide con el aprovisionamiento");
+        return roots;
+
+    }
+    static string[] Pins(string value) => value.Split(',').Select(x => x.Replace(":", "").Replace(" ", "").Trim().ToUpperInvariant()).Where(x => x != "").ToArray();
+    static string Sha(X509Certificate2 c) => c.GetCertHashString(System.Security.Cryptography.HashAlgorithmName.SHA256);
+    // What the server publishes in api/trust, over a connection this terminal already trusts. It is adopted only if it
+    // keeps at least one CA the terminal trusts now, so a rotation goes old → old+new → new and never jumps.
+    // Returns the profile to save, or null when nothing changes or the answer is not acceptable.
+    public static ConnectionProfile? Adopt(ConnectionProfile profile, IReadOnlyList<string> pems) {
+
+        if (pems.Count is 0 or > 3) return null;
+        var offered = new X509Certificate2Collection();
+        foreach (var pem in pems) {
+
+            X509Certificate2 ca;
+            try { ca = X509Certificate2.CreateFromPem(pem); } catch (System.Security.Cryptography.CryptographicException) { return null; }
+            var constraints = ca.Extensions.OfType<X509BasicConstraintsExtension>().FirstOrDefault();
+            if (constraints is not { CertificateAuthority: true } || !ca.SubjectName.RawData.AsSpan().SequenceEqual(ca.IssuerName.RawData) || ca.NotAfter.ToUniversalTime() < DateTime.UtcNow) return null;
+            offered.Add(ca);
+
+        }
+        var current = Pins(profile.CaSha256);
+        var next = offered.Select(Sha).Distinct().ToArray();
+        if (!next.Any(current.Contains) || next.Order().SequenceEqual(current.Order())) return null;
+        var file = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(profile.CaFile))!, "restaurant-ca-" + string.Join("-", next.Order().Select(x => x[..8])).ToLowerInvariant() + ".pem");
+        var temp = file + ".new";
+        File.WriteAllText(temp, string.Concat(offered.Select(x => x.ExportCertificatePem() + "\n")));
+        File.Move(temp, file, true);
+        return profile with { CaFile = file, CaSha256 = string.Join(",", next) };
 
     }
     public static HttpClient Create(ConnectionProfile p) => new(Handler(p)) { BaseAddress = new Uri(p.ServerUrl.TrimEnd('/') + "/"), Timeout = TimeSpan.FromSeconds(15) };
@@ -41,6 +79,12 @@ public sealed partial class NativeSession: IDisposable {
     public ConnectionState Connection { get; private set; } = ConnectionState.Unverified;
     public string OperationState { get; private set; } = "Sin operaciones pendientes";
     public NativeSession(ConnectionProfile profile, ISecureVault vault) { this.profile = profile; this.vault = vault; http = TrustedConnection.Create(profile); }
+    // After signing in: the CAs the server publishes for a rotation. A failure only means this terminal keeps its CA.
+    public async Task<ConnectionProfile?> RefreshTrust(CancellationToken ct = default) {
+
+        try { var cas = (await Request(HttpMethod.Get, "api/trust", null, ct))["cas"] as JsonArray; return cas is null ? null : TrustedConnection.Adopt(profile, cas.Select(x => x?.GetValue<string>() ?? "").ToArray()); } catch (Exception e) when (e is ApiFailure or HttpRequestException or IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException or TaskCanceledException) { return null; }
+
+    }
     public async Task<JsonObject> Login(string username, string password, string deviceName, string enrollment = "", CancellationToken ct = default) {
 
         // Verify branch identity through an already trusted TLS channel before sending credentials.

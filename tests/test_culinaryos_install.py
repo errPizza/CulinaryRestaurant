@@ -137,6 +137,61 @@ class CulinaryInstallation(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
+    def test_ca_rotation(self):
+        openssl = str(Path('C:/Program Files/Git/usr/bin/openssl.exe') if os.name == 'nt' else Path('/usr/bin/openssl'))
+        spec = importlib.util.spec_from_file_location('culinary_rotate', ROOT / 'deploy/culinaryos/rotate-ca.py')
+        rotate = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(rotate)
+        original = i.run
+        def command(*args, **kwargs): return original(openssl if args[0] == 'openssl' else args[0], *args[1:], **kwargs)
+        def verify(authority, leaf): return subprocess.run([openssl, 'verify', '-purpose', 'sslserver', '-verify_hostname', site['server_name'], '-CAfile', str(authority), str(leaf)], capture_output=True).returncode
+        site = self.site()
+        with tempfile.TemporaryDirectory() as tmp, patch.object(i, 'run', side_effect=command), patch.object(os, 'chown', create=True):
+            config, log = Path(tmp) / 'config', Path(tmp) / 'state/ca-rotation.json'
+            config.mkdir()
+            with patch.object(i, 'CONFIG', config):
+                ca, cert, key = i.certificates(site, tmp)
+            (config / 'restaurant-connection.json').write_text(json.dumps(i.connection(site, ca)))
+            profile = lambda: json.loads((config / 'restaurant-connection.json').read_text())
+            old_pin, server_key = profile()['CaSha256'], key.read_bytes()
+            (Path(tmp) / 'old-ca.crt').write_bytes(ca.read_bytes())
+            # 1. Announce: both CAs are published and pinned; the server certificate is still the old CA's.
+            rotate.announce(config, openssl, log)
+            bundle = config / 'restaurant-ca-bundle.pem'
+            self.assertEqual(bundle.read_text().count('BEGIN CERTIFICATE'), 2)
+            pins = profile()['CaSha256'].split(',')
+            self.assertEqual((pins[0], len(pins), profile()['CaFile']), (old_pin, 2, str(bundle)))
+            self.assertEqual(verify(bundle, cert), 0)
+            with self.assertRaises(ValueError):
+                rotate.announce(config, openssl, log)
+            new_pin = pins[1]
+            # A switch that fails leaves every file where it was.
+            kept = (config / 'secrets/restaurant-ca-next.key').read_bytes()
+            (config / 'secrets/restaurant-ca-next.key').write_bytes(b'not a key')
+            before = {p.name: p.read_bytes() for p in config.rglob('*') if p.is_file()}
+            with self.assertRaises(subprocess.CalledProcessError):
+                rotate.switch(config, openssl, lambda: None, log)
+            self.assertEqual(before, {p.name: p.read_bytes() for p in config.rglob('*') if p.is_file()})
+            (config / 'secrets/restaurant-ca-next.key').write_bytes(kept)
+            # 2. Switch: the server certificate comes from the new CA with the same key; the old CA stays published.
+            restarts = []
+            rotate.switch(config, openssl, lambda: restarts.append(1), log, now=1_000_000)
+            self.assertEqual((restarts, key.read_bytes()), ([1], server_key))
+            self.assertEqual(rotate.fingerprint(openssl, ca), new_pin)
+            self.assertEqual(verify(ca, cert), 0)
+            self.assertNotEqual(verify(Path(tmp) / 'old-ca.crt', cert), 0, 'a terminal that only knows the old CA would reject the server')
+            self.assertEqual(verify(bundle, cert), 0, 'a terminal that learned the bundle keeps working')
+            self.assertEqual(sorted(profile()['CaSha256'].split(',')), sorted([old_pin, new_pin]))
+            # 3. Retire: refused before the grace period, then only the new CA remains and the old key is gone.
+            with self.assertRaises(ValueError):
+                rotate.retire(config, openssl, log, now=1_000_000 + 10 * 86400)
+            rotate.retire(config, openssl, log, now=1_000_000 + 31 * 86400)
+            self.assertFalse(bundle.exists() or (config / 'restaurant-ca-previous.crt').exists() or (config / 'secrets/restaurant-ca-previous.key').exists())
+            self.assertEqual((profile()['CaSha256'], profile()['CaFile']), (new_pin, str(ca)))
+            self.assertEqual([e['step'] for e in json.loads(log.read_text())], ['announce', 'switch', 'retire'])
+            # The daily renewal keeps working with the CA now in place.
+            self.assertTrue(self.renewal().renew(config, openssl, lambda: None, force=True))
+            self.assertEqual(verify(ca, cert), 0)
     def test_tls_renewal(self):
         openssl = str(Path('C:/Program Files/Git/usr/bin/openssl.exe') if os.name == 'nt' else Path('/usr/bin/openssl'))
         original, renew = i.run, self.renewal().renew

@@ -21,14 +21,14 @@ def replace(path, data):
     os.replace(temp, path)
 def restart():
     subprocess.run(['systemctl', 'try-restart', BACKEND], check=True)
-def renew(config=CONFIG, openssl='openssl', restart=restart):
+def renew(config=CONFIG, openssl='openssl', restart=restart, force=False):
     """True when it renewed. The server key stays, so a failure at any step leaves a working pair."""
     ca, ca_key, cert = config / 'restaurant-ca.crt', config / 'secrets/restaurant-ca.key', config / 'restaurant-tls.crt'
     key = config / 'secrets/restaurant-tls.key'
     now = time.time()
     if ends(openssl, ca) - now < 365 * 86400:
         print('La CA de la sucursal vence en menos de un año; rotarla según docs/CERTIFICADOS-LOCALES.md', file=sys.stderr)
-    if ends(openssl, cert) - now > RENEW_SECONDS:
+    if not force and ends(openssl, cert) - now > RENEW_SECONDS:
         return False
     if ends(openssl, ca) - ends(openssl, cert) < 86400:
         raise ValueError('La CA vence antes de poder extender el certificado; hay que rotarla')
