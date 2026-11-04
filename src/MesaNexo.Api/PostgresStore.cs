@@ -55,6 +55,8 @@ public sealed partial class PostgresBranchStore: IBranchStore, IDisposable {
             CREATE TABLE IF NOT EXISTS events(id text COLLATE "C" PRIMARY KEY, seq bigserial NOT NULL UNIQUE, record_id text NOT NULL, version bigint NOT NULL, envelope bytea NOT NULL, digest text NOT NULL, created double precision NOT NULL, acked double precision, attempts integer NOT NULL DEFAULT 0, next_attempt double precision NOT NULL DEFAULT 0);
             CREATE INDEX IF NOT EXISTS events_pending ON events(seq) WHERE acked IS NULL;
             CREATE TABLE IF NOT EXISTS events_archive(id text COLLATE "C" PRIMARY KEY, seq bigint NOT NULL, record_id text NOT NULL, version bigint NOT NULL, envelope bytea NOT NULL, digest text NOT NULL, created double precision NOT NULL, acked double precision NOT NULL, archived double precision NOT NULL);
+            ALTER TABLE events ADD COLUMN IF NOT EXISTS last_error text, ADD COLUMN IF NOT EXISTS last_error_at double precision, ADD COLUMN IF NOT EXISTS held double precision;
+            CREATE TABLE IF NOT EXISTS outbox_interventions(id bigserial PRIMARY KEY, event_id text NOT NULL, action text NOT NULL, actor text NOT NULL, reason text NOT NULL, at double precision NOT NULL);
             """, ct);
         var site = await Scalar<string>(db, tx, "SELECT value FROM store_metadata WHERE key='site_id'", ct);
         var check = await Scalar<string>(db, tx, "SELECT value FROM store_metadata WHERE key='key_check'", ct);
@@ -282,13 +284,111 @@ public sealed partial class PostgresBranchStore: IBranchStore, IDisposable {
     async Task<JsonObject> OutboxStatus(CancellationToken ct) {
 
         await using var db = await data.OpenConnectionAsync(ct);
-        await using var cmd = Command(db, null, "SELECT count(*), min(created), pg_total_relation_size('events'), (SELECT value FROM store_metadata WHERE key='outbox_acked_seq') FROM events WHERE acked IS NULL");
+        JsonObject? head = null;
+        await using (var first = Command(db, null, "SELECT id, attempts, last_error, last_error_at, created FROM events WHERE acked IS NULL AND held IS NULL ORDER BY seq LIMIT 1")) {
+
+            await using var r = await first.ExecuteReaderAsync(ct);
+            if (await r.ReadAsync(ct) && !r.IsDBNull(2)) head = J.O("event_id", r.GetString(0), "attempts", r.GetInt32(1), "error", r.GetString(2), "error_at", r.IsDBNull(3) ? null : r.GetDouble(3), "created", r.GetDouble(4));
+
+        }
+        await using var cmd = Command(db, null, "SELECT count(*), min(created), pg_total_relation_size('events'), (SELECT value FROM store_metadata WHERE key='outbox_acked_seq'), count(held) FROM events WHERE acked IS NULL");
         await using var row = await cmd.ExecuteReaderAsync(ct);
         await row.ReadAsync(ct);
         double? oldest = row.IsDBNull(1) ? null : row.GetDouble(1);
         var bytes = row.GetInt64(2);
-        var alert = bytes > AlertBytes ? "size" : oldest is { } o && Epoch() - o > AlertAge.TotalSeconds && Central() == true ? "age" : null;
-        return J.O("pending", row.GetInt64(0), "oldest_pending", oldest, "bytes", bytes, "acked_seq", row.IsDBNull(3) ? 0 : long.Parse(row.GetString(3)), "alert", alert);
+        var held = row.GetInt64(4);
+        // The oldest event holds back every later one: a central that keeps refusing it for its content needs a person,
+        // and so does a central that stopped trusting the branch. Connectivity and server errors only wait.
+        var blocked = head is not null && head.L("attempts") >= BlockedAttempts && EventFault(head.S("error"));
+        var alert = blocked ? "blocked" : head?.S("error") == "auth" ? "auth" : held > 0 ? "held" : bytes > AlertBytes ? "size" : oldest is { } o && Epoch() - o > AlertAge.TotalSeconds && Central() == true ? "age" : null;
+        return J.O("pending", row.GetInt64(0), "oldest_pending", oldest, "bytes", bytes, "acked_seq", row.IsDBNull(3) ? 0 : long.Parse(row.GetString(3)), "held", held, "head", head, "alert", alert);
+
+    }
+    const int BlockedAttempts = 5;
+    // Failures that come from the event itself, as the central classifies its answer; the rest are about the link.
+    public static bool EventFault(string error) => error is "validation" or "conflict" or "incompatible" or "ack";
+    // Inspection for the administrator: pending events in order, with their last failure. Their content stays sealed.
+    public async Task<JsonArray> OutboxEvents(int limit, CancellationToken ct = default) {
+
+        await using var db = await data.OpenConnectionAsync(ct);
+        var list = new JsonArray();
+        await using var cmd = Command(db, null, "SELECT id, seq, record_id, version, digest, created, attempts, next_attempt, last_error, last_error_at, held FROM events WHERE acked IS NULL ORDER BY seq LIMIT @n", ("n", limit));
+        await using var row = await cmd.ExecuteReaderAsync(ct);
+        while (await row.ReadAsync(ct)) list.Add(J.O("event_id", row.GetString(0), "seq", row.GetInt64(1), "record_id", row.GetString(2), "version", row.GetInt64(3), "sha256", row.GetString(4), "created", row.GetDouble(5), "attempts", row.GetInt32(6), "next_attempt", row.GetDouble(7), "error", row.IsDBNull(8) ? null : row.GetString(8), "error_at", row.IsDBNull(9) ? null : row.GetDouble(9), "held", row.IsDBNull(10) ? null : row.GetDouble(10)));
+        return list;
+
+    }
+    // A person's decision on a pending event, recorded with who and why. `retry` sends it again now; `hold` sets it aside
+    // so later events reach the central; `release` puts it back in line. None of them acknowledges or removes the event.
+    public async Task<JsonObject> Intervene(string eventId, string action, string actor, string reason, CancellationToken ct = default) {
+
+        Rules.Need(action is "retry" or "hold" or "release", "Acción de outbox desconocida");
+        Rules.Need(actor.Trim().Length is >= 2 and <= 80, "Indica quién interviene");
+        Rules.Need(reason.Trim().Length is >= 10 and <= 500, "Explica el motivo (10 caracteres o más)");
+        await using var db = await data.OpenConnectionAsync(ct);
+        await using var tx = await db.BeginTransactionAsync(ct);
+        await Exec(db, tx, "SELECT pg_advisory_xact_lock(@l)", ct, ("l", WriterLock));
+        var held = await Scalar<object>(db, tx, "SELECT coalesce(held, -1) FROM events WHERE id=@i AND acked IS NULL", ct, ("i", eventId));
+        Rules.Need(held is double, "El evento no está pendiente", 404);
+        var isHeld = (double)held! >= 0;
+        Rules.Need(action != "hold" || !isHeld, "El evento ya está apartado", 409);
+        Rules.Need(action != "release" || isHeld, "El evento no está apartado", 409);
+        var sql = action switch { "hold" => "UPDATE events SET held=@now WHERE id=@i", "release" => "UPDATE events SET held=NULL, attempts=0, next_attempt=0 WHERE id=@i", _ => "UPDATE events SET next_attempt=0 WHERE id=@i" };
+        await Exec(db, tx, sql, ct, ("now", Epoch()), ("i", eventId));
+        await Exec(db, tx, "INSERT INTO outbox_interventions(event_id, action, actor, reason, at) VALUES(@i, @a, @w, @r, @now)", ct, ("i", eventId), ("a", action), ("w", actor.Trim()), ("r", reason.Trim()), ("now", Epoch()));
+        await tx.CommitAsync(ct);
+        return J.O("event_id", eventId, "action", action, "actor", actor.Trim());
+
+    }
+    public async Task<JsonArray> Interventions(CancellationToken ct = default) {
+
+        await using var db = await data.OpenConnectionAsync(ct);
+        var list = new JsonArray();
+        await using var cmd = Command(db, null, "SELECT event_id, action, actor, reason, at FROM outbox_interventions ORDER BY id");
+        await using var row = await cmd.ExecuteReaderAsync(ct);
+        while (await row.ReadAsync(ct)) list.Add(J.O("event_id", row.GetString(0), "action", row.GetString(1), "actor", row.GetString(2), "reason", row.GetString(3), "at", row.GetDouble(4)));
+        return list;
+
+    }
+    // Pending events as they are stored, still sealed under the keyring, to carry them off a failing disk. Importing them
+    // back adds only the ones the store does not have, and only if they open under this store's keyring and site.
+    public async Task<int> ExportPending(Stream output, CancellationToken ct = default) {
+
+        await using var db = await data.OpenConnectionAsync(ct);
+        await using var writer = new StreamWriter(output, new UTF8Encoding(false), leaveOpen: true);
+        var count = 0;
+        await using var cmd = Command(db, null, "SELECT id, record_id, version, envelope, digest, created FROM events WHERE acked IS NULL ORDER BY seq");
+        await using var row = await cmd.ExecuteReaderAsync(ct);
+        while (await row.ReadAsync(ct)) { await writer.WriteLineAsync(J.O("site_id", options.Site, "id", row.GetString(0), "record_id", row.GetString(1), "version", row.GetInt64(2), "envelope", Convert.ToBase64String((byte[])row[3]), "digest", row.GetString(4), "created", row.GetDouble(5)).ToJsonString()); count++; }
+        return count;
+
+    }
+    public async Task<JsonObject> ImportPending(TextReader input, CancellationToken ct = default) {
+
+        var lines = new List<JsonObject>();
+        while (await input.ReadLineAsync(ct) is { } line) if (line.Trim() != "") lines.Add((JsonObject)JsonNode.Parse(line)!);
+        // Every line must open and match its digest before anything is written.
+        foreach (var item in lines) {
+
+            Rules.Need(item.S("site_id") == options.Site, "Eventos de otra sucursal");
+            byte[] raw;
+            try { raw = OpenEvent(Convert.FromBase64String(item.S("envelope")), item.S("record_id"), item.L("version"), item.S("id")); } catch (Exception e) when (e is StoreException or FormatException or System.Security.Cryptography.CryptographicException) { throw new StoreException("COS-DATA-INTEGRITY"); }
+            if (Digest(raw) != item.S("digest")) throw new StoreException("COS-DATA-INTEGRITY");
+
+        }
+        await using var db = await data.OpenConnectionAsync(ct);
+        await using var tx = await db.BeginTransactionAsync(ct);
+        await Exec(db, tx, "SELECT pg_advisory_xact_lock(@l)", ct, ("l", WriterLock));
+        var added = 0;
+        foreach (var item in lines) {
+
+            if (await Scalar<object>(db, tx, "SELECT 1 FROM events WHERE id=@i UNION ALL SELECT 1 FROM events_archive WHERE id=@i", ct, ("i", item.S("id"))) is not null) continue;
+            await Exec(db, tx, "INSERT INTO events(id, record_id, version, envelope, digest, created) VALUES(@i, @r, @v, @e, @d, @c)", ct, ("i", item.S("id")), ("r", item.S("record_id")), ("v", item.L("version")), ("e", Convert.FromBase64String(item.S("envelope"))), ("d", item.S("digest")), ("c", item["created"]!.GetValue<double>()));
+            added++;
+
+        }
+        await tx.CommitAsync(ct);
+        return J.O("read", lines.Count, "added", added);
 
     }
     async Task<JsonNode> EventStatus(string eventId, CancellationToken ct) {
@@ -406,7 +506,7 @@ public sealed partial class PostgresBranchStore: IBranchStore, IDisposable {
         await using var db = await data.OpenConnectionAsync(ct);
         var now = Epoch();
         var values = new List<(JsonObject, byte[], string)>();
-        await using var cmd = Command(db, null, "SELECT id, record_id, version, envelope, digest, next_attempt FROM events WHERE acked IS NULL ORDER BY seq LIMIT @n", ("n", limit));
+        await using var cmd = Command(db, null, "SELECT id, record_id, version, envelope, digest, next_attempt FROM events WHERE acked IS NULL AND held IS NULL ORDER BY seq LIMIT @n", ("n", limit));
         await using var row = await cmd.ExecuteReaderAsync(ct);
         while (await row.ReadAsync(ct)) {
 
@@ -435,7 +535,7 @@ public sealed partial class PostgresBranchStore: IBranchStore, IDisposable {
             last = value;
 
         }
-        if (await Scalar<object>(db, tx, "SELECT 1 FROM events WHERE acked IS NULL AND seq < @s LIMIT 1", ct, ("s", last)) is not null) throw new StoreException("COS-DATA-CONFLICT");
+        if (await Scalar<object>(db, tx, "SELECT 1 FROM events WHERE acked IS NULL AND held IS NULL AND seq < @s LIMIT 1", ct, ("s", last)) is not null) throw new StoreException("COS-DATA-CONFLICT");
         await Exec(db, tx, "INSERT INTO store_metadata VALUES('outbox_acked_seq', @v) ON CONFLICT(key) DO UPDATE SET value=greatest(store_metadata.value::bigint, excluded.value::bigint)::text", ct, ("v", last.ToString()));
         await tx.CommitAsync(ct);
 
@@ -470,10 +570,11 @@ public sealed partial class PostgresBranchStore: IBranchStore, IDisposable {
         return J.O("valid", valid, "events", total, "pending", pending, "transactions", receipts, "damaged", damaged, "duplicated", duplicated, "acked_seq", acked, "dropped_before", dropped);
 
     }
-    public async Task Retry(string eventId, CancellationToken ct = default) {
+    // A failed delivery waits 5 s, doubling up to an hour, and keeps the class of its last failure for the alert.
+    public async Task Retry(string eventId, string error = "network", CancellationToken ct = default) {
 
         await using var db = await data.OpenConnectionAsync(ct);
-        await Exec(db, null, "UPDATE events SET attempts=attempts+1, next_attempt=@now + least(3600, 5 * power(2, least(attempts, 10))) WHERE id=@i AND acked IS NULL", ct, ("now", Epoch()), ("i", eventId));
+        await Exec(db, null, "UPDATE events SET attempts=attempts+1, next_attempt=@now + least(3600, 5 * power(2, least(attempts, 10))), last_error=@e, last_error_at=@now WHERE id=@i AND acked IS NULL", ct, ("now", Epoch()), ("i", eventId), ("e", error));
 
     }
     // Migration from SQLite: rows as they were, sealed under this store's keyring.

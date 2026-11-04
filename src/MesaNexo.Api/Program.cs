@@ -33,6 +33,11 @@ public static class Program {
             var service = new BranchService(store, site, new Passwords());
             // For culinaryos-restore: the audit chain and the outbox of a database loaded from a snapshot (exit 4 when they fail).
             if (args.Contains("--verify-store")) { var audit = await service.AuditChain(); var outbox = await store.VerifyOutbox(); var valid = audit.B("valid") && outbox.B("valid"); Console.WriteLine(J.O("valid", valid, "audit", audit, "outbox", outbox).ToJsonString()); return valid ? 0 : 4; }
+            // Support tools for the outbox: inspect, act on one event with a recorded reason, and carry pending events off a disk.
+            if (args.Contains("--outbox-list")) { Console.WriteLine(J.O("status", await store.CallAsync(J.O("op", "outbox_status_v1")), "events", await store.OutboxEvents(int.Parse(Arg("limit") ?? "20")), "interventions", await store.Interventions()).ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true })); return 0; }
+            if (Arg("outbox-intervene") is string held) { Console.WriteLine((await store.Intervene(held, Arg("action") ?? throw new BusinessException(400, "Especifica --action retry|hold|release"), Arg("actor") ?? throw new BusinessException(400, "Especifica --actor"), Arg("reason") ?? throw new BusinessException(400, "Especifica --reason"))).ToJsonString()); return 0; }
+            if (Arg("export-outbox") is string outboxFile) { await using var output = new FileStream(outboxFile, FileMode.CreateNew, FileAccess.Write); var count = await store.ExportPending(output); Console.WriteLine(count + " eventos pendientes exportados, sellados con el llavero de la sucursal, a " + outboxFile); return 0; }
+            if (Arg("import-outbox") is string inboxFile) { using var input = File.OpenText(inboxFile); Console.WriteLine((await store.ImportPending(input)).ToJsonString()); return 0; }
             var checkpoints = ObjectBucket.From(Arg("checkpoints-config") ?? (lab ? null : Path.Combine(IntegrationConfig.Directory, "checkpoints.json")));
             var backups = ObjectBucket.From(Arg("backups-config") ?? (lab ? null : Path.Combine(IntegrationConfig.Directory, "backups.json")), 1800);
             // The password comes on stdin: an argument would stay in the process list and the shell history.

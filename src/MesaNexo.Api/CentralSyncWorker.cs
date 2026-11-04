@@ -55,11 +55,11 @@ public sealed class CentralSyncWorker(PostgresBranchStore store, string branchCo
                 var body = await response.Content.ReadAsByteArrayAsync(timeout.Token);
                 var ack = (int)response.StatusCode is 200 or 201 && body.Length <= 8192 ? JsonNode.Parse(body) as JsonObject : null;
                 if (ack is not null && ack.S("site_id") == store.Site && ack.S("event_id") == eventId && ack.S("sha256") == digest && ack.S("status") == "committed") { acked.Add((eventId, digest)); if (acked.Count == AckBatch) await Flush(); continue; }
-                reason = "ack";
+                reason = Classify((int)response.StatusCode);
 
-            } catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; } catch (HttpRequestException e) when (e.InnerException is AuthenticationException) { reason = "tls"; } catch (Exception e) when (e is HttpRequestException or OperationCanceledException or IOException) { reason = "network"; } catch (System.Text.Json.JsonException) { reason = "ack"; }
+            } catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; } catch (HttpRequestException e) when (e.InnerException is AuthenticationException) { reason = "auth"; } catch (Exception e) when (e is HttpRequestException or OperationCanceledException or IOException) { reason = "network"; } catch (System.Text.Json.JsonException) { reason = "ack"; }
             await Flush();
-            await store.Retry(eventId, ct);
+            await store.Retry(eventId, reason, ct);
             return J.O("sent", sent, "state", "pending", "reason", reason);
 
         }
@@ -67,6 +67,16 @@ public sealed class CentralSyncWorker(PostgresBranchStore store, string branchCo
         return J.O("sent", sent, "state", sent == 0 ? "idle" : "delivered");
 
     }
+    // What a refusal says about the event. Only validation, conflict, incompatible and ack (a 2xx that does not confirm
+    // this event) are about the event itself; after five of them the outbox reports it as blocking the rest.
+    public static string Classify(int status) => status switch {
+        >= 200 and < 300 => "ack",
+        401 or 403 => "auth",
+        408 or 425 or 429 or >= 500 => "temporary",
+        400 or 413 or 422 => "validation",
+        409 => "conflict",
+        _ => "incompatible"
+    };
     HttpClient Client() {
 
         if (transport is not null) return new HttpClient(transport, false);
