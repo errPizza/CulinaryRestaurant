@@ -117,6 +117,17 @@ sealed class Terminal(string name, HttpClient http, Metrics metrics, bool delta)
 }
 static class Program {
     const string Site = "load-site";
+    // CPU and memory of the backend (this process) and of the PostgreSQL processes, which together are the branch server.
+    static (double CpuSeconds, long BackendBytes, long PostgresBytes) Usage() {
+
+        var self = Process.GetCurrentProcess();
+        self.Refresh();
+        double cpu = self.TotalProcessorTime.TotalSeconds;
+        long postgres = 0;
+        foreach (var p in Process.GetProcessesByName("postgres")) { try { cpu += p.TotalProcessorTime.TotalSeconds; postgres += p.WorkingSet64; } catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception) { } finally { p.Dispose(); } }
+        return (cpu, self.WorkingSet64, postgres);
+
+    }
     static int FreePort() { var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start(); var p = ((IPEndPoint)listener.LocalEndpoint).Port; listener.Stop(); return p; }
     static async Task<int> Main(string[] args) {
 
@@ -229,6 +240,9 @@ static class Program {
         var started = Stopwatch.StartNew();
         var bad = 0;
         var previous = 0;
+        var usage = Usage();
+        var sampled = Stopwatch.StartNew();
+        async Task<long> DatabaseBytes() { await using var db = await runtime.Data.OpenConnectionAsync(); await using var cmd = new Npgsql.NpgsqlCommand("SELECT pg_database_size(current_database())", db); return (long)(await cmd.ExecuteScalarAsync())!; }
         var verdict = "completó la duración prevista";
         while (started.Elapsed.TotalMinutes < minutes) {
 
@@ -245,7 +259,11 @@ static class Program {
             previous = count;
             var requests = samples.Count;
             var errors = samples.Count(x => x.Outcome != "ok");
-            windows.Add(J.O("seconds", (long)started.Elapsed.TotalSeconds, "records", records, "internalLoadMs", loadMs, "ticketsClosed", count, "ticketsInWindow", delta, "state", state, "actions", actions, "retries", Interlocked.Read(ref metrics.Retries)));
+            var now = Usage();
+            var cpuPercent = Math.Round((now.CpuSeconds - usage.CpuSeconds) / sampled.Elapsed.TotalSeconds / Environment.ProcessorCount * 100, 1);
+            usage = now;
+            sampled.Restart();
+            windows.Add(J.O("seconds", (long)started.Elapsed.TotalSeconds, "records", records, "internalLoadMs", loadMs, "ticketsClosed", count, "ticketsInWindow", delta, "state", state, "actions", actions, "retries", Interlocked.Read(ref metrics.Retries), "cpuPercent", cpuPercent, "backendMiB", now.BackendBytes >> 20, "postgresMiB", now.PostgresBytes >> 20, "databaseMiB", await DatabaseBytes() >> 20));
             Console.WriteLine($"[{started.Elapsed:mm\\:ss}] registros {records,6} · load interno {loadMs / 1000.0,5:0.00} s · cuentas cerradas {count,4} (+{delta,3}) · state p50/p95 {state.L("p50Ms"),5}/{state.L("p95Ms"),5} ms ({state.L("avgBytes") / 1024,5} KB) · acciones p50/p95 {actions.L("p50Ms"),5}/{actions.L("p95Ms"),5} ms · errores {errors}/{requests}");
             bad = requests > 0 && errors * 2 >= requests || delta == 0 ? bad + 1 : 0;
             if (bad >= 2) { verdict = "colapso: dos muestras seguidas sin cuentas cerradas o con la mitad de las solicitudes fallidas"; break; }
@@ -288,7 +306,8 @@ static class Program {
         var all = metrics.All;
         var report = J.O("generatedAt", J.Now(),
             "scenario", J.O("waiters", waiters, "kitchen", 2, "manager", 1, "tables", tableCount, "pollMs", pollMs, "thinkMs", thinkMs, "plannedMinutes", minutes, "deltaState", deltaState, "ticket", "2 tacos + 1 agua, cobro en efectivo o tarjeta"),
-            "store", "Laboratorio: lab_host.py sobre el mismo almacén cifrado de CulinaryOS, por tubería en vez de socket Unix (cota optimista: en producción cada página abre un socket nuevo).",
+            "store", "PostgreSQL del laboratorio (PostgresBranchStore, registros sellados con el llavero), en el mismo equipo que el backend y los clientes simulados. No es el hardware de la sucursal.",
+            "environment", J.O("machine", Environment.MachineName, "os", System.Runtime.InteropServices.RuntimeInformation.OSDescription, "cores", Environment.ProcessorCount, "memoryMiB", GC.GetGCMemoryInfo().TotalAvailableMemoryBytes >> 20, "dotnet", Environment.Version.ToString()),
             "verdict", verdict, "elapsedSeconds", (long)started.Elapsed.TotalSeconds, "windows", windows,
             "totals", J.O("state", Metrics.Summary(all.Where(x => x.Kind == "state")), "actions", Metrics.Summary(all.Where(x => x.Kind is not "state" and not "state-check" and not "login")), "byType", new JsonObject(all.GroupBy(x => x.Kind).OrderBy(g => g.Key).Select(g => KeyValuePair.Create(g.Key, (JsonNode?)Metrics.Summary(g))))),
             "retries", Interlocked.Read(ref metrics.Retries), "duplicateReplies", Interlocked.Read(ref metrics.DuplicateReplies), "deltaChecks", Interlocked.Read(ref metrics.DeltaChecks), "deltaMismatches", Interlocked.Read(ref metrics.DeltaMismatches), "mismatchKeys", metrics.MismatchKeys.Distinct().ToArray(), "failures", failures.ToDictionary(x => x.Key, x => x.Value), "verification", verification);

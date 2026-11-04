@@ -55,6 +55,22 @@ Todas tienen adaptador real y simulador. Ninguna se ha probado contra el sandbox
 | Impresoras y cajón ESC/POS | Sí | Sí, con impresora simulada | No: sin impresora física | No |
 | Notificaciones FCM y APNs | Biblioteca aislada, sin activar | No | No | No |
 
+## Dispositivos (CR-015)
+
+Una fila por modelo probado. Un dispositivo sólo se declara compatible con todas sus columnas llenas y el resultado «Funciona». Hoy no hay ninguno probado en físico: las filas son los modelos que el código ya contempla.
+
+| Tipo | Modelo | Sistema y versión | Controlador o conexión | Funciones probadas | Errores encontrados | Resultado | Limitaciones |
+|---|---|---|---|---|---|---|---|
+| Impresora de tickets | ESC/POS 80 mm (genérica) | CulinaryOS / Windows | USB o red, ESC/POS | Sólo simulador | — | Sin probar | — |
+| Cajón de dinero | Por puerto de la impresora | — | Pulso ESC/POS | Sólo simulador | — | Sin probar | — |
+| Terminal de pago | Mercado Pago Point | — | API de órdenes | Sólo simulador HTTP | — | Sin probar | — |
+| Terminal de pago | Clip PinPad | — | API de pinpad | Sólo simulador HTTP | — | Sin probar | Sin reverso por API |
+| Terminal de pago | BBVA semiintegrada | — | Captura del voucher | Flujo manual | — | Sin probar | Sin consulta ni reverso |
+| UPS | Compatible con NUT | CulinaryOS | USB, `ups.py` | Sólo simulado | — | Sin probar | — |
+| Servidor | Equipo de sucursal | Debian 13 amd64 | — | Sólo VM | — | Sin probar | TPM, SMART y LUKS sin validar |
+
+Para llenar una fila: fecha, versión de Culinary Restaurant, firmware del dispositivo y la evidencia (foto del ticket, registro del journal o captura) en `evidence/`.
+
 ## Antes de vender
 
 1. Simulacro completo en VM y en un equipo real, midiendo RTO y RPO.
