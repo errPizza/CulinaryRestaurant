@@ -97,8 +97,47 @@ static class TenantTests {
         Check(dlOrder.S("status") == "pending-branch" && commerce.Deliverect("alpha-a", dlRaw, dlSig, location).B("duplicate"), "a signed Deliverect order is queued once for the branch as an aggregator proposal");
         Deny(() => commerce.Deliverect("alpha-a", dlRaw, new string('0', 64), location), "a Deliverect webhook with a forged signature is rejected before the domain");
         using (var raw = new Npgsql.NpgsqlConnection(db)) { raw.Open(); using var read = new Npgsql.NpgsqlCommand("SELECT string_agg(encode(value, 'escape'), '') FROM cloud_order", raw); var stored = read.ExecuteScalar() as string ?? ""; Check(stored.Length > 0 && !stored.Contains("Synthetic Customer"), "public order personal data is encrypted at rest"); }
+        // Adversarial: a third branch with a real client certificate tries to reach the other two through the mTLS entry.
+        System.Security.Cryptography.X509Certificates.X509Certificate2 Client(string name, DateTimeOffset from, DateTimeOffset to, bool clientAuth = true) {
+
+            using var rsa = RSA.Create(2048);
+            var csr = new System.Security.Cryptography.X509Certificates.CertificateRequest("CN=" + name, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            csr.CertificateExtensions.Add(new System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension([new Oid(clientAuth ? "1.3.6.1.5.5.7.3.2" : "1.3.6.1.5.5.7.3.1")], false));
+            return csr.CreateSelfSigned(from, to);
+
+        }
+        string Fingerprint(System.Security.Cryptography.X509Certificates.X509Certificate2 c) => c.GetCertHashString(HashAlgorithmName.SHA256).ToLowerInvariant();
+        using var gammaCert = Client("gamma", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+        using var expired = Client("gamma-old", DateTimeOffset.UtcNow.AddDays(-30), DateTimeOffset.UtcNow.AddDays(-1));
+        using var serverOnly = Client("gamma-server", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30), clientAuth: false);
+        store.ProvisionTenant(Provision("gamma", "g", "site-g", Fingerprint(gammaCert)), new Passwords());
+        store.ProvisionTenant(Provision("gamma", "g2", "site-g2", Fingerprint(expired)), new Passwords());
+        store.ProvisionTenant(Provision("gamma", "g3", "site-g3", Fingerprint(serverOnly)), new Passwords());
+        var central = new CentralService(store, new Passwords(), "central-test", null);
+        (byte[] Raw, string Digest) Wire(string site, string eventId, string projectedSite, string name) { var raw = Encoding.UTF8.GetBytes(J.O("protocol", "culinaryos-events-v1", "site_id", site, "event_id", eventId, "record_id", "tx_" + eventId, "version", 1, "data", J.O("changes", new[] { J.O("expected_version", 5, "data", J.O("kind", "product", "id", "same-product", "siteId", projectedSite, "name", name, "price", 1, "available", true, "visible", true)) }, "receipt", J.O("at", J.Now()))).ToJsonString()); return (raw, Convert.ToHexStringLower(SHA256.HashData(raw))); }
+        void Status(Action action, int status, string name) { try { action(); throw new Exception("Expected rejection " + name); } catch (BusinessException e) when (e.Status == status) { Check(true, name); } }
+        var spoof = Wire("site-a", "attack-1", "site-a", "Hijacked");
+        Status(() => central.Receive(spoof.Raw, spoof.Digest, gammaCert), 403, "a branch certificate cannot post events in another branch's name");
+        var inner = Wire("site-g", "attack-2", "site-a", "Hijacked");
+        Status(() => central.Receive(inner.Raw, inner.Digest, gammaCert), 403, "an event of its own branch cannot project records into another branch");
+        Check(commerce.Catalog("alpha-a").A("products").Objects().Single().S("name") == "Alpha product", "after both attempts the other branch's catalog is unchanged");
+        Status(() => central.Receive(spoof.Raw, spoof.Digest, expired), 403, "an expired certificate is refused even when provisioned");
+        Status(() => central.Receive(spoof.Raw, spoof.Digest, serverOnly), 403, "a certificate without client authentication is refused even when provisioned");
+        using (var stranger = Client("stranger", DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30))) Status(() => central.Receive(spoof.Raw, spoof.Digest, stranger), 403, "an unprovisioned certificate is refused");
+        var forged = Wire("site-g", "attack-3", "site-g", "Gamma");
+        Deny(() => central.Receive(forged.Raw, new string('0', 64), gammaCert), "an event whose digest does not match its body is refused");
+        var shared = Wire("site-g", "shared-event", "site-g", "Gamma");
+        Check(central.Receive(shared.Raw, shared.Digest, gammaCert).S("status") == "committed", "a branch commits its own event through its certificate");
+        var reused = Wire("site-g", "shared-event", "site-g", "Gamma changed");
+        Status(() => central.Receive(reused.Raw, reused.Digest, gammaCert), 409, "an event id reused with other content is refused");
+        var alphaShared = Wire("site-a", "shared-event", "site-a", "Alpha product");
+        Check(store.Receive("site-a", "shared-event", alphaShared.Digest, alphaShared.Raw).S("status") == "committed" && commerce.Catalog("gamma-g").A("products").Objects().Single().S("name") == "Gamma" && commerce.Catalog("alpha-a").A("products").Objects().Single().S("name") == "Alpha product", "the same event id in two branches stays two events, each in its own branch");
+        Check(store.PendingCommands(new("gamma", "g")).Length == 0 && store.PendingCommands(new("alpha", "a")).Length > 0, "a branch's queue never shows another branch's orders");
+        Deny(() => store.AuthorizeTenant(J.Id() + J.Id(), "a"), "an invented session token authorizes nothing");
+        Deny(() => commerce.Analytics(J.Id() + J.Id(), "a"), "owner analytics refuses an invented session token");
         store.TenantLogout(token);
         Deny(() => store.AuthorizeTenant(token, "a"), "tenant session revocation enforced by backend");
+        Deny(() => commerce.Analytics(token, "a"), "a closed session cannot read analytics again");
         return Task.CompletedTask;
 
     }
