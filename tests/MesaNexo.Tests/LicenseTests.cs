@@ -26,7 +26,7 @@ sealed class FakeCulinaryServer: IAsyncDisposable {
     public JsonObject? Fingerprint;
     public string? CentralCertificate;
     public DateTimeOffset Expires = DateTimeOffset.UtcNow.AddDays(30);
-    public readonly List<JsonObject> Tickets = [], Faults = [];
+    public readonly List<JsonObject> Tickets = [], Faults = [], OwnerMessages = [];
     // What /branch/v1/stats holds per business day, as the Worker will: a lower revision never replaces a higher one.
     public readonly List<JsonObject> StatsPosts = [];
     public readonly Dictionary<string, JsonObject> StatsDays = [];
@@ -107,6 +107,8 @@ sealed class FakeCulinaryServer: IAsyncDisposable {
         App.MapPut("/branch/v1/registry", async (HttpContext c) => { if (await Signed(c) is not { } r) return Error(401, "unauthorized", "Firma inválida"); CentralCertificate = r.Body.S("centralCertificateSha256"); return Results.Json(J.O("siteId", site, "tenantId", "grupo", "centralCertificateSha256", CentralCertificate)); });
         App.MapPost("/branch/v1/tickets", async (HttpContext c) => { if (await Signed(c) is not { } r) return Error(401, "unauthorized", "Firma inválida"); var t = J.O("id", Guid.NewGuid().ToString("D"), "subject", r.Body.S("subject"), "status", "open", "messages", new[] { J.O("id", Guid.NewGuid().ToString("D"), "author", "branch", "body", r.Body.S("message"), "createdAt", Iso(DateTimeOffset.UtcNow)) }); Tickets.Add(t); return Results.Json(J.O("ticket", t), statusCode: 201); });
         App.MapPost("/branch/v1/tickets/{id}/messages", async (HttpContext c, string id) => { if (await Signed(c) is not { } r) return Error(401, "unauthorized", "Firma inválida"); var t = Tickets.Single(x => x.S("id") == id); t.A("messages").Add(J.O("id", Guid.NewGuid().ToString("D"), "author", "branch", "body", r.Body.S("message"), "createdAt", Iso(DateTimeOffset.UtcNow))); t["status"] = "open"; return Results.Json(J.O("ticket", t.DeepClone()), statusCode: 201); });
+        App.MapGet("/branch/v1/owner-messages", async (HttpContext c) => await Signed(c) is null ? Error(401, "unauthorized", "Firma inválida") : Results.Json(J.O("messages", new JsonArray(OwnerMessages.Select(x => x.DeepClone()).ToArray()))));
+        App.MapPost("/branch/v1/owner-messages", async (HttpContext c) => { if (await Signed(c) is not { } r) return Error(401, "unauthorized", "Firma inválida"); if (!OwnerMessages.Any(x => x.S("id") == r.Body.S("id"))) OwnerMessages.Add(J.O("id", r.Body.S("id"), "author", "branch", "name", r.Body.S("name"), "body", r.Body.S("message"), "toAll", false, "createdAt", Iso(DateTimeOffset.UtcNow))); return Results.Json(J.O("id", r.Body.S("id")), statusCode: 201); });
         App.MapGet("/branch/v1/tickets", async (HttpContext c) => await Signed(c) is null ? Error(401, "unauthorized", "Firma inválida") : Results.Json(J.O("tickets", new JsonArray(Tickets.Select(x => x.DeepClone()).ToArray()))));
         App.MapPost("/branch/v1/updates/latest", async (HttpContext c) => await Signed(c) is null ? Error(401, "unauthorized", "Firma inválida") : Results.Json(J.O("releases", Published)));
         App.MapPost("/branch/v1/stats", async (HttpContext c) => {
@@ -247,6 +249,22 @@ static class LicenseTests {
         await service.SyncSupport();
         var synced = (await service.Load()).Get("ticket", ticket.S("id"));
         Check(synced.S("status") == "answered" && synced.A("messages").Objects().Count(m => m.S("actor") == "provider") == 1 && fake.Tickets[0].A("messages").Count == 2, "the provider's reply arrives once and nothing is sent twice");
+        // The owner's thread: it arrives as a ticket of the owner channel, the manager answers it and support never sees it.
+        await service.SyncOwnerMessages();
+        Check(!(await service.Load()).List("ticket").Any(t => t.S("channel") == "owner"), "without owner messages there is no owner thread");
+        fake.OwnerMessages.Add(J.O("id", Guid.NewGuid().ToString("D"), "author", "owner", "name", "Dueño · dueno@plaza.mx", "body", "Junta el lunes", "toAll", true, "createdAt", DateTimeOffset.UtcNow.ToString("O")));
+        await service.SyncOwnerMessages();
+        await service.SyncOwnerMessages();
+        var owner = (await service.Load()).List("ticket").Single(t => t.S("channel") == "owner");
+        Check(owner.A("messages").Count == 1 && owner.A("messages").Objects().Single().B("toAll"), "the owner's message arrives once");
+        Check(await service.SupportDue(TimeSpan.FromMinutes(2)), "the owner thread is read every 2 minutes");
+        await Act("ticket.reply", J.O("id", owner.S("id"), "message", "Enterado"));
+        Check(await service.SupportDue(TimeSpan.Zero), "an answer to the owner is due at once");
+        await service.SyncSupport();
+        await service.SyncOwnerMessages();
+        await service.SyncOwnerMessages();
+        Check(fake.OwnerMessages.Count(m => m.S("author") == "branch" && m.S("body") == "Enterado") == 1 && fake.Tickets.Count == 1, "the answer reaches the owner once and opens no support ticket");
+        Check((await service.Load()).Get("ticket", owner.S("id")).A("messages").Objects().All(m => m.B("sent")), "the answer is marked sent");
         // Updates: the branch asks with its license; the terminal verifies the signed update itself.
         await Act("session.logout", new());
         var device = J.O("siteId", site, "deviceId", deviceId, "deviceSecret", deviceSecret);

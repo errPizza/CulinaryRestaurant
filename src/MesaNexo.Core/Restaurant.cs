@@ -621,7 +621,7 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
             case "ticket.create":
                 result = Add(s, "ticket", J.O("subject", Text(p, "subject", 200), "status", "open", "at", J.Now(), "messages", new[] { J.O("id", J.Id(), "actor", u.S("id"), "name", u.S("name"), "message", Text(p, "message"), "at", J.Now()) }));
                 break;
-            case "ticket.reply": { var ticket = s.Get("ticket", id); Need(ticket.A("messages").Count < 20, "Abre otro ticket para continuar"); ticket.A("messages").Add(J.O("id", J.Id(), "actor", u.S("id"), "name", u.S("name"), "message", Text(p, "message"), "at", J.Now())); break; }
+            case "ticket.reply": { var ticket = s.Get("ticket", id); Need(ticket.S("channel") == "owner" || ticket.A("messages").Count < 20, "Abre otro ticket para continuar"); ticket.A("messages").Add(J.O("id", J.Id(), "actor", u.S("id"), "name", u.S("name"), "message", Text(p, "message"), "at", J.Now())); break; }
             default:
                 throw new BusinessException(404, "Operación no implementada: " + type);
         }

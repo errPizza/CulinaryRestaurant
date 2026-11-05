@@ -21,7 +21,8 @@ public sealed class LicenseWorker(BranchService branch, ILogger<LicenseWorker> l
         }
 
     }
-    // A local message leaves on the next look; replies are fetched every 30 s while a ticket is open.
+    // A local message leaves on the next look; replies are fetched every 30 s while a ticket is open, and the owner's
+    // messages every 2 minutes.
     async Task Support(CancellationToken ct) {
 
         await Task.Yield();
@@ -34,6 +35,7 @@ public sealed class LicenseWorker(BranchService branch, ILogger<LicenseWorker> l
                 if ((await branch.LicenseStatus(ct)).S("state") != "missing" && await branch.SupportDue(DateTimeOffset.UtcNow - last, ct)) {
 
                     await branch.SyncSupport(ct);
+                    await branch.SyncOwnerMessages(ct);
                     last = DateTimeOffset.UtcNow;
 
                 }
@@ -93,7 +95,7 @@ public sealed partial class BranchService {
 
         var tickets = (await View(ct)).List("ticket").ToArray();
         if (tickets.Any(t => t.A("messages").Objects().Any(m => m.S("actor") != "provider" && !m.B("sent")))) return true;
-        return since >= TimeSpan.FromMinutes(5) || since >= TimeSpan.FromSeconds(30) && tickets.Any(t => t.S("status") != "closed");
+        return since >= TimeSpan.FromMinutes(2) || since >= TimeSpan.FromSeconds(30) && tickets.Any(t => t.S("channel") != "owner" && t.S("status") != "closed");
 
     }
     // Local tickets are the source of what the branch wrote; CulinaryServer is the source of the provider's replies.
@@ -101,7 +103,7 @@ public sealed partial class BranchService {
 
         var local = (await View(ct)).List("ticket").Select(x => (JsonObject)x.DeepClone()).ToArray();
         var sent = new Dictionary<string, (string RemoteId, string[] Messages)>();
-        foreach (var ticket in local) {
+        foreach (var ticket in local.Where(t => t.S("channel") != "owner")) {
 
             var messages = ticket.A("messages").Objects().Where(m => m.S("actor") != "provider" && !m.B("sent")).ToArray();
             if (messages.Length == 0) continue;
@@ -125,7 +127,7 @@ public sealed partial class BranchService {
 
             var s = await Load(ct);
             var changed = false;
-            foreach (var ticket in s.List("ticket").ToArray()) {
+            foreach (var ticket in s.List("ticket").Where(t => t.S("channel") != "owner").ToArray()) {
 
                 if (sent.TryGetValue(ticket.S("id"), out var delivery)) {
 
@@ -147,6 +149,51 @@ public sealed partial class BranchService {
             }
             if (changed) await Commit(s, J.Id(), "culinary-server", J.Hash("support:" + J.Now()), J.O("synchronized", true), "support.sync", ct);
             return changed;
+
+        }, ct);
+
+    }
+    public const string OwnerThread = "owner";
+    const int OwnerThreadKept = 200;
+    // The owner's thread lives in the store as one ticket of the "owner" channel: the managers read it on the support
+    // page and answer with ticket.reply. CulinaryServer keeps the thread; the branch sends its answers by their own id.
+    public async Task SyncOwnerMessages(CancellationToken ct = default) {
+
+        var mine = (await View(ct)).List("ticket").FirstOrDefault(t => t.S("channel") == "owner");
+        var delivered = new List<string>();
+        foreach (var m in mine?.A("messages").Objects().Where(m => m.S("actor") != "owner" && !m.B("sent")).ToArray() ?? []) {
+
+            await Call(HttpMethod.Post, "/branch/v1/owner-messages", J.O("id", m.S("id"), "name", m.S("name") == "" ? "Sucursal" : m.S("name"), "message", m.S("message")), ct);
+            delivered.Add(m.S("id"));
+
+        }
+        var remote = (await Call(HttpMethod.Get, "/branch/v1/owner-messages", null, ct)).A("messages").Objects().Where(m => m.S("author") == "owner").ToArray();
+        if (mine is null && remote.Length == 0) return;
+        await Exclusive(async () => {
+
+            var s = await Load(ct);
+            var thread = s.List("ticket").FirstOrDefault(t => t.S("channel") == "owner");
+            var changed = false;
+            if (thread is null) {
+
+                thread = s.Add("ticket", J.O("id", OwnerThread, "siteId", s.Meta.S("siteId"), "channel", "owner", "subject", "Mensajes del dueño", "status", "open", "at", J.Now(), "messages", new JsonArray()));
+                changed = true;
+
+            }
+            var messages = thread.A("messages");
+            foreach (var m in messages.Objects()) if (delivered.Contains(m.S("id")) && !m.B("sent")) { m["sent"] = true; changed = true; }
+            foreach (var m in remote.Where(m => !messages.Objects().Any(x => x.S("id") == "server-" + m.S("id")))) {
+
+                messages.Add(J.O("id", "server-" + m.S("id"), "actor", "owner", "name", m.S("name"), "message", m.S("body"), "toAll", m.B("toAll"), "at", m.S("createdAt"), "sent", true));
+                changed = true;
+
+            }
+            if (!changed) return false;
+            var ordered = messages.Objects().OrderBy(m => DateTimeOffset.TryParse(m.S("at"), out var t) ? t : DateTimeOffset.MinValue).TakeLast(OwnerThreadKept).Select(m => m.DeepClone()).ToArray();
+            thread["messages"] = new JsonArray(ordered);
+            thread["lastAt"] = ordered.Length > 0 ? ordered[^1]!.AsObject().S("at") : thread.S("at");
+            await Commit(s, J.Id(), "culinary-server", J.Hash("owner-messages:" + J.Now()), J.O("synchronized", true), "owner.sync", ct);
+            return true;
 
         }, ct);
 

@@ -5,7 +5,8 @@ const date = (v: string) => v ? new Date(v).toLocaleString('es-MX', { dateStyle:
 export function SupportPage({ state: s, form, confirm, action }: { state: any; form: any; confirm: any; action: any }) {
 
     const [filter, setFilter] = useState('all'), [expanded, setExpanded] = useState<string | null>(null);
-    const tickets: Row[] = s.tickets || [], license = s.restaurant.license || {};
+    // The owner's thread arrives as a ticket of the owner channel; it is a conversation, not a request to support.
+    const all: Row[] = s.tickets || [], owner = all.find(t => t.channel === 'owner'), tickets = all.filter(t => t.channel !== 'owner'), license = s.restaurant.license || {};
     const plan = ({ trial: 'Prueba', monthly: 'Mensual', annual: 'Anual', permanent: 'Permanente' } as Record<string, string>)[license.plan] || 'Sin licencia';
     const selected = tickets.filter(t => filter === 'all' || t.status === filter).slice().reverse();
     const openCount = tickets.filter(t => t.status !== 'closed').length;
@@ -14,6 +15,7 @@ export function SupportPage({ state: s, form, confirm, action }: { state: any; f
             <section className="card coverage-card"><div style={{ display: 'flex', alignItems: 'center', gap: 16 }}><Sq icon="key" tone="green" /><div className="ph" style={{ flex: 1 }}><div><h2>Licencia {plan}</h2><p>{license.expiresAt ? 'Vigente hasta ' + date(license.expiresAt) : 'Sin fecha de vencimiento'}{license.validatedAt ? ' · validada ' + date(license.validatedAt) : ''}</p></div></div><StatusBadge value="active" label="Vigente" /></div></section>
             <section className="card coverage-card"><div style={{ display: 'flex', alignItems: 'center', gap: 16 }}><Sq icon="message" tone="blue" /><div className="ph" style={{ flex: 1 }}><div><h2>{openCount} solicitud{openCount === 1 ? '' : 'es'} abierta{openCount === 1 ? '' : 's'}</h2><p>El historial y las respuestas quedan registrados</p></div></div></div></section>
         </div>
+        {owner && <OwnerThread thread={owner} form={form} />}
         <div className="g g-main support-layout">
             <section className="card panel support-tickets"><PanelHeading title="Tus solicitudes" note="Consulta el seguimiento y agrega información" icon="message" />
                 <div className="utabs ui-list-tabs" role="group" aria-label="Filtrar solicitudes">{[['all', 'Todas'], ['open', 'En espera'], ['answered', 'Respondidas'], ['closed', 'Cerradas']].map(([key, name]) => <Button key={key} icon={false} className={filter === key ? 'active' : ''} aria-pressed={filter === key} onClick={() => setFilter(key)}>{name}<span className="ui-count">{key === 'all' ? tickets.length : tickets.filter(t => t.status === key).length}</span></Button>)}</div>
@@ -28,5 +30,19 @@ export function SupportPage({ state: s, form, confirm, action }: { state: any; f
             </aside>
         </div>
     </div>;
+
+}
+
+const SHOWN = 6;
+/** The owner's messages, newest last, with the managers' answers. A message to every branch says so. */
+function OwnerThread({ thread, form }: { thread: Row; form: any }) {
+
+    const [all, setAll] = useState(false);
+    const messages: Row[] = thread.messages || [], shown = all ? messages : messages.slice(-SHOWN);
+    const waiting = messages[messages.length - 1]?.actor === 'owner';
+    return <section className="card panel owner-thread" aria-label="Mensajes del dueño"><PanelHeading title="Mensajes del dueño" note={waiting ? 'El dueño espera tu respuesta' : 'Lo que escribe el dueño desde Culinary Dueño'} icon="message" action={<Button className="primary" icon="message" onClick={() => form('Responder al dueño', [{ key: 'message', label: 'Mensaje', type: 'textarea', required: true }], 'ticket.reply', { id: thread.id }, 'Le llega al dueño en Culinary Dueño en unos minutos.')}>Responder</Button>} />
+        {messages.length > SHOWN && <Button className="text-button" icon="eye" aria-expanded={all} onClick={() => setAll(!all)}>{all ? 'Ver sólo los recientes' : 'Ver los ' + messages.length + ' mensajes'}</Button>}
+        <div className="rows">{shown.map((m, i) => <div className="ticket-message" key={m.id || i} style={{ background: m.actor === 'owner' ? 'var(--paper-2)' : 'transparent', borderRadius: 10, padding: '10px 12px', boxShadow: 'inset 0 0 0 1px var(--line-soft)', marginBottom: 8 }}><b style={{ fontSize: 12 }}>{m.actor === 'owner' ? m.name : 'Tú · ' + m.name} · {date(m.at)}{m.toAll ? ' · A todas las sucursales' : ''}{m.actor !== 'owner' && !m.sent ? ' · Pendiente de enviar' : ''}</b><p style={{ color: 'var(--text)', whiteSpace: 'pre-wrap' }}>{m.message}</p></div>)}</div>
+    </section>;
 
 }
