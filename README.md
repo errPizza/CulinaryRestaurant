@@ -66,6 +66,7 @@ Si ya hay un servidor en el puerto, el iniciador valida TLS, CA, nombre e identi
 - [Recuperación](docs/RECUPERACION.md)
 - [Android e iOS](docs/MOVILES.md)
 - [Auditoría del prototipo](docs/AUDITORIA.md)
+- [Auditoría fiscal, CSD, terminales y continuidad](docs/AUDITORIA-FISCAL-Y-CONTINUIDAD.md)
 
 El proyecto no se declara listo para producción ni se considera la validación headless equivalente a probar dispositivos, instaladores o una actualización real.
 La reserva ocurre al enviar a cocina; el consumo durable se crea al liquidar. Cancelar libera sólo lo no preparado. Los pedidos públicos esperan revisión y commit del gerente local. Por decisión del usuario los adaptadores externos permanecen aislados, sin rutas ni comandos de activación; no hay emisión fiscal, cobro online, impresión, AMI, geocodificación ni push reales.

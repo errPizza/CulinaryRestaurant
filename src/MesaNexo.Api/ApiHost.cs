@@ -51,7 +51,9 @@ public static class ApiHost {
         if (store is PostgresBranchStore branchStore && options.Credentials is not null) builder.Services.AddSingleton<IHostedService> (sp => new CentralSyncWorker(branchStore, "/etc/culinaryos/branch.json", options.Credentials, sp.GetRequiredService<ILogger<CentralSyncWorker>> ()));
         
         if (printer is not null) builder.Services.AddSingleton<IHostedService> (sp => new PrintWorker(sp.GetRequiredService<BranchService> (), printer, sp.GetRequiredService<ILogger<PrintWorker>> ()));
-        if (fiscal is not null) builder.Services.AddSingleton<IHostedService> (sp => new FiscalWorker(sp.GetRequiredService<BranchService> (), fiscal.Adapter(), fiscal.Issuer, sp.GetRequiredService<ILogger<FiscalWorker>> (), fiscal.EmailReceiver));
+        // One Facturama client stamps and, when the owner sends sellos, loads the CSD.
+        var pac = fiscal?.Adapter();
+        if (fiscal is not null) builder.Services.AddSingleton<IHostedService> (sp => new FiscalWorker(sp.GetRequiredService<BranchService> (), pac!, fiscal.Issuer, sp.GetRequiredService<ILogger<FiscalWorker>> (), fiscal.EmailReceiver));
         
         integrations ??= new();
         
@@ -67,6 +69,7 @@ public static class ApiHost {
         service.UseCertificate(cert.NotAfter);
         if (options.Credentials is not null) service.UseServerHealth("/run/culinaryos/status.json");
         if (licensing is not null) service.UseLicensing(licensing);
+        if (pac is ICsdLoader loader) service.UseCsdLoader(loader);
 
         app.Use(async(ctx, next) => {
 

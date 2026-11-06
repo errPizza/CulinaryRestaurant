@@ -62,7 +62,9 @@ public sealed partial class BranchService {
         string Env(string status) => sandbox ? "sandbox-" + status : status;
         var uuidField = sandbox ? "sandboxUuid" : "fiscalUuid";
         var actor = sandbox ? "sandbox-fiscal-service" : "fiscal-service";
-        var configHash = J.Hash(J.Canonical(config));
+        // A CSD loaded from Culinary Dueño counts as configuration: new sellos unblock what the expired ones held back.
+        var csd = s.Meta.Obj("fiscalCsd");
+        var configHash = J.Hash(J.Canonical(config) + "|" + csd.S("serial"));
         var now = DateTimeOffset.UtcNow;
         bool Leased(JsonObject x) => DateTimeOffset.TryParse(x.S("leaseUntil"), out var lease) && lease >= now;
         var fiscal = s.List("fiscal").Where(x => (allRequests || x.B("sandboxAuthorized")) && !Leased(x)).OrderBy(x => x.S("at"), StringComparer.Ordinal).FirstOrDefault(x => x.S("status") switch {
@@ -85,7 +87,7 @@ public sealed partial class BranchService {
             await Commit(s, J.Id(), actor, configHash, J.O("id", id, "status", "validating"), "fiscal.pac.validate", ct);
             s = await Load(ct);
             fiscal = s.Get("fiscal", id);
-            try { fiscal["pacPayload"] = BuildCfdi(s, fiscal, config); fiscal["status"] = "validated"; } catch (BusinessException e) { fiscal["status"] = "validation-blocked"; fiscal["message"] = e.Message; fiscal["configHash"] = configHash; await Commit(s, J.Id(), actor, configHash, J.O("id", id, "status", "validation-blocked"), "fiscal.pac.validation.blocked", ct); return true; }
+            try { CsdUsable(csd, sandbox); fiscal["pacPayload"] = BuildCfdi(s, fiscal, config); fiscal["status"] = "validated"; } catch (BusinessException e) { fiscal["status"] = "validation-blocked"; fiscal["message"] = e.Message; fiscal["configHash"] = configHash; await Commit(s, J.Id(), actor, configHash, J.O("id", id, "status", "validation-blocked"), "fiscal.pac.validation.blocked", ct); return true; }
 
         }
         fiscal["status"] = cancel ? Env("cancellation-pending") : "submitting";
@@ -105,10 +107,19 @@ public sealed partial class BranchService {
             if (result.FiscalUuid != "") current[uuidField] = result.FiscalUuid;
             current["providerAt"] = J.Now();
             if (current.S("status") == "pending-reconciliation" && current.S("providerId") == "") current["message"] = Unanswered(current, sandbox);
+            // The stamping log: one record per call to the PAC, written with its result and never edited (AuditChain refuses it).
+            s.Add("pacattempt", J.O("id", J.Id(), "fiscalId", id, "folio", current.S("folio"), "operation", cancel ? "cancel" : fiscal.S("providerId") != "" ? "consult" : "stamp", "environment", sandbox ? "sandbox" : "production", "httpStatus", result.HttpStatus, "outcome", result.Status, "receiverRfc", current.Obj("receiver").S("rfc"), "fiscalUuid", current.S(uuidField), "message", result.Message, "at", J.Now()));
             try { await Commit(s, J.Id(), actor, fingerprint, J.O("id", id, "status", current.S("status")), "fiscal.pac.result", ct); return true; } catch (StoreException e) when (e.Code == "COS-DATA-CONFLICT" && attempt < 7) { }
 
         }
         return false;
+
+    }
+    // Without sellos loaded from Culinary Dueño the CSD is the one in Facturama's panel and its expiry is not known here.
+    static void CsdUsable(JsonObject csd, bool sandbox) {
+
+        if (!csd.B("loaded") || csd.S("environment") != (sandbox ? "sandbox" : "production")) return;
+        Need(DateTimeOffset.Parse(csd.S("notAfter")) > DateTimeOffset.UtcNow, "El CSD venció el " + csd.S("notAfter")[..10] + "; el dueño debe cargar sellos nuevos desde Culinary Dueño");
 
     }
     static string Unanswered(JsonObject fiscal, bool sandbox) => (sandbox ? "SANDBOX · " : "") + "el PAC no respondió. Revisa en Facturama si existe el folio " + fiscal.S("folio") + ": si no está, reintenta (mismo folio y fecha); si está, no reintentes.";

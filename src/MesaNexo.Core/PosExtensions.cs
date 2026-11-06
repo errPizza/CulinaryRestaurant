@@ -3,7 +3,7 @@ using static MesaNexo.Core.Rules;
 namespace MesaNexo.Core;
 
 public sealed partial class Restaurant {
-    static readonly string[] EcosystemKinds = ["refund", "call", "cloudproposal", "folio", "printjob", "customer", "address", "delivery", "courier", "zone", "warehouse", "ingredient", "recipe", "recipeversion", "stock", "stocklayer", "stockmovement", "stockjob", "unitstock", "transfer", "ownernotice", "cashadjustment", "fiscal", "invoicetoken", "station", "supplier", "purchase", "payable", "payablepayment", "stockcount", "expenseaccount", "expense", "pettymove", "pinauth", "pricelist", "walletmove", "staffcharge", "zreport", "integration", "integrationlog", "terminaltxn", "paylink", "message", "aggregatororder", "pmspost"];
+    static readonly string[] EcosystemKinds = ["refund", "call", "cloudproposal", "folio", "printjob", "customer", "address", "delivery", "courier", "zone", "warehouse", "ingredient", "recipe", "recipeversion", "stock", "stocklayer", "stockmovement", "stockjob", "unitstock", "transfer", "ownernotice", "cashadjustment", "fiscal", "pacattempt", "invoicetoken", "station", "supplier", "purchase", "payable", "payablepayment", "stockcount", "expenseaccount", "expense", "pettymove", "pinauth", "pricelist", "walletmove", "staffcharge", "zreport", "integration", "integrationlog", "terminaltxn", "paylink", "message", "aggregatororder", "pmspost"];
     // Largest remainder, stable index tie-break. All values are minor units; no binary float.
     long IncludedTax(BranchState s, JsonObject v, long total) {
 
@@ -187,7 +187,7 @@ public sealed partial class Restaurant {
             var variant = kind;
             if (u.S("role") != "manager") {
 
-                if (new[] { "refund", "cloudproposal", "printjob", "warehouse", "ingredient", "recipe", "recipeversion", "stock", "stocklayer", "stockmovement", "stockjob", "unitstock", "transfer", "ownernotice", "cashadjustment", "fiscal", "invoicetoken", "supplier", "purchase", "payable", "payablepayment", "stockcount", "expenseaccount", "expense", "pettymove", "pinauth", "staffcharge", "zreport" }.Contains(kind)) {
+                if (new[] { "refund", "cloudproposal", "printjob", "warehouse", "ingredient", "recipe", "recipeversion", "stock", "stocklayer", "stockmovement", "stockjob", "unitstock", "transfer", "ownernotice", "cashadjustment", "fiscal", "pacattempt", "invoicetoken", "supplier", "purchase", "payable", "payablepayment", "stockcount", "expenseaccount", "expense", "pettymove", "pinauth", "staffcharge", "zreport" }.Contains(kind)) {
 
                     if (kind == "cloudproposal" && u.S("role") == "mesero") { values = values.Where(x => x.Obj("command").S("type") == "table" && x.S("status") == "pending-review" && x.S("visitId") != "" && s.Get("visit", x.S("visitId")).S("waiterId") == u.S("id")); variant = "cloudproposal:mesero"; build = x => J.O("id", x.S("id"), "visitId", x.S("visitId"), "tableId", x.S("tableId"), "status", x.S("status"), "command", J.O("type", "table", "payload", J.O("kind", "order", "items", x.Obj("command").Obj("payload").A("items").DeepClone(), "notes", x.Obj("command").Obj("payload").S("notes"))), "receivedAt", x.S("receivedAt")); } else values = [];
 

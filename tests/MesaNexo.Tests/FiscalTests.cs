@@ -168,6 +168,70 @@ static class FiscalTests {
         await Act("fiscal.cancel.request", J.O("id", first, "reason", "Datos del receptor equivocados", "motive", "02"));
         Check(await Process() && (await Fiscal(first)).S("status") == "sandbox-cancelled" && facturama.CancelCalls == 1, "a cancellation request reaches the PAC and is recorded");
 
+        // The stamping log: one record per call to the PAC, with its answer code, the receiver and the time.
+        var attempts = (await service.Load()).List("pacattempt").ToArray();
+        Check(attempts.Any(a => a.S("fiscalId") == first && a.S("operation") == "stamp" && a.L("httpStatus") == 200 && a.S("outcome") == "stamped" && a.S("receiverRfc") == "EKU9003173C9" && a.S("folio") != "" && a.S("at") != ""), "a stamp is logged with the PAC's code, receiver RFC and time");
+        Check(attempts.Any(a => a.S("fiscalId") == lost && a.L("httpStatus") == 0 && a.S("outcome") == "pending-reconciliation"), "a lost answer is logged without a PAC code");
+        Check(attempts.Any(a => a.S("fiscalId") == rejected && a.L("httpStatus") == 400 && a.S("outcome") == "rejected"), "a PAC refusal is logged with its code");
+        Check(attempts.Any(a => a.S("fiscalId") == first && a.S("operation") == "cancel" && a.S("outcome") == "cancelled") && attempts.Any(a => a.S("fiscalId") == partial && a.S("operation") == "consult"), "consults and cancellations are logged too");
+        Check((await service.State(token)).A("pacattempts").Count == attempts.Length, "a manager reads the stamping log");
+
+        // The ticket says whether it is invoiced, and a stamped ticket cannot be invoiced again from the register or the web.
+        async Task<string> Invoice(string visit) => (await service.State(token)).A("visits").Objects().First(v => v.S("id") == visit).S("invoice");
+        var fresh = await Ticket();
+        Check(await Invoice(fresh) == "none", "a settled ticket starts as not invoiced");
+        await Request(fresh);
+        Check(await Invoice(fresh) == "processing", "a request on its way to the PAC shows the ticket in process");
+        await Process();
+        Check(await Invoice(fresh) == "invoiced", "a stamped ticket shows as invoiced");
+        await Deny(() => Request(fresh), "ya tiene solicitud fiscal", "a stamped ticket is not invoiced twice at the register");
+        await Act("fiscal.portal.configure", J.O("url", "https://facturas.example.mx"));
+        await Deny(() => Act("fiscal.token", J.O("visitId", fresh)), "ya tiene solicitud fiscal", "a stamped ticket gets no self-invoice QR");
+        Check(await Invoice(cashTicket) == "none", "a cancelled CFDI leaves its ticket free to invoice again");
+        var receiver = J.O("visitId", await Ticket(), "rfc", "EKU9003173C8", "name", "Escuela   Kemper Urgate", "postalCode", "42501", "regime", "601", "use", "G03");
+        await Deny(() => Act("fiscal.request", receiver), "dígito verificador", "a receiver RFC with a wrong check digit is refused at the register");
+        receiver["rfc"] = "EKU9003173C9"; receiver["regime"] = "612";
+        await Deny(() => Act("fiscal.request", receiver), "persona moral", "a regime that does not apply to the receiver is refused");
+        receiver["regime"] = "601";
+        var normalized = await Act("fiscal.request", receiver);
+        Check((await Fiscal(normalized.S("id"))).Obj("receiver").S("name") == "ESCUELA KEMPER URGATE", "the receiver's name is stored as the SAT prints it");
+        await Process();
+
+        // Sellos sent from Culinary Dueño: checked against the license's RFC, loaded into the PAC and never stored.
+        var withFiscal = TestLicense.Payload(service, Restaurant.Modules, revision: 2);
+        withFiscal["fiscal"] = J.O("rfc", CsdFixture.Rfc, "name", "ESCUELA KEMPER URGATE", "postalCode", "42501", "regime", "601");
+        await service.InstallLicense(TestLicense.Sign(Jws.License, withFiscal));
+        var loader = new RecordingCsdLoader();
+        service.UseCsdLoader(loader);
+        using var intake = System.Security.Cryptography.ECDiffieHellman.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256);
+        var intakeSpki = intake.ExportSubjectPublicKeyInfo();
+        var intakeSha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(intakeSpki));
+        JsonObject Sending(string id, byte[] cer, string pass = CsdFixture.Password) => J.O("id", id, "intakeSha256", intakeSha, "envelope", IntakeEnvelope.Seal(intakeSpki, Encoding.UTF8.GetBytes(J.O("cer", Convert.ToBase64String(cer), "key", Convert.ToBase64String(CsdFixture.Key()), "password", pass).ToJsonString()), IntakeEnvelope.Context(TestLicense.LicenseId("fiscal-site"), id, intakeSha)));
+        var wrongPassword = await service.ReceiveCsd(Sending("envio-1", CsdFixture.Certificate(), "otra"), intake, intakeSha);
+        Check(wrongPassword!.S("status") == "rejected" && wrongPassword.S("message").Contains("contraseña") && loader.Calls == 0, "a CSD that does not open is refused before the PAC");
+        var verdict = await service.ReceiveCsd(Sending("envio-2", CsdFixture.Certificate()), intake, intakeSha);
+        var csd = (await service.Load()).Meta.Obj("fiscalCsd");
+        Check(verdict!.S("status") == "loaded" && verdict.S("serial") == "30001000000500003416" && loader.Calls == 1 && csd.S("rfc") == CsdFixture.Rfc && csd.B("loaded"), "a valid CSD is loaded into the PAC and only its RFC, serial and dates are kept");
+        var stored = await service.Load();
+        var everything = stored.Meta.ToJsonString() + string.Concat(stored.List("audit").Select(a => a.ToJsonString()));
+        Check(!everything.Contains(CsdFixture.Password) && !everything.Contains(Convert.ToBase64String(CsdFixture.Key())[..40]), "neither the password nor the .key reach the store or the audit");
+        Check((await service.ReceiveCsd(Sending("envio-2", CsdFixture.Certificate()), intake, intakeSha))!.S("status") == "loaded" && loader.Calls == 1, "a lost answer to CulinaryServer is repeated without loading twice");
+        var foreign = Sending("envio-3", CsdFixture.Certificate());
+        foreign["intakeSha256"] = new string('0', 64);
+        Check((await service.ReceiveCsd(foreign, intake, intakeSha))!.S("status") == "rejected", "a sending sealed to another intake key is refused");
+        loader.Answer = new("unavailable", Message: "Facturama no disponible");
+        Check(await service.ReceiveCsd(Sending("envio-4", CsdFixture.Certificate(serial: "30001000000500003417")), intake, intakeSha) is null, "with the PAC down the sending waits for the next look");
+        loader.Answer = new("loaded", HttpStatus: 204);
+
+        // Expired sellos block stamping until new ones arrive.
+        var stale = await service.Load();
+        stale.Meta.Obj("fiscalCsd")["notAfter"] = DateTimeOffset.UtcNow.AddDays(-1).ToString("O");
+        stale.Meta["revision"] = stale.Meta.L("revision") + 1;
+        await runtime.CallAsync(J.O("op", "transaction_v1", "protocol", 1, "event_id", J.Id(), "receipt", J.O("actor", "fiscal-fixture", "fingerprint", J.Id(), "result", new JsonObject()), "changes", new JsonArray(stale.Changes().Select(x => (JsonNode)x).ToArray())));
+        var held = await Request(await Ticket());
+        Check(await Process() && (await Fiscal(held)).S("status") == "validation-blocked" && (await Fiscal(held)).S("message").Contains("venció"), "an expired CSD holds the CFDI back instead of sending it to the PAC");
+        Check((await service.ReceiveCsd(Sending("envio-5", CsdFixture.Certificate(serial: "30001000000500003418")), intake, intakeSha))!.S("status") == "loaded" && await Process() && (await Fiscal(held)).S("status") == "sandbox-stamped", "new sellos release what the expired ones held back");
+
         // With the PAC simulator on, the sandbox stays out of it.
         await Act("integration.configure", J.O("provider", "pac", "mode", "simulated"));
         var simulatedRequest = await Request(await Ticket());

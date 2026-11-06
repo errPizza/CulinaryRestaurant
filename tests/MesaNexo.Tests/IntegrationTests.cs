@@ -158,8 +158,8 @@ static class IntegrationTests {
 
             // Simulated PAC: SAT receiver rule, stamping, e-mail and cancellation.
             var ticket = (await service.Load()).List("visit").First(x => x.S("status") == "closed" && x.S("id") == uv.S("id"));
-            var bad = await Act("fiscal.request", J.O("visitId", ticket.S("id"), "rfc", "XAXX010101000", "name", "PUBLICO EN GENERAL", "postalCode", "06000", "regime", "601", "use", "G03"));
-            Check((await Act("pac.stamp", J.O("id", bad.S("id")))).S("status") == "simulated-rejected", "simulated PAC applies the SAT generic RFC rule");
+            // The SAT rule for the generic RFC is checked at the register now, before anything reaches a PAC.
+            await Deny(() => Act("fiscal.request", J.O("visitId", ticket.S("id"), "rfc", "XAXX010101000", "name", "PUBLICO EN GENERAL", "postalCode", "06000", "regime", "601", "use", "G03")), "the register applies the SAT generic RFC rule before the PAC", 400);
             var good = await Act("fiscal.request", J.O("visitId", ticket.S("id"), "rfc", "EKU9003173C9", "name", "ESCUELA KEMPER URGATE", "postalCode", "42501", "regime", "601", "use", "G03", "email", "compras@example.mx"));
             var stamped = await Act("pac.stamp", J.O("id", good.S("id")));
             state = await service.Load();

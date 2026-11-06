@@ -159,9 +159,9 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
                     variant = "visit:cocina";
                     break;
                 case "visit":
-                    build = v => { var c = Without(v, "trackingKey"); foreach (var p in Totals(s, v)) c[p.Key] = p.Value?.DeepClone(); return c; };
+                    build = v => { var c = Without(v, "trackingKey"); foreach (var p in Totals(s, v)) c[p.Key] = p.Value?.DeepClone(); c["invoice"] = InvoiceStatus(s, v); return c; };
                     variant = "visit:totals";
-                    stamp = v => string.Join(",", s.Related("unit", "visitId", v.S("id")).Select(Version)) + ";" + string.Join(",", s.Related("payment", "visitId", v.S("id")).Select(Version));
+                    stamp = v => string.Join(",", s.Related("unit", "visitId", v.S("id")).Select(Version)) + ";" + string.Join(",", s.Related("payment", "visitId", v.S("id")).Select(Version)) + ";" + string.Join(",", s.Related("fiscal", "visitId", v.S("id")).Select(Version));
                     break;
                 case "unit" when role == "cocina":
                     build = x => { var c = (JsonObject)x.DeepClone(); c.Remove("price"); c.Remove("basePrice"); c.Remove("promoId"); c["extras"] = new JsonArray(x.A("extras").Objects().Select(e => (JsonNode)J.O("name", e.S("name"))).ToArray()); c["modifiers"] = new JsonArray(x.A("modifiers").Objects().Select(m => (JsonNode)J.O("group", m.S("group"), "name", m.S("name"))).ToArray()); return c; };

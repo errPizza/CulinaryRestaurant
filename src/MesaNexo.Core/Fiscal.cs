@@ -6,20 +6,30 @@ namespace MesaNexo.Core;
 
 public sealed partial class Restaurant {
     // Requests in these states no longer block a new request or a reopen.
-    static readonly string[] FiscalClosed = ["rejected", "cancelled", "simulated-rejected", "simulated-cancelled"];
+    static readonly string[] FiscalClosed = ["rejected", "cancelled", "sandbox-cancelled", "simulated-rejected", "simulated-cancelled"];
     public static JsonObject FiscalReceiver(JsonObject p) {
 
         var rfc = Text(p, "rfc", 13).ToUpperInvariant();
-        Need(Regex.IsMatch(rfc, @"^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$"), "RFC inválido");
         var zip = Text(p, "postalCode", 5);
-        Need(Regex.IsMatch(zip, @"^\d{5}$"), "Código postal fiscal inválido");
+        Need(Regex.IsMatch(zip, @"^\d{5}$") && !zip.StartsWith("00"), "Código postal fiscal inválido");
         var regime = Text(p, "regime", 3);
-        var use = Text(p, "use", 3);
-        Need(Regex.IsMatch(regime, @"^\d{3}$") && Regex.IsMatch(use, @"^[A-Z]{1,2}\d{1,2}$"), "Régimen o uso CFDI inválido");
-        var receiver = J.O("rfc", rfc, "name", Text(p, "name", 250), "postalCode", zip, "regime", regime, "use", use);
+        var use = Text(p, "use", 4).ToUpperInvariant();
+        if (Sat.ReceiverProblem(rfc, regime, use) is { } problem) throw new BusinessException(400, problem);
+        // CFDI 4.0 compares the name with the Constancia de Situación Fiscal: upper case and single spaces.
+        var name = Regex.Replace(Text(p, "name", 250).Normalize().ToUpper(new System.Globalization.CultureInfo("es-MX")), @"\s+", " ").Trim();
+        var receiver = J.O("rfc", rfc, "name", name, "postalCode", zip, "regime", regime, "use", use);
         var email = p.S("email").Trim();
         if (email != "") { Need(email.Length <= 150 && Regex.IsMatch(email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"), "Correo para la factura inválido"); receiver["email"] = email; }
         return receiver;
+
+    }
+    // How the ticket stands for invoicing: once stamped it cannot be stamped again, from the register or from the web.
+    static readonly string[] FiscalStamped = ["stamped", "sandbox-stamped", "simulated-stamped", "cancellation-pending", "sandbox-cancellation-pending"];
+    public static string InvoiceStatus(BranchState s, JsonObject visit) {
+
+        var requests = s.Related("fiscal", "visitId", visit.S("id")).ToArray();
+        if (requests.Any(x => FiscalStamped.Contains(x.S("status")))) return "invoiced";
+        return requests.Any(x => !FiscalClosed.Contains(x.S("status"))) ? "processing" : "none";
 
     }
     bool TryFiscal(BranchState s, JsonObject u, string type, JsonObject p, out JsonObject result) {

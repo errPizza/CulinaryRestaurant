@@ -5,6 +5,8 @@
 artifacts/
 *.user
 *.key
+# A throwaway CSD key for the tests (PBES2/3DES like the SAT's); never a real one.
+!tests/fixtures/csd/llave-prueba-des3.key
 *.pfx
 *.p12
 *.keystore

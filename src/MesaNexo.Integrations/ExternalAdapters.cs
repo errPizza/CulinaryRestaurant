@@ -7,7 +7,7 @@ using MesaNexo.Core;
 using static MesaNexo.Core.Rules;
 namespace MesaNexo.Integrations;
 // Vendor contract verified 2026-10-15. Credentials stay on the server. No constructor makes a call.
-public sealed class FacturamaAdapter: IPacAdapter, IDisposable {
+public sealed class FacturamaAdapter: IPacAdapter, ICsdLoader, IDisposable {
     readonly HttpClient http; public bool IsSandbox { get; }
     public FacturamaAdapter(string username, string password, bool sandbox = true, HttpMessageHandler? testHandler = null) {
 
@@ -42,6 +42,13 @@ public sealed class FacturamaAdapter: IPacAdapter, IDisposable {
             using var request = new HttpRequestMessage(method, path);
             if (body is not null) request.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+            return await Read(response, method, expectedUuid, ct) with { HttpStatus = (int)response.StatusCode };
+
+        } catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return new("pending-reconciliation", Message: "Respuesta PAC incierta; conservar Folio y Date"); } catch (HttpRequestException) { return new("pending-reconciliation", Message: "PAC no disponible; conservar Folio y Date"); }
+
+    }
+    async Task<PacResult> Read(HttpResponseMessage response, HttpMethod method, string? expectedUuid, CancellationToken ct) {
+
             if (!response.IsSuccessStatusCode) return new((int)response.StatusCode is >= 400 and < 500 && response.StatusCode is not (HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests) ? "rejected" : "pending-reconciliation", Message: "PAC HTTP " + (int)response.StatusCode);
             await using var stream = await response.Content.ReadAsStreamAsync(ct);
             using var buffer = new MemoryStream();
@@ -54,7 +61,23 @@ public sealed class FacturamaAdapter: IPacAdapter, IDisposable {
             if (!Guid.TryParse(uuid, out _)) return new("pending-reconciliation", data.S("Id"), Message: "Respuesta sin timbre verificable; consultar PAC antes de reintentar");
             return new(data.S("Status") == "canceled" ? "cancelled" : "stamped", data.S("Id"), uuid, "Respuesta HTTPS del PAC");
 
-        } catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return new("pending-reconciliation", Message: "Respuesta PAC incierta; conservar Folio y Date"); } catch (HttpRequestException) { return new("pending-reconciliation", Message: "PAC no disponible; conservar Folio y Date"); }
+    }
+    // API Web, "Mi cuenta": PUT TaxEntity/UploadCsd with both files in base64 answers 204. The CSD then lives only in Facturama.
+    public async Task<PacResult> LoadCsd(byte[] certificate, byte[] privateKey, string password, CancellationToken ct = default) {
+
+        var body = J.O("Certificate", Convert.ToBase64String(certificate), "PrivateKey", Convert.ToBase64String(privateKey), "PrivateKeyPassword", password);
+        try {
+
+            using var request = new HttpRequestMessage(HttpMethod.Put, "TaxEntity/UploadCsd") { Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json") };
+            using var response = await http.SendAsync(request, ct);
+            var code = (int)response.StatusCode;
+            if (response.IsSuccessStatusCode) return new("loaded", Message: "Sellos cargados en Facturama", HttpStatus: code);
+            // Facturama explains a refusal in Message or in ModelState; nothing of the request is echoed back.
+            var detail = "";
+            try { var data = JsonNode.Parse(await response.Content.ReadAsStringAsync(ct)) as JsonObject; detail = data?.S("Message") ?? ""; if (data?["ModelState"] is JsonObject state) detail = string.Join(" ", state.Select(x => x.Value is JsonArray m ? string.Join(" ", m.Select(v => v?.ToString())) : "")).Trim() is { Length: > 0 } listed ? listed : detail; } catch (System.Text.Json.JsonException) { }
+            return new(code is >= 400 and < 500 && code is not (408 or 429) ? "rejected" : "unavailable", Message: "Facturama respondió HTTP " + code + (detail == "" ? "" : ": " + detail[..Math.Min(detail.Length, 200)]), HttpStatus: code);
+
+        } catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return new("unavailable", Message: "Facturama no respondió"); } catch (HttpRequestException) { return new("unavailable", Message: "Facturama no disponible"); } finally { body["PrivateKey"] = ""; body["PrivateKeyPassword"] = ""; }
 
     }
     // Facturama e-mails the PDF and XML itself (API Web: POST Cfdi?cfdiType=issued&cfdiId=…&email=…, empty body).

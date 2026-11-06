@@ -14,7 +14,7 @@ public sealed partial class BranchService {
     }
     void AppendAudit(BranchState s, string eventId, string actor, string fingerprint, string type) {
 
-        var immutable = new[] { "audit", "recipeversion", "stockmovement", "cashadjustment", "refund" };
+        var immutable = new[] { "audit", "recipeversion", "stockmovement", "cashadjustment", "refund", "pacattempt" };
         var all = s.Changes().ToArray();
         // Records cannot be removed, so a historical record is altered only if it appears among the changes.
         foreach (var c in all) if (s.Original.TryGetValue(c.S("record_id"), out var prior)) { var d = prior.Data; Need(!immutable.Contains(d.S("kind")) && !(d.S("kind") == "cash" && d.S("status") == "closed"), "Registro histórico inalterable por la aplicación", 409); }

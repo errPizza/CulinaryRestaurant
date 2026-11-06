@@ -63,6 +63,7 @@ static class Program {
         if (args.Contains("--fiscal-only")) { try { await FiscalTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "fiscal-sandbox.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--live-only")) { try { await LiveIntegrationTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "live-integrations.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--print-only")) { try { await PrintTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "printing.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
+        if (args.Contains("--csd-only")) { try { await CsdTests.Run(evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "csd.json"), new JsonArray(evidence.Select(x => (JsonNode)x.DeepClone()).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--adapters-only")) { try { await AdapterTests.Run(evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "adapters.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--license-only")) { try { await LicenseTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "licenses.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--checkpoint-only")) { try { await CheckpointTests.Run(root, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "checkpoints.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
@@ -230,6 +231,7 @@ static class Program {
             await IntegrationTests.Run(root, python, evidence);
             await Suite("tenants", () => TenantTests.Run(root, evidence));
             await AdapterTests.Run(evidence);
+            await Suite("csd", () => CsdTests.Run(evidence));
             await SchemaTests.Run(root, python, evidence);
             await Suite("store-outbox", async () => { await StoreTests.Run(root, evidence); await StoreTests.OfflineMonth(root, evidence); await StoreTests.Blocking(root, evidence); await StoreTests.Restore(root, evidence); await StoreTests.Migration(root, python, evidence); });
             await PrintTests.Run(root, python, evidence);

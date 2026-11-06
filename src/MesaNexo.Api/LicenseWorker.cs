@@ -7,9 +7,9 @@ namespace MesaNexo.Api;
 
 // Renews at least daily while CulinaryServer is reachable (the license itself allows 7 days offline) and keeps the
 // multi-company central's certificate registered. Support runs on its own, much shorter, clock; so do fault reports,
-// the owner's summaries and the look at what the provider published.
+// the owner's summaries, the look at what the provider published and the CSD the owner sends from Culinary Dueño.
 public sealed class LicenseWorker(BranchService branch, ILogger<LicenseWorker> log): BackgroundService {
-    protected override Task ExecuteAsync(CancellationToken ct) => Task.WhenAll(Licensing(ct), Support(ct), Every(TimeSpan.FromMinutes(1), branch.SendFaults, ct), Every(TimeSpan.FromMinutes(3), branch.SendStats, ct), Every(TimeSpan.FromMinutes(15), branch.LookForReleases, ct));
+    protected override Task ExecuteAsync(CancellationToken ct) => Task.WhenAll(Licensing(ct), Support(ct), Every(TimeSpan.FromMinutes(1), branch.SendFaults, ct), Every(TimeSpan.FromMinutes(3), branch.SendStats, ct), Every(TimeSpan.FromMinutes(15), branch.LookForReleases, ct), Every(TimeSpan.FromMinutes(1), branch.SyncFiscalIntake, ct));
     async Task Every(TimeSpan period, Func<CancellationToken, Task> work, CancellationToken ct) {
 
         await Task.Yield();

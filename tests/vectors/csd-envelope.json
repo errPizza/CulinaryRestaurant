@@ -1,0 +1,19 @@
+{
+  "note": "Sobre cifrado por Culinary Dueño (src/csd.ts, WebCrypto) para comprobar que la sucursal lo abre. Llave de prueba, sin uso real.",
+  "intakePkcs8": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgDxImrCOCvpiXInkmDDhYkDv-IrIaOplzM9BPIQngH0mhRANCAATYZKEDD4XxXqzV2453z25jP2QxNzt-tNJ6l8z2SIswgl_PoO6D2lFg0jdsxgQTynfmRRHsr0di7Z0c8Ic0YksB",
+  "intakeSha256": "9225e4079a8f00861f426b4be5185c1303408eec515820766c6c34d6c60c7ca5",
+  "licenseId": "licencia-vector",
+  "submissionId": "envio-vector",
+  "envelope": {
+    "v": 1,
+    "epk": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE6cV1vzr_99gMbn_Mty_g2VowgK744Nwf9iomNiOP6zVF-BmFGWimN23IQ8Dy0YBlByE0Yudcu6i2Rmf5nD5iGQ",
+    "salt": "S0jsNO87WMW5SAExlrHaZkc_B6uBLwpEM8C10-TbB9E",
+    "iv": "lYTX1IIOevcE4HVa",
+    "ct": "zoqtXPd8abnRGwe5w1_-s42vEGp8EcE17KUsSFTnGW54Yd9PiyvhMev3iV8VJBVxcyaJ2wW-Ii9F2RzPE3VUeH1X3FkbQu5QnUP_Ei8a4E95teyDiJc"
+  },
+  "expected": {
+    "cer": "MIIBAgM=",
+    "key": "MIIJCAc=",
+    "password": "contraseña 12345678a"
+  }
+}

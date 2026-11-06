@@ -600,11 +600,11 @@
     "result": "passed"
   },
   {
-    "test": "central no longer serves provider route api/backups/0d728bb2152d472784dcd42e70305fa3",
+    "test": "central no longer serves provider route api/backups/b51e9b4f656e46b286c67b3c45a5c281",
     "result": "passed"
   },
   {
-    "test": "central no longer serves provider route api/operations/11553792f60e49a18efa593edeb39ab8",
+    "test": "central no longer serves provider route api/operations/2e1c177696ae41fda9ea2d46b7ec1d6d",
     "result": "passed"
   },
   {
@@ -821,6 +821,30 @@
   },
   {
     "test": "the provider\u0027s reply arrives once and nothing is sent twice",
+    "result": "passed"
+  },
+  {
+    "test": "without owner messages there is no owner thread",
+    "result": "passed"
+  },
+  {
+    "test": "the owner\u0027s message arrives once",
+    "result": "passed"
+  },
+  {
+    "test": "the owner thread is read every 2 minutes",
+    "result": "passed"
+  },
+  {
+    "test": "an answer to the owner is due at once",
+    "result": "passed"
+  },
+  {
+    "test": "the answer reaches the owner once and opens no support ticket",
+    "result": "passed"
+  },
+  {
+    "test": "the answer is marked sent",
     "result": "passed"
   },
   {
@@ -2056,6 +2080,70 @@
     "result": "passed"
   },
   {
+    "test": "sales split by the zone of the table",
+    "result": "passed"
+  },
+  {
+    "test": "products split by the kind of their category",
+    "result": "passed"
+  },
+  {
+    "test": "a shift is cut at each hour of the branch\u0027s clock and priced at the wage",
+    "result": "passed"
+  },
+  {
+    "test": "a waiter carries guests, tables, cancellations asked and hours worked",
+    "result": "passed"
+  },
+  {
+    "test": "an opening of the drawer asked by hand belongs to who asked",
+    "result": "passed"
+  },
+  {
+    "test": "kitchen times from received to ready and from ready to delivered",
+    "result": "passed"
+  },
+  {
+    "test": "returns by dish and reason",
+    "result": "passed"
+  },
+  {
+    "test": "a pickup ready after its time is late",
+    "result": "passed"
+  },
+  {
+    "test": "reviews and what was eaten with them",
+    "result": "passed"
+  },
+  {
+    "test": "expenses by account",
+    "result": "passed"
+  },
+  {
+    "test": "a known guest who came before counts as repeat",
+    "result": "passed"
+  },
+  {
+    "test": "the new sections meet the identities",
+    "result": "passed"
+  },
+  {
+    "test": "what is left of a lot that expires tomorrow",
+    "result": "passed"
+  },
+  {
+    "test": "a purchase 30 % dearer than the one before raises an alert",
+    "result": "passed"
+  },
+  {
+    "test": "guests go as counts, never as people",
+    "result": "passed"
+  },
+  {
+    "test": "hires, exits and headcount by month",
+    "result": "passed"
+  },
+  {
     "test": "without a usable license nothing is uploaded",
     "result": "passed"
   },
@@ -2197,6 +2285,66 @@
   },
   {
     "test": "days past the retention are not sent",
+    "result": "passed"
+  },
+  {
+    "test": "a day the server refuses holds back no other",
+    "result": "passed"
+  },
+  {
+    "test": "the refused day stays pending",
+    "result": "passed"
+  },
+  {
+    "test": "a second entry while one is open is refused",
+    "result": "passed"
+  },
+  {
+    "test": "anyone clocks in and out by themselves",
+    "result": "passed"
+  },
+  {
+    "test": "a manager does not correct their own hours",
+    "result": "passed"
+  },
+  {
+    "test": "a wage and hiring date are kept, and leaving records the exit and closes the shift",
+    "result": "passed"
+  },
+  {
+    "test": "an unknown category kind is refused",
+    "result": "passed"
+  },
+  {
+    "test": "a category keeps its kind when renamed",
+    "result": "passed"
+  },
+  {
+    "test": "only a delivered dish goes back",
+    "result": "passed"
+  },
+  {
+    "test": "a return needs a known reason",
+    "result": "passed"
+  },
+  {
+    "test": "a returned dish goes back to the kitchen and the return is recorded",
+    "result": "passed"
+  },
+  {
+    "test": "a lot date is a calendar date",
+    "result": "passed"
+  },
+  {
+    "test": "a lot with its expiry date shows as about to expire",
+    "result": "passed"
+  },
+  {
+    "test": "what is live counts tables and the roster of the year",
+    "result": "passed"
+  },
+  {
+    "test": "the new sections travel with their days and meet every identity",
     "result": "passed"
   },
   {
@@ -2409,6 +2557,58 @@
   },
   {
     "test": "a waiter cannot erase a customer",
+    "result": "passed"
+  },
+  {
+    "test": "without privacy.json the purge does not run",
+    "result": "passed"
+  },
+  {
+    "test": "a disabled purge does not run",
+    "result": "passed"
+  },
+  {
+    "test": "enabled without a period it keeps 90 days",
+    "result": "passed"
+  },
+  {
+    "test": "a period under 30 days is refused",
+    "result": "passed"
+  },
+  {
+    "test": "a waiter cannot run the purge",
+    "result": "passed"
+  },
+  {
+    "test": "a reservation 120 days old is anonymized in place",
+    "result": "passed"
+  },
+  {
+    "test": "a reservation inside the period is kept",
+    "result": "passed"
+  },
+  {
+    "test": "customers, wallet and sales are not touched by the purge",
+    "result": "passed"
+  },
+  {
+    "test": "the purge leaves a record with counts and no personal data",
+    "result": "passed"
+  },
+  {
+    "test": "a second run finds nothing, adds nothing and the audit chain stays valid",
+    "result": "passed"
+  },
+  {
+    "test": "old calls, messages and platform orders are purged in the same run",
+    "result": "passed"
+  },
+  {
+    "test": "they lose the person and keep the amounts and status",
+    "result": "passed"
+  },
+  {
+    "test": "a recent call is kept",
     "result": "passed"
   },
   {
@@ -3432,7 +3632,7 @@
     "result": "passed"
   },
   {
-    "test": "simulated PAC applies the SAT generic RFC rule",
+    "test": "the register applies the SAT generic RFC rule before the PAC",
     "result": "passed"
   },
   {
@@ -3600,7 +3800,63 @@
     "result": "passed"
   },
   {
+    "test": "a branch certificate cannot post events in another branch\u0027s name",
+    "result": "passed"
+  },
+  {
+    "test": "an event of its own branch cannot project records into another branch",
+    "result": "passed"
+  },
+  {
+    "test": "after both attempts the other branch\u0027s catalog is unchanged",
+    "result": "passed"
+  },
+  {
+    "test": "an expired certificate is refused even when provisioned",
+    "result": "passed"
+  },
+  {
+    "test": "a certificate without client authentication is refused even when provisioned",
+    "result": "passed"
+  },
+  {
+    "test": "an unprovisioned certificate is refused",
+    "result": "passed"
+  },
+  {
+    "test": "an event whose digest does not match its body is refused",
+    "result": "passed"
+  },
+  {
+    "test": "a branch commits its own event through its certificate",
+    "result": "passed"
+  },
+  {
+    "test": "an event id reused with other content is refused",
+    "result": "passed"
+  },
+  {
+    "test": "the same event id in two branches stays two events, each in its own branch",
+    "result": "passed"
+  },
+  {
+    "test": "a branch\u0027s queue never shows another branch\u0027s orders",
+    "result": "passed"
+  },
+  {
+    "test": "an invented session token authorizes nothing",
+    "result": "passed"
+  },
+  {
+    "test": "owner analytics refuses an invented session token",
+    "result": "passed"
+  },
+  {
     "test": "tenant session revocation enforced by backend",
+    "result": "passed"
+  },
+  {
+    "test": "a closed session cannot read analytics again",
     "result": "passed"
   },
   {
@@ -3672,6 +3928,121 @@
     "test": "AMI parser recognizes caller-ID event only; fixture is not a real call",
     "result": "passed",
     "transport": "synthetic HTTP handler; no external calls"
+  },
+  {
+    "test": "RFC check digit accepts the SAT\u0027s own test RFCs",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "RFC with a wrong check digit, date or length is refused",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "receiver regime and CFDI use must apply to the kind of person",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "p\u00FAblico en general only with 616/S01, and regimes come from the SAT catalog",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "a valid CSD with a PBES2/3DES key opens and reports RFC, SAT serial and expiry",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "a wrong password is refused (La contrase\u00F1a no abre el archivo .key, o el archivo no es una llave privada del SAT)",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "a .key from other sellos is refused (El archivo .key no corresponde al .cer: son de sellos distintos)",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "an e.firma (FIEL) is told apart from a CSD (Ese certificado es tu e.firma (FIEL). Para facturar se usa el Certificado de Sello Digital (CSD), que se tramita con la e.firma en CertiSAT)",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "an expired CSD is refused before it reaches the PAC (El CSD venci\u00F3 el 2026-11-05; tramita uno nuevo en CertiSAT)",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "a CSD of another RFC than the license\u0027s is refused (El CSD es del RFC XIA190128J61 y esta sucursal est\u00E1 registrada con el RFC EKU9003173C9)",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "in production the certificate must come from the SAT (El certificado no lo emiti\u00F3 el SAT)",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "the sandbox accepts the SAT test authority\u0027s certificates",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "a file that is not a certificate is refused (El archivo .cer no es un certificado v\u00E1lido)",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "the branch opens what was sealed to its intake key",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "an envelope does not open for another license",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "an envelope does not open as another sending",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "a modified envelope is refused by AES-GCM",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "another machine\u0027s intake key cannot open it",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "the branch opens an envelope sealed with WebCrypto by Culinary Due\u00F1o",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "the CSD goes to PUT TaxEntity/UploadCsd and 204 means loaded",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "the body carries exactly the certificate, the key in base64 and the password",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "a refusal is reported with Facturama\u0027s reason and without the password",
+    "result": "passed",
+    "pac": "synthetic; no network"
+  },
+  {
+    "test": "a PAC that is down leaves the sending for the next look",
+    "result": "passed",
+    "pac": "synthetic; no network"
   },
   {
     "test": "an upgrade keeps every pending event, and adds its own",
@@ -3815,6 +4186,94 @@
   },
   {
     "test": "no event is in both the outbox and the archive",
+    "result": "passed"
+  },
+  {
+    "test": "each answer of the central falls in one class: temporary, auth, validation, conflict, incompatible or ack",
+    "result": "passed"
+  },
+  {
+    "test": "twelve network and server failures keep retrying the oldest event and raise no blocking alert",
+    "result": "passed"
+  },
+  {
+    "test": "once the central answers, the waiting events arrive once each and in order",
+    "result": "passed"
+  },
+  {
+    "test": "four refusals are not yet a blocking alert",
+    "result": "passed"
+  },
+  {
+    "test": "after five refusals the outbox reports the event that blocks the other four",
+    "result": "passed"
+  },
+  {
+    "test": "the manager sees a critical alert with how many events wait behind it",
+    "result": "passed"
+  },
+  {
+    "test": "support lists the pending events with their last failure and without their content",
+    "result": "passed"
+  },
+  {
+    "test": "an intervention needs a known action, who acts and a reason; there is no action that drops an event",
+    "result": "passed"
+  },
+  {
+    "test": "only a pending event can be acted on",
+    "result": "passed"
+  },
+  {
+    "test": "an event set aside cannot be set aside twice",
+    "result": "passed"
+  },
+  {
+    "test": "set aside, the event stays pending and the four after it reach the central",
+    "result": "passed"
+  },
+  {
+    "test": "while an event is set aside the manager keeps a notice",
+    "result": "passed"
+  },
+  {
+    "test": "the outbox still verifies with an event set aside after later ones were confirmed",
+    "result": "passed"
+  },
+  {
+    "test": "released, the event reaches the central exactly once and nothing is left pending",
+    "result": "passed"
+  },
+  {
+    "test": "both interventions are recorded with the event, who acted and why",
+    "result": "passed"
+  },
+  {
+    "test": "a refused certificate is a critical alert after the first try",
+    "result": "passed"
+  },
+  {
+    "test": "export writes every pending event",
+    "result": "passed"
+  },
+  {
+    "test": "the exported events stay sealed",
+    "result": "passed"
+  },
+  {
+    "test": "importing events the store has adds nothing",
+    "result": "passed"
+  },
+  {
+    "test": "a lost pending event comes back from the export and the outbox verifies",
+    "result": "passed"
+  },
+  {
+    "test": "events of another branch are refused",
+    "result": "passed"
+  },
+  {
+    "test": "an altered event is refused before anything is written",
     "result": "passed"
   },
   {
@@ -4135,6 +4594,116 @@
     "pac": "simulated Facturama API Web; no network"
   },
   {
+    "test": "a stamp is logged with the PAC\u0027s code, receiver RFC and time",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "a lost answer is logged without a PAC code",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "a PAC refusal is logged with its code",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "consults and cancellations are logged too",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "a manager reads the stamping log",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "a settled ticket starts as not invoiced",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "a request on its way to the PAC shows the ticket in process",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "a stamped ticket shows as invoiced",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "a stamped ticket is not invoiced twice at the register",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "a stamped ticket gets no self-invoice QR",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "a cancelled CFDI leaves its ticket free to invoice again",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "a receiver RFC with a wrong check digit is refused at the register",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "a regime that does not apply to the receiver is refused",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "the receiver\u0027s name is stored as the SAT prints it",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "a CSD that does not open is refused before the PAC",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "a valid CSD is loaded into the PAC and only its RFC, serial and dates are kept",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "neither the password nor the .key reach the store or the audit",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "a lost answer to CulinaryServer is repeated without loading twice",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "a sending sealed to another intake key is refused",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "with the PAC down the sending waits for the next look",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "an expired CSD holds the CFDI back instead of sending it to the PAC",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "new sellos release what the expired ones held back",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
     "test": "the sandbox does not touch requests while the PAC simulator is on",
     "result": "passed",
     "pac": "simulated Facturama API Web; no network"
@@ -4290,7 +4859,42 @@
     "providers": "simulated HTTP APIs; no network"
   },
   {
+    "test": "until the provider confirms, the refund is pending and is not counted as money returned",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a pending refund cannot be asked twice (No se puede devolver m\u00E1s de lo cobrado)",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a refund the provider refuses is recorded as failed",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a failed refund is neither returned nor pending",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
     "test": "the provider returns the charge, and the payment keeps its history",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "once confirmed the refund counts once, and the failed attempt stays in the trail",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "every step of both refund attempts stays in the charge\u0027s trail",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "only a refund left to a person can be confirmed by hand (S\u00F3lo se confirma una devoluci\u00F3n que el proveedor dej\u00F3 para hacerse a mano)",
     "result": "passed",
     "providers": "simulated HTTP APIs; no network"
   },
@@ -4306,6 +4910,31 @@
   },
   {
     "test": "the manager\u0027s capture applies the charge once",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a Clip refund is left to a person",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a refund left to a person is pending, not returned",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "confirming it by hand needs the provider\u0027s reference (reference: texto requerido (m\u00E1ximo 120))",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "the manager\u0027s confirmation closes it once, with the reference in the charge\u0027s trail",
+    "result": "passed",
+    "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a confirmed refund is not confirmed twice (S\u00F3lo se confirma una devoluci\u00F3n que el proveedor dej\u00F3 para hacerse a mano)",
     "result": "passed",
     "providers": "simulated HTTP APIs; no network"
   },
