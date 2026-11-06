@@ -7,7 +7,7 @@ using MesaNexo.Core;
 using static MesaNexo.Core.Rules;
 namespace MesaNexo.Integrations;
 // Vendor contract verified 2026-10-15. Credentials stay on the server. No constructor makes a call.
-public sealed class FacturamaAdapter: IPacAdapter, ICsdLoader, IDisposable {
+public sealed class FacturamaAdapter: IPacAdapter, ICsdLoader, ICfdiPdfSource, IDisposable {
     readonly HttpClient http; public bool IsSandbox { get; }
     public FacturamaAdapter(string username, string password, bool sandbox = true, HttpMessageHandler? testHandler = null) {
 
@@ -85,6 +85,29 @@ public sealed class FacturamaAdapter: IPacAdapter, ICsdLoader, IDisposable {
 
         Need(id.Length is > 0 and <= 100 && System.Text.RegularExpressions.Regex.IsMatch(email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$") && email.Length <= 150, "Correo del receptor inválido");
         try { using var response = await http.PostAsync("Cfdi?cfdiType=issued&cfdiId=" + Uri.EscapeDataString(id) + "&email=" + Uri.EscapeDataString(email), new StringContent("{}", Encoding.UTF8, "application/json"), ct); return response.IsSuccessStatusCode; } catch (Exception e) when (e is HttpRequestException or OperationCanceledException && !ct.IsCancellationRequested) { return false; }
+
+    }
+    // API Web: GET cfdi/pdf/issued/{id} answers {"ContentEncoding":"base64","ContentType":"pdf","ContentLength":n,"Content":"…"}.
+    public async Task<byte[]> Pdf(string id, CancellationToken ct = default) {
+
+        Need(id.Length is > 0 and <= 100, "CFDI sin identificador del PAC");
+        try {
+
+            using var response = await http.GetAsync("cfdi/pdf/issued/" + Uri.EscapeDataString(id), HttpCompletionOption.ResponseHeadersRead, ct);
+            Need(response.StatusCode != HttpStatusCode.NotFound, "Facturama no tiene ese CFDI", 404);
+            Need(response.IsSuccessStatusCode, "Facturama respondió HTTP " + (int)response.StatusCode + " al pedir el PDF", 503);
+            await using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var buffer = new MemoryStream();
+            var chunk = new byte[16384];
+            int n;
+            while ((n = await stream.ReadAsync(chunk, ct)) > 0) { Need(buffer.Length + n <= 8 * 1024 * 1024, "PDF del PAC excesivo", 503); buffer.Write(chunk, 0, n); }
+            var data = JsonNode.Parse(buffer.ToArray()) as JsonObject;
+            byte[] pdf;
+            try { pdf = Convert.FromBase64String(data?.S("Content") ?? ""); } catch (FormatException) { pdf = []; }
+            Need(pdf.Length > 4 && pdf.AsSpan(0, 5).SequenceEqual("%PDF-"u8), "Facturama no devolvió un PDF", 503);
+            return pdf;
+
+        } catch (OperationCanceledException) when (!ct.IsCancellationRequested) { throw new BusinessException(503, "Facturama no respondió; intenta de nuevo"); } catch (HttpRequestException) { throw new BusinessException(503, "Facturama no disponible; intenta de nuevo"); } catch (System.Text.Json.JsonException) { throw new BusinessException(503, "Facturama no devolvió un PDF"); }
 
     }
     public void Dispose() => http.Dispose();

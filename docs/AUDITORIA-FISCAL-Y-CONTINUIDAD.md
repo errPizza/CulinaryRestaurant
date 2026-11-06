@@ -115,9 +115,9 @@ No está implementado. Es trabajo aparte.
 - **En caja** (ya existía): `fiscal.request` → `FiscalWorker` en segundo plano → Facturama `3/cfdis` → UUID guardado.
   - Un envío sin respuesta nunca se repite solo: el gerente reintenta con el mismo folio y fecha.
   - Facturama manda el PDF y el XML por correo si `emailReceiver` está activo.
-  - **Falta:** descargar el PDF a la sucursal para imprimirlo (`GET cfdi/pdf/issued/{id}`).
+  - El gerente descarga el PDF desde la pantalla fiscal para imprimirlo o reenviarlo (`GET /api/fiscal/{id}/pdf` → Facturama `GET cfdi/pdf/issued/{id}`). Se pide a Facturama cada vez y no se guarda en el almacén: un PDF suele pasar de los 40 KiB por registro.
 - **Autofactura** (ya existía): token aleatorio de 32 bytes, guardado como SHA-256, vigente 24 horas, en el portal público. La central lo consume una sola vez (`invoice_capability`).
-  - **Falta:** imprimir el QR en el ticket. Hoy el enlace se genera a pedido en la pantalla fiscal.
+  - Con portal configurado, liquidar una cuenta encola su ticket. Al imprimirse se emite el token y se dibuja el QR (ESC/POS `GS ( k`, modelo 2, corrección M). El token sólo existe en el papel; en el almacén queda su hash. Un ticket facturado o en proceso sale sin QR. Una reimpresión autorizada lleva un token nuevo.
 - **Estado de facturación del ticket** (nuevo): cada cuenta trae `invoice` = `none` (No facturado), `processing` (En proceso) o `invoiced` (Facturado), derivado de sus solicitudes fiscales.
 - **Doble timbre:** bloqueado en caja y en web, con prueba. Corregido de paso un error: un CFDI cancelado en sandbox (`sandbox-cancelled`) seguía bloqueando el ticket.
 - **Receptor:** ahora se valida con el catálogo SAT (`src/MesaNexo.Core/Sat.cs`):
@@ -218,8 +218,6 @@ Cliente ── QR/enlace ──► portal público ──► central (token de u
 3. **Compilar e instalar Culinary Admin.** No abrirlo desde Claude.
 4. **Confirmar Culinary Dueño** cuando el diseño v3 tenga su commit.
 5. **Pendientes de código:**
-   - imprimir el QR de autofactura en el ticket;
-   - descargar el PDF del CFDI a la sucursal;
    - comparar la razón social del CSD con la de la licencia;
    - huella de la llave de recepción fuera de banda;
    - catálogo completo de códigos postales.

@@ -71,6 +71,21 @@ sealed class EscPosWriter(int columns) {
 
     }
     public EscPosWriter Rule() => Line(new string('-', Width));
+    // QR code with GS ( k: model 2, module size in dots, error correction M, store the data, then print the symbol.
+    public EscPosWriter Qr(string data, byte module) {
+
+        var payload = Encoding.UTF8.GetBytes(data);
+        Need(payload.Length is > 0 and <= 7089, "QR demasiado largo para la impresora");
+        var n = payload.Length + 3;
+        Raw(0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00);
+        Raw(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, module);
+        Raw(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x31);
+        Raw(0x1D, 0x28, 0x6B, (byte)(n & 0xFF), (byte)(n >> 8), 0x31, 0x50, 0x30).Raw(payload);
+        Raw(0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30);
+        bytes.Add(0x0A);
+        return this;
+
+    }
     // Feed three lines and cut partially (GS V 66 3).
     public EscPosWriter Cut() => Raw(0x1D, 0x56, 0x42, 0x03);
     // Drawer kick on pin 2: 50 ms on, 500 ms off (ESC p 0 25 250).
@@ -114,7 +129,10 @@ public static class EscPosDocument {
         w.Bold(true).Big(true).Row("TOTAL", Money(totals.L("total"))).Big(false).Bold(false);
         w.Row("IVA incluido", Money(totals.L("tax")));
         if (totals.L("paid") > 0) w.Row("Pagado", Money(totals.L("paid"))).Row("Saldo", Money(totals.L("balance")));
-        return w.Line().Center().Line("¡Gracias por su visita!").Cut().ToArray();
+        w.Line().Center();
+        // 6-dot modules on 80 mm paper, 4 on 58 mm: a ~100-character link is a version 7 symbol of 45 modules.
+        if (job.S("invoiceUrl") != "") w.Rule().Bold(true).Line("FACTURA ESTE CONSUMO").Bold(false).Line("Escanea el código").Qr(job.S("invoiceUrl"), (byte)(columns >= 42 ? 6 : 4)).Line("Vigente hasta " + Local(job.S("invoiceExpires"))).Line();
+        return w.Line("¡Gracias por su visita!").Cut().ToArray();
 
     }
     static byte[] ZReport(JsonObject job, int columns) {

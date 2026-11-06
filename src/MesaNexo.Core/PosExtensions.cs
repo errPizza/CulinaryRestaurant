@@ -40,6 +40,7 @@ public sealed partial class Restaurant {
         else Need(!p.ContainsKey("tendered"), "El cambio corresponde a efectivo");
 
     }
+    JsonObject BillSnapshot(BranchState s, JsonObject v) => J.O("totals", Totals(s, v), "units", s.Related("unit", "visitId", v.S("id")).Select(x => J.O("name", x.S("name"), "price", x.L("price"), "status", x.S("status"))).ToArray());
     bool TryPos(BranchState s, JsonObject u, string type, JsonObject p, out JsonObject result) {
 
         result = J.O("ok", true);
@@ -108,7 +109,7 @@ public sealed partial class Restaurant {
                     v["printed"] = true;
                     v["printedAt"] = J.Now();
                     if (v.S("tableId") != "") s.Get("table", v.S("tableId"))["status"] = "printed";
-                    result = Add(s, "printjob", J.O("type", "bill", "visitId", id, "status", "pending", "at", J.Now(), "actor", u.S("id"), "snapshot", J.O("totals", Totals(s, v), "units", s.Related("unit", "visitId", id).Select(x => J.O("name", x.S("name"), "price", x.L("price"), "status", x.S("status"))).ToArray())));
+                    result = Add(s, "printjob", J.O("type", "bill", "visitId", id, "status", "pending", "at", J.Now(), "actor", u.S("id"), "snapshot", BillSnapshot(s, v)));
                     break;
 
                 }
@@ -155,7 +156,7 @@ public sealed partial class Restaurant {
                     var old = s.Get("printjob", id);
                     Need(new[] { "failed", "uncertain" }.Contains(old.S("status")), "Trabajo no requiere conciliación");
                     var reason = Text(p, "reason");
-                    result = Add(s, "printjob", J.O("type", old.S("type"), "visitId", old.S("visitId"), "status", "pending", "snapshot", old["snapshot"], "retryOf", id, "reason", reason, "actor", u.S("id"), "at", J.Now()));
+                    result = Add(s, "printjob", J.O("type", old.S("type"), "visitId", old.S("visitId"), "status", "pending", "snapshot", old["snapshot"], "invoiceQr", old.B("invoiceQr"), "retryOf", id, "reason", reason, "actor", u.S("id"), "at", J.Now()));
                     break;
 
                 }

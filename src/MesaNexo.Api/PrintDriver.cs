@@ -36,6 +36,7 @@ public sealed class CupsPrintDriver(string queue, string? drawerOption = null): 
         var text = new StringBuilder("Culinary Restaurant\n");
         foreach (var unit in job.Obj("snapshot").A("units").Objects()) text.AppendLine(unit.S("name") + " · " + (unit.L("price") / 100m).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));
         text.AppendLine("Total: " + (job.Obj("snapshot").Obj("totals").L("total") / 100m).ToString("0.00", System.Globalization.CultureInfo.InvariantCulture));
+        if (job.S("invoiceUrl") != "") text.AppendLine("Factura en: " + job.S("invoiceUrl"));
         await process.StandardInput.WriteAsync(text.ToString().AsMemory(), ct);
         process.StandardInput.Close();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -69,8 +70,9 @@ public sealed partial class BranchService {
         return false;
 
     }
-    // The job plus the names it only refers to by id, read when it is printed.
-    static JsonObject Document(BranchState s, JsonObject job) {
+    // The job plus the names it only refers to by id, read when it is printed. A settled ticket's self-invoice token is
+    // issued here, so it exists only on the paper and as a hash in the store; it is committed with the claim.
+    JsonObject Document(BranchState s, JsonObject job) {
 
         var d = (JsonObject)job.DeepClone();
         d["restaurantName"] = s.Meta.S("name");
@@ -78,6 +80,7 @@ public sealed partial class BranchService {
 
             if (v.S("tableId") != "") d["tableName"] = s.Related("table", "id", v.S("tableId")).FirstOrDefault()?.S("name") ?? "";
             d["waiterName"] = s.Related("user", "id", v.S("waiterId")).FirstOrDefault()?.S("name") ?? "";
+            if (job.B("invoiceQr") && Domain.InvoiceLink(s, v) is { } link) { d["invoiceUrl"] = link.S("url"); d["invoiceExpires"] = link.S("expires"); }
 
         }
         if (job.S("zreportId") != "") d["zreport"] = s.Get("zreport", job.S("zreportId")).DeepClone();

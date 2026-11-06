@@ -144,6 +144,23 @@ public sealed partial class BranchService {
         return false;
 
     }
+    // The manager prints or forwards a CFDI's PDF. It comes from Facturama on each request and is not kept in the store,
+    // whose records are bounded at 40 KiB: a CFDI's PDF usually weighs more.
+    ICfdiPdfSource? pdfSource;
+    public void UseCfdiPdf(ICfdiPdfSource source) => pdfSource = source;
+    public async Task<JsonObject> FiscalPdf(string token, string fiscalId, CancellationToken ct = default) {
+
+        var s = await View(ct);
+        var u = Authenticate(s, token, out _);
+        Role(u, "manager");
+        var f = s.Get("fiscal", fiscalId);
+        var uuid = f.S("fiscalUuid") != "" ? f.S("fiscalUuid") : f.S("sandboxUuid");
+        Need(f.S("providerId") != "" && uuid != "", "Sólo un CFDI timbrado en Facturama tiene PDF", 409);
+        Need(pdfSource is not null, "Facturama no está configurado en esta sucursal", 503);
+        var pdf = await pdfSource!.Pdf(f.S("providerId"), ct);
+        return J.O("fileName", "CFDI-" + (f.S("folio") != "" ? f.S("folio") : uuid) + ".pdf", "contentType", "application/pdf", "bytes", pdf.Length, "sandbox", f.S("sandboxUuid") != "", "content", Convert.ToBase64String(pdf));
+
+    }
     public string FiscalState { get; private set; } = "";
     public void NoteFiscal(string state) => FiscalState = state;
 }

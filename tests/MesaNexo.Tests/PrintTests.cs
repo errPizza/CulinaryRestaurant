@@ -164,6 +164,53 @@ static class PrintTests {
         await Act("drawer.request", J.O("reason", "USB"));
         Check(await service.ProcessPrint(usb) && EscPosReader.Has(File.ReadAllBytes(device), Pulse), "a USB device path receives the same ESC/POS bytes");
 
+        // The settled ticket carries the self-invoice QR when the branch has a portal; the token exists only on the paper.
+        byte[] QrModel = [0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00], QrPrint = [0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30];
+        Check(!EscPosReader.Has(bill, QrModel), "the bill printed before payment carries no self-invoice QR");
+        await Act("cash.open", J.O("initial", 0));
+        async Task<string> Settle() {
+
+            var visit = (await Act("visit.quick", new())).S("id");
+            foreach (var unit in (await Act("command.send", J.O("visitId", visit, "items", new[] { J.O("productId", cafe.S("id"), "quantity", 2), J.O("productId", pina.S("id"), "quantity", 1) }))).A("unitIds").Strings())
+            foreach (var status in new[] { "preparing", "ready", "delivered" }) await Act("unit.state", J.O("id", unit, "status", status));
+            await Act("payment.add", J.O("visitId", visit, "amount", 18000, "method", "card"));
+            await Act("visit.close", J.O("id", visit));
+            return visit;
+
+        }
+        JsonObject[] Tickets(BranchState state, string visit) => state.List("printjob").Where(j => j.S("visitId") == visit).ToArray();
+        var noPortal = await Settle();
+        Check(Tickets(await service.Load(), noPortal).Length == 0, "without a self-invoice portal settling an account prints nothing new");
+        await Act("fiscal.portal.configure", J.O("url", "https://facturas.example.mx"));
+        var settled = await Settle();
+        var closing = Tickets(await service.Load(), settled).Single();
+        Check(closing.S("type") == "bill" && closing.B("invoiceQr") && closing.S("status") == "pending" && !(await service.Load()).List("invoicetoken").Any(t => t.S("visitId") == settled), "settling an account queues its ticket; the token waits for the printer");
+        Check(await Print(), "the settled ticket is printed");
+        var receipt = printer.Printed.Last();
+        var receiptText = EscPosReader.Text(receipt);
+        var prefix = Encoding.ASCII.GetBytes("https://facturas.example.mx/invoice#");
+        var at = Enumerable.Range(0, receipt.Length - prefix.Length).First(i => receipt.AsSpan(i, prefix.Length).SequenceEqual(prefix));
+        var qrToken = Encoding.ASCII.GetString(receipt, at + prefix.Length, 64);
+        var stored = (await service.Load()).List("invoicetoken").Where(t => t.S("visitId") == settled).ToArray();
+        Check(EscPosReader.Has(receipt, QrModel) && EscPosReader.Has(receipt, 0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, 0x06) && EscPosReader.Has(receipt, 0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x31) && EscPosReader.Has(receipt, QrPrint), "the QR is drawn with GS ( k model 2, 6-dot modules on 80 mm paper and error correction M");
+        Check(EscPosReader.Has(receipt, [0x1D, 0x28, 0x6B, (byte)(prefix.Length + 64 + 3), 0x00, 0x31, 0x50, 0x30, .. prefix]) && System.Text.RegularExpressions.Regex.IsMatch(qrToken, "^[0-9a-f]{64}$"), "the QR stores the portal's self-invoice URL with a 256-bit token");
+        Check(receiptText.Contains("FACTURA ESTE CONSUMO") && receiptText.Contains("Vigente hasta") && receiptText.Contains("Pagado") && EscPosReader.Has(receipt, Cut), "the ticket explains the QR and its validity, shows the payment and cuts");
+        Check(stored.Length == 1 && stored[0].S("tokenHash") == J.Hash(qrToken) && !stored[0].B("used") && DateTimeOffset.Parse(stored[0].S("expires")) > DateTimeOffset.UtcNow.AddHours(23), "the printed token is stored only as its hash, unused and valid 24 hours");
+        var everything = string.Concat((await service.Load()).List("printjob").Select(j => j.ToJsonString()));
+        Check(!everything.Contains(qrToken), "the token itself is not kept in the print job");
+        printer.DropAfter = 20;
+        var cutShort = await Settle();
+        Check(await Print() && Tickets(await service.Load(), cutShort).Single().S("status") == "uncertain", "a settled ticket cut short is left uncertain");
+        printer.DropAfter = null;
+        var again = await Act("print.retry", J.O("id", Tickets(await service.Load(), cutShort).Single().S("id"), "reason", "Salió cortado"));
+        Check(await Print() && EscPosReader.Has(printer.Printed.Last(), QrModel) && (await Job(again.S("id"))).B("invoiceQr") && (await service.Load()).List("invoicetoken").Count(t => t.S("visitId") == cutShort) == 2, "its authorized reprint carries a QR of its own");
+        var processing = await Settle();
+        await Act("fiscal.request", J.O("visitId", processing, "rfc", "EKU9003173C9", "name", "ESCUELA KEMPER URGATE", "postalCode", "42501", "regime", "601", "use", "G03"));
+        Check(await Print() && !EscPosReader.Has(printer.Printed.Last(), QrModel) && !EscPosReader.Text(printer.Printed.Last()).Contains("FACTURA ESTE CONSUMO") && !(await service.Load()).List("invoicetoken").Any(t => t.S("visitId") == processing), "a ticket already on its way to the PAC prints without a QR and issues no token");
+        await Deny(() => Act("fiscal.token", J.O("visitId", processing)), "ya tiene solicitud fiscal", "nor can a QR be asked for it at the register");
+        var narrow = EscPosDocument.Render(J.O("type", "bill", "restaurantName", "Café La Niña", "visitId", "abcdef0123456789", "at", "2026-10-22T20:00:00Z", "invoiceUrl", "https://facturas.example.mx/invoice#" + new string('a', 64), "invoiceExpires", "2026-10-23T20:00:00Z", "snapshot", J.O("totals", J.O("gross", 18000, "discount", 0, "total", 18000, "paid", 18000, "balance", 0, "tax", 2483), "units", new JsonArray())), 32);
+        Check(EscPosReader.Has(narrow, 0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, 0x04) && EscPosReader.Has(narrow, QrPrint), "58 mm paper draws the QR with 4-dot modules");
+
         // The service a branch runs: it prints what appears and reports the printer in /api/state.
         var worker = new PrintWorker(service, driver, NullLogger<PrintWorker>.Instance);
         await worker.StartAsync(CancellationToken.None);

@@ -8,10 +8,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MesaNexo.Tests;
 // Facturama's API Web as FacturamaAdapter calls it: POST 3/cfdis stamps, GET cfdi/{id} consults, DELETE cfdi/{id} cancels.
 // Mode "reject" answers 400; "lost" stamps and then loses the answer, as a dropped connection; "no-uuid" stamps but
-// answers only the provider's Id, so the stamp is learned by consulting.
+// answers only the provider's Id, so the stamp is learned by consulting. GET cfdi/pdf/issued/{id} returns a 60 KiB PDF in base64.
 sealed class SimulatedFacturama(string user, string password): HttpMessageHandler {
     readonly Dictionary<string, (string Uuid, string Status)> cfdis = [];
-    public readonly List<JsonObject> Stamped = []; public int StampCalls, ConsultCalls, CancelCalls; public string Mode = "ok";
+    public readonly List<JsonObject> Stamped = []; public int StampCalls, ConsultCalls, CancelCalls, PdfCalls; public string Mode = "ok";
     static HttpResponseMessage Json(HttpStatusCode code, JsonObject body) => new(code) { Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json") };
     static JsonObject Cfdi(string id, string uuid, string status) => J.O("Id", id, "Status", status, "Complement", J.O("TaxStamp", J.O("Uuid", uuid)));
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) {
@@ -33,6 +33,7 @@ sealed class SimulatedFacturama(string user, string password): HttpMessageHandle
 
         }
         if (!cfdis.TryGetValue(id, out var cfdi)) return Json(HttpStatusCode.NotFound, J.O("Message", "No existe"));
+        if (request.Method == HttpMethod.Get && path == "/cfdi/pdf/issued/" + id) { PdfCalls++; var pdf = Encoding.ASCII.GetBytes("%PDF-1.4\n% CFDI " + cfdi.Uuid + "\n" + new string('x', 60 * 1024) + "\n%%EOF\n"); return Json(HttpStatusCode.OK, J.O("ContentEncoding", "base64", "ContentType", "pdf", "ContentLength", pdf.Length, "Content", Convert.ToBase64String(pdf))); }
         if (request.Method == HttpMethod.Get) { ConsultCalls++; return Json(HttpStatusCode.OK, Cfdi(id, cfdi.Uuid, cfdi.Status)); }
         if (request.Method == HttpMethod.Delete) { CancelCalls++; cfdis[id] = (cfdi.Uuid, "canceled"); return Json(HttpStatusCode.OK, J.O("Uuid", cfdi.Uuid, "Status", "canceled")); }
         return Json(HttpStatusCode.MethodNotAllowed, new());
@@ -195,6 +196,20 @@ static class FiscalTests {
         receiver["regime"] = "601";
         var normalized = await Act("fiscal.request", receiver);
         Check((await Fiscal(normalized.S("id"))).Obj("receiver").S("name") == "ESCUELA KEMPER URGATE", "the receiver's name is stored as the SAT prints it");
+        await Process();
+
+        // The manager downloads a stamped CFDI's PDF to print it or send it on; it comes from Facturama and is not stored.
+        await Deny(() => service.FiscalPdf(token, transfer), "Facturama no está configurado", "without Facturama there is no PDF to download");
+        service.UseCfdiPdf(pac);
+        var revision = (await service.Load()).Meta.L("revision");
+        var download = await service.FiscalPdf(token, transfer);
+        var pdfBytes = Convert.FromBase64String(download.S("content"));
+        Check(pdfBytes.AsSpan(0, 5).SequenceEqual("%PDF-"u8) && Encoding.ASCII.GetString(pdfBytes).Contains((await Fiscal(transfer)).S("sandboxUuid")) && download.L("bytes") == pdfBytes.Length && download.S("fileName") == "CFDI-" + (await Fiscal(transfer)).S("folio") + ".pdf" && download.B("sandbox") && facturama.PdfCalls == 1, "a manager downloads the stamped CFDI's PDF from Facturama");
+        Check(pdfBytes.Length > 40 * 1024 && (await service.Load()).Meta.L("revision") == revision && !(await Fiscal(transfer)).ContainsKey("pdf"), "the PDF, larger than a 40 KiB record, is not written to the store");
+        Check((await service.FiscalPdf(token, first)).L("bytes") > 0 && facturama.PdfCalls == 2, "a cancelled CFDI's PDF can still be downloaded, each time from Facturama");
+        var unstamped = await Request(await Ticket());
+        await Deny(() => service.FiscalPdf(token, unstamped), "Sólo un CFDI timbrado", "a request not yet stamped has no PDF");
+        await Deny(() => pac.Pdf("no-existe"), "no tiene ese CFDI", "an id Facturama does not know is reported, not retried");
         await Process();
 
         // Sellos sent from Culinary Dueño: checked against the license's RFC, loaded into the PAC and never stored.

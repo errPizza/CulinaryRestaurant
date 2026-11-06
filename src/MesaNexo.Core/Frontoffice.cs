@@ -63,6 +63,8 @@ public sealed partial class Restaurant {
         foreach (var linked in v.A("linkedTableIds").Strings()) Release(s, linked);
         QueueConsumption(s, v);
         LoyaltyEarn(s, v);
+        // With a self-invoice portal the settled ticket is printed with its QR; the token is issued when it prints.
+        if (s.Meta.S("invoicePortal") != "") Add(s, "printjob", J.O("type", "bill", "visitId", id, "status", "pending", "at", J.Now(), "invoiceQr", true, "snapshot", BillSnapshot(s, v)));
 
     }
     // A counter sale is all or nothing: a declined or silent terminal leaves no sale behind.

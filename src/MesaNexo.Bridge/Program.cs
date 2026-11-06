@@ -205,6 +205,8 @@ public sealed class BridgeHost(ISecureVault vault): IDisposable {
                 return await Session.VerifyAudit();
             case "preview":
                 return await Session.Preview(a.S("visitId"));
+            case "fiscal.pdf":
+                return await Session.FiscalPdf(a.S("id"));
             case "motion.get":
                 return J.O("reduced", await vault.Read("motion.reduced") == "true");
             case "motion.set":

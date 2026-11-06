@@ -32,6 +32,17 @@ public sealed partial class Restaurant {
         return requests.Any(x => !FiscalClosed.Contains(x.S("status"))) ? "processing" : "none";
 
     }
+    // A one-use self-invoice link for a settled ticket, valid 24 hours; only its hash is stored. Null without a portal, or
+    // when the ticket is invoiced or on its way to the PAC: then the customer asks at the register instead.
+    public JsonObject? InvoiceLink(BranchState s, JsonObject v) {
+
+        if (s.Meta.S("invoicePortal") == "" || v.S("status") != "closed" || InvoiceStatus(s, v) != "none") return null;
+        var token = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
+        var expires = DateTimeOffset.UtcNow.AddHours(24).ToString("O");
+        Add(s, "invoicetoken", J.O("tokenHash", J.Hash(token), "visitId", v.S("id"), "expires", expires, "used", false, "ticketSnapshot", J.O("totals", Totals(s, v), "closedAt", v.S("closedAt"))));
+        return J.O("url", s.Meta.S("invoicePortal") + "/invoice#" + token, "expires", expires);
+
+    }
     bool TryFiscal(BranchState s, JsonObject u, string type, JsonObject p, out JsonObject result) {
 
         result = new();
@@ -65,10 +76,7 @@ public sealed partial class Restaurant {
         if (type == "fiscal.token") {
 
             Need(s.Meta.S("invoicePortal") != "", "Configura el portal público separado");
-            var token = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
-            var expires = DateTimeOffset.UtcNow.AddHours(24).ToString("O");
-            Add(s, "invoicetoken", J.O("tokenHash", J.Hash(token), "visitId", v.S("id"), "expires", expires, "used", false, "ticketSnapshot", J.O("totals", Totals(s, v), "closedAt", v.S("closedAt"))));
-            result = J.O("url", s.Meta.S("invoicePortal") + "/invoice#" + token, "expires", expires);
+            result = InvoiceLink(s, v)!;
             return true;
 
         }

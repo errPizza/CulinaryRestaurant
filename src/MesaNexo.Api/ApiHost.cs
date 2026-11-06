@@ -70,6 +70,7 @@ public static class ApiHost {
         if (options.Credentials is not null) service.UseServerHealth("/run/culinaryos/status.json");
         if (licensing is not null) service.UseLicensing(licensing);
         if (pac is ICsdLoader loader) service.UseCsdLoader(loader);
+        if (pac is ICfdiPdfSource pdfs) service.UseCfdiPdf(pdfs);
 
         app.Use(async(ctx, next) => {
 
@@ -103,6 +104,7 @@ public static class ApiHost {
         app.MapPost("/api/faults", async(HttpContext c, CancellationToken ct) => await service.ReportFault(await Body(c, ct), ct)).RequireRateLimiting("faults");
         app.MapPost("/api/device/end-sessions", async(HttpContext c, CancellationToken ct) => await service.EndDeviceSessions(await Body(c, ct), ct)).RequireRateLimiting("login");
         app.MapGet("/api/preview/{id}", async(string id, HttpContext c, CancellationToken ct) => await service.Preview(Token(c), id, ct));
+        app.MapGet("/api/fiscal/{id}/pdf", async(string id, HttpContext c, CancellationToken ct) => await service.FiscalPdf(Token(c), id, ct));
         app.MapGet("/api/reports", async(HttpContext c, CancellationToken ct) => await service.Report(Token(c), c.Request.Query["from"], c.Request.Query["until"], c.Request.Query["after"], ct));
         app.MapGet("/api/audit/verify", async(HttpContext c, CancellationToken ct) => await service.VerifyAudit(Token(c), ct));
         app.MapGet("/api/state", async(HttpContext c, CancellationToken ct) => await service.State(Token(c), ct, c.Request.Query.TryGetValue("since", out var since) ? since.ToString(): null));

@@ -116,6 +116,7 @@ public sealed partial class NativeSession: IDisposable {
     public async Task<JsonObject> CloseForUpdate(CancellationToken ct = default) => await Request(HttpMethod.Post, "api/updates/close-sessions", [], ct);
     public async Task<JsonObject> VerifyAudit(CancellationToken ct = default) => await Request(HttpMethod.Get, "api/audit/verify", null, ct);
     public async Task<JsonObject> Preview(string visit, CancellationToken ct = default) => await Request(HttpMethod.Get, "api/preview/" + Uri.EscapeDataString(visit), null, ct);
+    public async Task<JsonObject> FiscalPdf(string fiscalId, CancellationToken ct = default) => await Request(HttpMethod.Get, "api/fiscal/" + Uri.EscapeDataString(fiscalId) + "/pdf", null, ct);
     // The branch server sends only what changed since the state held here; callers always get a whole, private copy.
     JsonObject? held; string heldBase = ""; readonly SemaphoreSlim stateGate = new(1);
     async Task<JsonObject> Fetch(CancellationToken ct) {

@@ -8,6 +8,10 @@ public interface ICsdLoader {
     bool IsSandbox { get; }
     Task<PacResult> LoadCsd(byte[] certificate, byte[] privateKey, string password, CancellationToken ct = default);
 }
+// The PDF of a stamped CFDI, fetched from the PAC each time it is asked for and never stored in the branch.
+public interface ICfdiPdfSource {
+    Task<byte[]> Pdf(string providerId, CancellationToken ct = default);
+}
 public interface IPacAdapter {
     bool IsSandbox { get; }
     Task<PacResult> Stamp(JsonObject frozen, CancellationToken ct = default);
