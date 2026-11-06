@@ -23,6 +23,10 @@ def payload():
         (app + 'hardware-identity.py', text(DEPLOY / 'hardware-identity.py'), 0o644),
         (app + 'renew-tls.py', text(DEPLOY / 'renew-tls.py'), 0o644),
         (app + 'rotate-ca.py', text(DEPLOY / 'rotate-ca.py'), 0o644),
+        # The pair of servers: enabled only by `culinaryos-ha primary` or `standby`, never by installing.
+        (app + 'ha.py', text(DEPLOY / 'ha/ha.py'), 0o644),
+        ('usr/local/sbin/culinaryos-ha', text(DEPLOY / 'ha/culinaryos-ha'), 0o755),
+        ('etc/systemd/system/culinary-ha-watch.service', text(DEPLOY / 'ha/culinary-ha-watch.service'), 0o644),
         ('usr/local/lib/culinary-update/apply.py', text(DEPLOY / 'update/apply.py'), 0o755),
         ('etc/systemd/system/culinary-update.path', text(DEPLOY / 'update/culinary-update.path'), 0o644),
         ('etc/systemd/system/culinary-update.service', text(DEPLOY / 'update/culinary-update.service'), 0o644),

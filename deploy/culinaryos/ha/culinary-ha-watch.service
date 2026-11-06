@@ -1,0 +1,26 @@
+[Unit]
+Description=Culinary Restaurant - vigilante del par de servidores
+After=postgresql.service
+ConditionPathExists=/etc/culinaryos/ha.json
+
+[Service]
+User=postgres
+Group=postgres
+ExecStart=/usr/bin/python3 /opt/culinaryos-app/ha.py watch
+RuntimeDirectory=culinaryos-ha
+RuntimeDirectoryMode=0755
+# A report that stops changing is how the backend notices a dead watcher.
+RuntimeDirectoryPreserve=yes
+Restart=always
+RestartSec=2s
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=
+MemoryMax=64M
+
+[Install]
+WantedBy=multi-user.target

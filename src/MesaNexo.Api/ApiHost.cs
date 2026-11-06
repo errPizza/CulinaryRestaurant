@@ -67,7 +67,7 @@ public static class ApiHost {
         service.UseFaults(faults);
         service.UseStats(new StatsLedger(options.LabDirectory is { } statsDirectory ? Path.Combine(statsDirectory, "owner-stats.json") : StatsLedger.DefaultFile));
         service.UseCertificate(cert.NotAfter);
-        if (options.Credentials is not null) service.UseServerHealth("/run/culinaryos/status.json");
+        if (options.Credentials is not null) service.UseServerHealth("/run/culinaryos/status.json", "/run/culinaryos-ha/status.json");
         if (licensing is not null) service.UseLicensing(licensing);
         if (pac is ICsdLoader loader) service.UseCsdLoader(loader);
         if (pac is ICfdiPdfSource pdfs) service.UseCfdiPdf(pdfs);

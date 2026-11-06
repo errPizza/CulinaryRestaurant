@@ -168,9 +168,23 @@ static class CheckpointTests {
         await File.WriteAllTextAsync(report, "{no es json");
         Check(BranchService.ReadServerHealth(report, checkedAt).Count == 1, "an unreadable report is an alert, not a failure");
         Check(BranchService.ReadServerHealth(Path.Combine(folder, "no-existe.json"), checkedAt).Count == 0, "outside CulinaryOS there is no report to read");
+        // The pair of servers: culinaryos-ha's watcher on the primary.
+        var pair = Path.Combine(folder, "ha-status.json");
+        string Pair(string state, DateTimeOffset generated, string role = "primary") => J.O("role", role, "state", state, "generated_at", generated.ToUnixTimeSeconds()).ToJsonString();
+        Check(BranchService.ReadPairHealth(Path.Combine(folder, "sin-par.json"), checkedAt).Count == 0, "a server without a standby says nothing");
+        await File.WriteAllTextAsync(pair, Pair("sync", checkedAt));
+        Check(BranchService.ReadPairHealth(pair, checkedAt).Count == 0, "a standby up to date is not an alert");
+        await File.WriteAllTextAsync(pair, Pair("degraded", checkedAt));
+        Check(BranchService.ReadPairHealth(pair, checkedAt).Single().S("message").Contains("nadie toma su lugar"), "a missing standby reaches the manager");
+        await File.WriteAllTextAsync(pair, Pair("sync", checkedAt.AddMinutes(-2)));
+        Check(BranchService.ReadPairHealth(pair, checkedAt).Single().S("message").Contains("dejó de informar"), "a watcher that stopped writing is an alert");
+        await File.WriteAllTextAsync(pair, Pair("disconnected", checkedAt, "standby"));
+        Check(BranchService.ReadPairHealth(pair, checkedAt).Count == 0, "the standby's own report is not the primary's business");
         await File.WriteAllTextAsync(report, Health(checkedAt));
-        service.UseServerHealth(report);
-        Check((await service.State(token)).Obj("connection").A("server").Objects().Any(x => x.S("message").Contains("disco anuncia")), "the manager's state carries the alert");
+        await File.WriteAllTextAsync(pair, Pair("degraded", checkedAt));
+        service.UseServerHealth(report, pair);
+        var server = (await service.State(token)).Obj("connection").A("server").Objects().ToArray();
+        Check(server.Any(x => x.S("message").Contains("disco anuncia")) && server.Any(x => x.S("message").Contains("nadie toma su lugar")), "the manager's state carries the alerts");
 
     }
 }

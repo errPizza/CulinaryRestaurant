@@ -48,8 +48,8 @@ public sealed partial class BranchService {
     }
     // One failed upload is the next one's job; an hour of them means the recovery point is slipping.
     public JsonObject? BackupAlert(DateTimeOffset now) => backupFailing is { } since && now - since >= TimeSpan.FromHours(1) ? J.O("level", now - since >= TimeSpan.FromHours(4) ? "critical" : "notice", "message", "La copia externa de la sucursal no se ha podido enviar desde hace más de " + (int)(now - since).TotalHours + " h. Revisa el internet del servidor; si sigue, llama a soporte.") : null;
-    string? healthFile; JsonArray healthAlerts = []; DateTimeOffset healthRead = DateTimeOffset.MinValue;
-    public void UseServerHealth(string file) { healthFile = file; healthRead = DateTimeOffset.MinValue; }
+    string? healthFile, pairFile; JsonArray healthAlerts = []; DateTimeOffset healthRead = DateTimeOffset.MinValue;
+    public void UseServerHealth(string file, string? pair = null) { healthFile = file; pairFile = pair; healthRead = DateTimeOffset.MinValue; }
     static readonly string[] WatchedChecks = ["COS-DISK", "COS-READONLY", "COS-SMART", "COS-TEMPERATURE", "COS-SERVICES", "COS-BACKUP"];
     // What the machine says about itself, from culinaryos-health. A report that stopped arriving is itself an alert.
     public static JsonArray ReadServerHealth(string? file, DateTimeOffset now) {
@@ -66,6 +66,23 @@ public sealed partial class BranchService {
         return alerts;
 
     }
+    // From culinaryos-ha's watcher, which rewrites it every second. No file: this server has no standby, and says nothing.
+    public static JsonArray ReadPairHealth(string? file, DateTimeOffset now) {
+
+        var alerts = new JsonArray();
+        if (file is null || !File.Exists(file)) return alerts;
+        try {
+
+            var status = JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+            if (status.S("role") != "primary") return alerts;
+            if (status["generated_at"]?.GetValue<double>() is not { } at || now.ToUnixTimeSeconds() - at > 60) alerts.Add(J.O("level", "notice", "message", "El vigilante del equipo de respaldo dejó de informar. Llama a soporte."));
+            else if (status.S("state") == "degraded") alerts.Add(J.O("level", "notice", "message", "El equipo de respaldo no responde: si este servidor falla, nadie toma su lugar. Revisa que el respaldo esté encendido y conectado."));
+            else if (status.S("state") == "error") alerts.Add(J.O("level", "notice", "message", "El vigilante del equipo de respaldo no puede leer la base. Llama a soporte."));
+
+        } catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException) { alerts.Add(J.O("level", "notice", "message", "No se pudo leer el estado del equipo de respaldo. Llama a soporte.")); }
+        return alerts;
+
+    }
     // The outbox as the manager reads it. Nothing in it is dropped; these say when a person has to act.
     public static JsonObject? OutboxAlert(JsonObject status) => status["alert"]?.GetValue<string>() switch {
         "blocked" => J.O("level", "critical", "message", "Sincronización detenida: la central rechaza un evento (" + status.Obj("head").S("error") + ") tras " + status.Obj("head").L("attempts") + " intentos y los " + status.L("pending") + " pendientes esperan detrás de él. No se pierde nada; llama a soporte para revisarlo."),
@@ -79,7 +96,7 @@ public sealed partial class BranchService {
 
         var now = DateTimeOffset.UtcNow;
         // State is polled every few seconds; the report only changes every two minutes.
-        if (now - healthRead > TimeSpan.FromMinutes(1)) { healthAlerts = ReadServerHealth(healthFile, now); healthRead = now; }
+        if (now - healthRead > TimeSpan.FromMinutes(1)) { healthAlerts = ReadServerHealth(healthFile, now); foreach (var pair in ReadPairHealth(pairFile, now)) healthAlerts.Add(pair!.DeepClone()); healthRead = now; }
         var alerts = (JsonArray)healthAlerts.DeepClone();
         if (BackupAlert(now) is { } backup) alerts.Add(backup);
         if (inventoryAlert is { } inventory) alerts.Add(inventory.DeepClone());
