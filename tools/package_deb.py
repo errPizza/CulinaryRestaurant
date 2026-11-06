@@ -49,7 +49,7 @@ def main():
     for size in (16, 24, 32, 48, 64, 128, 256):
         entries.append((f'usr/share/icons/hicolor/{size}x{size}/apps/culinary-restaurant.png', (ROOT / f'branding/icons/icon-{size}.png').read_bytes(), 0o644))
     entries.append(('usr/share/icons/hicolor/512x512/apps/culinary-restaurant.png', (ROOT / 'branding/culinary-restaurant.png').read_bytes(), 0o644))
-    control = 'Package: mesanexo-native\nVersion: 0.3.0\nArchitecture: amd64\nMaintainer: PizzaDev (Culinary)\nSection: misc\nPriority: optional\nDepends: libc6 (>= 2.36), libgcc-s1, libstdc++6, zlib1g, libssl3t64, libicu76, libx11-6, libice6, libsm6, libfontconfig1, libsecret-tools, gnome-keyring, dbus-user-session\nDescription: Culinary Restaurant native development candidate for CulinaryOS\n Does not provision keys, reset data, register services or change networking.\n'
+    control = 'Package: mesanexo-native\nVersion: 0.3.0\nArchitecture: amd64\nMaintainer: PizzaDev (Culinary Services)\nSection: misc\nPriority: optional\nDepends: libc6 (>= 2.36), libgcc-s1, libstdc++6, zlib1g, libssl3t64, libicu76, libx11-6, libice6, libsm6, libfontconfig1, libsecret-tools, gnome-keyring, dbus-user-session\nDescription: Culinary Restaurant native development candidate for CulinaryOS\n Does not provision keys, reset data, register services or change networking.\n'
     md5 = ''.join(hashlib.md5(data).hexdigest() + '  ' + name + '\n' for name, data, _ in sorted(entries))
     target = ROOT / 'artifacts' / 'CulinaryRestaurant-0.3.0-dev-amd64.deb'
     target.write_bytes(ar([('debian-binary', b'2.0\n'), ('control.tar.gz', tarball([('control', control.encode(), 0o644), ('md5sums', md5.encode(), 0o644)])), ('data.tar.gz', tarball(entries))]))

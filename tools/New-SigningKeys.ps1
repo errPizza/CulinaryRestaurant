@@ -1,4 +1,4 @@
-﻿# Crea las llaves de firma de Culinary (desarrollador PizzaDev) fuera del repositorio. No sobrescribe ninguna:
+# Crea las llaves de firma de Culinary (desarrollador PizzaDev) fuera del repositorio. No sobrescribe ninguna:
 # perder la de Android impide actualizar la app ya instalada. Ver docs/FIRMA.md.
 param([string]$Directory=(Join-Path $env:USERPROFILE '.culinary-firma'))
 $ErrorActionPreference='Stop'
@@ -13,7 +13,7 @@ function RandomPassword($name){
 $windows=Join-Path $Directory 'culinary-windows.pfx'
 if(-not(Test-Path $windows)){
     $pass=RandomPassword 'windows'
-    & $keytool -genkeypair -alias culinary -keyalg RSA -keysize 3072 -sigalg SHA256withRSA -validity 1825 -dname 'CN=Culinary, OU=PizzaDev, O=Culinary, C=MX' -ext 'KU=digitalSignature' -ext 'EKU=codeSigning' -storetype PKCS12 -keystore $windows -storepass $pass -keypass $pass
+    & $keytool -genkeypair -alias culinary -keyalg RSA -keysize 3072 -sigalg SHA256withRSA -validity 1825 -dname 'CN=Culinary Services, OU=PizzaDev, O=Culinary Services, C=MX' -ext 'KU=digitalSignature' -ext 'EKU=codeSigning' -storetype PKCS12 -keystore $windows -storepass $pass -keypass $pass
     if($LASTEXITCODE){throw 'No se pudo crear el certificado de Windows.'}
     & $keytool -exportcert -rfc -alias culinary -keystore $windows -storepass $pass -file (Join-Path $Directory 'culinary-windows.cer')
     if($LASTEXITCODE){throw 'No se pudo exportar el certificado de Windows.'}
@@ -21,7 +21,7 @@ if(-not(Test-Path $windows)){
 $android=Join-Path $Directory 'culinary-android.jks'
 if(-not(Test-Path $android)){
     $pass=RandomPassword 'android'
-    & $keytool -genkeypair -alias culinary -keyalg RSA -keysize 4096 -sigalg SHA256withRSA -validity 10950 -dname 'CN=PizzaDev, O=Culinary, C=MX' -storetype PKCS12 -keystore $android -storepass $pass -keypass $pass
+    & $keytool -genkeypair -alias culinary -keyalg RSA -keysize 4096 -sigalg SHA256withRSA -validity 10950 -dname 'CN=PizzaDev, O=Culinary Services, C=MX' -storetype PKCS12 -keystore $android -storepass $pass -keypass $pass
     if($LASTEXITCODE){throw 'No se pudo crear la llave de Android.'}
 }
 $gnupg=Join-Path $Directory 'gnupg'
@@ -31,9 +31,9 @@ if(-not(Test-Path $gnupg)){
     $gpg=Join-Path (Split-Path (Split-Path (Get-Command git).Source -Parent) -Parent) 'usr\bin\gpg.exe'
     # Git's gpg is an MSYS program: it only understands POSIX paths.
     $posix=('/'+$Directory.Replace(':','').Replace([char]92,[char]47))
-    & $gpg --homedir "$posix/gnupg" --batch --pinentry-mode loopback --passphrase-file "$posix/linux.pass" --quick-generate-key 'Culinary (PizzaDev)' rsa4096 sign 10y
+    & $gpg --homedir "$posix/gnupg" --batch --pinentry-mode loopback --passphrase-file "$posix/linux.pass" --quick-generate-key 'Culinary Services (PizzaDev)' rsa4096 sign 10y
     if($LASTEXITCODE){throw 'No se pudo crear la llave de Linux.'}
-    & $gpg --homedir "$posix/gnupg" --batch --armor --output "$posix/culinary-linux.asc" --export 'Culinary (PizzaDev)'
+    & $gpg --homedir "$posix/gnupg" --batch --armor --output "$posix/culinary-linux.asc" --export 'Culinary Services (PizzaDev)'
     if($LASTEXITCODE){throw 'No se pudo exportar la llave de Linux.'}
 }
 Get-ChildItem $Directory -File | Select-Object Name,Length

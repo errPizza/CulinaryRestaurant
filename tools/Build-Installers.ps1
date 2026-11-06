@@ -42,8 +42,9 @@ if($Android){
         # Untrimmed: the Release APK cannot be run here, so it keeps the same assemblies the Debug build exercised.
         dotnet publish src/MesaNexo.Android -c Release -f net10.0-android -o '.lab/android-release' -p:PublishTrimmed=false -p:RunAOTCompilation=false -p:AndroidKeyStore=true "-p:AndroidSigningKeyStore=$(Join-Path $Directory 'culinary-android.jks')" -p:AndroidSigningKeyAlias=culinary -p:AndroidSigningStorePass=env:CULINARY_ANDROID_PASS -p:AndroidSigningKeyPass=env:CULINARY_ANDROID_PASS "-p:AndroidSdkDirectory=$(Join-Path $env:LOCALAPPDATA 'Android\Sdk')" "-p:JavaSdkDirectory=$env:JAVA_HOME"
         if($LASTEXITCODE){throw 'Fallo Android.'}
+        # MSBuild only signs with one key; re-sign with the rotation to the Culinary Services key (tools/Sign-Apk.ps1).
         $apk=Get-ChildItem '.lab/android-release' -Filter '*-Signed.apk' | Select-Object -First 1
-        Copy-Item $apk.FullName (Join-Path $out "CulinaryRestaurant-$version-android.apk") -Force
+        & (Join-Path $PSScriptRoot 'Sign-Apk.ps1') $apk.FullName (Join-Path $out "CulinaryRestaurant-$version-android.apk") -Directory $Directory
     }finally{Pop-Location;Remove-Item Env:\CULINARY_ANDROID_PASS}
 }
 Get-ChildItem $out | Select-Object Name,Length

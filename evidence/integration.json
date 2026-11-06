@@ -600,11 +600,11 @@
     "result": "passed"
   },
   {
-    "test": "central no longer serves provider route api/backups/b51e9b4f656e46b286c67b3c45a5c281",
+    "test": "central no longer serves provider route api/backups/dcbf32c3c8e246d9b778b8ac3d1933b6",
     "result": "passed"
   },
   {
-    "test": "central no longer serves provider route api/operations/2e1c177696ae41fda9ea2d46b7ec1d6d",
+    "test": "central no longer serves provider route api/operations/75d082571a174a9491ee849981e2dcea",
     "result": "passed"
   },
   {
@@ -1296,7 +1296,27 @@
     "result": "passed"
   },
   {
-    "test": "the manager\u0027s state carries the alert",
+    "test": "a server without a standby says nothing",
+    "result": "passed"
+  },
+  {
+    "test": "a standby up to date is not an alert",
+    "result": "passed"
+  },
+  {
+    "test": "a missing standby reaches the manager",
+    "result": "passed"
+  },
+  {
+    "test": "a watcher that stopped writing is an alert",
+    "result": "passed"
+  },
+  {
+    "test": "the standby\u0027s own report is not the primary\u0027s business",
+    "result": "passed"
+  },
+  {
+    "test": "the manager\u0027s state carries the alerts",
     "result": "passed"
   },
   {
@@ -4444,6 +4464,76 @@
     "printer": "simulated ESC/POS over TCP; no hardware"
   },
   {
+    "test": "the bill printed before payment carries no self-invoice QR",
+    "result": "passed",
+    "printer": "simulated ESC/POS over TCP; no hardware"
+  },
+  {
+    "test": "without a self-invoice portal settling an account prints nothing new",
+    "result": "passed",
+    "printer": "simulated ESC/POS over TCP; no hardware"
+  },
+  {
+    "test": "settling an account queues its ticket; the token waits for the printer",
+    "result": "passed",
+    "printer": "simulated ESC/POS over TCP; no hardware"
+  },
+  {
+    "test": "the settled ticket is printed",
+    "result": "passed",
+    "printer": "simulated ESC/POS over TCP; no hardware"
+  },
+  {
+    "test": "the QR is drawn with GS ( k model 2, 6-dot modules on 80 mm paper and error correction M",
+    "result": "passed",
+    "printer": "simulated ESC/POS over TCP; no hardware"
+  },
+  {
+    "test": "the QR stores the portal\u0027s self-invoice URL with a 256-bit token",
+    "result": "passed",
+    "printer": "simulated ESC/POS over TCP; no hardware"
+  },
+  {
+    "test": "the ticket explains the QR and its validity, shows the payment and cuts",
+    "result": "passed",
+    "printer": "simulated ESC/POS over TCP; no hardware"
+  },
+  {
+    "test": "the printed token is stored only as its hash, unused and valid 24 hours",
+    "result": "passed",
+    "printer": "simulated ESC/POS over TCP; no hardware"
+  },
+  {
+    "test": "the token itself is not kept in the print job",
+    "result": "passed",
+    "printer": "simulated ESC/POS over TCP; no hardware"
+  },
+  {
+    "test": "a settled ticket cut short is left uncertain",
+    "result": "passed",
+    "printer": "simulated ESC/POS over TCP; no hardware"
+  },
+  {
+    "test": "its authorized reprint carries a QR of its own",
+    "result": "passed",
+    "printer": "simulated ESC/POS over TCP; no hardware"
+  },
+  {
+    "test": "a ticket already on its way to the PAC prints without a QR and issues no token",
+    "result": "passed",
+    "printer": "simulated ESC/POS over TCP; no hardware"
+  },
+  {
+    "test": "nor can a QR be asked for it at the register",
+    "result": "passed",
+    "printer": "simulated ESC/POS over TCP; no hardware"
+  },
+  {
+    "test": "58 mm paper draws the QR with 4-dot modules",
+    "result": "passed",
+    "printer": "simulated ESC/POS over TCP; no hardware"
+  },
+  {
     "test": "print service prints new jobs without being asked",
     "result": "passed",
     "printer": "simulated ESC/POS over TCP; no hardware"
@@ -4660,6 +4750,36 @@
   },
   {
     "test": "the receiver\u0027s name is stored as the SAT prints it",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "without Facturama there is no PDF to download",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "a manager downloads the stamped CFDI\u0027s PDF from Facturama",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "the PDF, larger than a 40 KiB record, is not written to the store",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "a cancelled CFDI\u0027s PDF can still be downloaded, each time from Facturama",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "a request not yet stamped has no PDF",
+    "result": "passed",
+    "pac": "simulated Facturama API Web; no network"
+  },
+  {
+    "test": "an id Facturama does not know is reported, not retried",
     "result": "passed",
     "pac": "simulated Facturama API Web; no network"
   },

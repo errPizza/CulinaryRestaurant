@@ -46,7 +46,7 @@ def main():
     entries = payload()
     if any(data[:4] != b'\x7fELF' for path, data, _ in entries if path.endswith(('MesaNexo.Api', 'culinary-restaurant', 'culinary-bridge'))):
         raise ValueError('Expected Linux executables')
-    control = f'Package: culinary-restaurant\nVersion: {version}\nArchitecture: amd64\nMaintainer: PizzaDev (Culinary)\nSection: misc\nPriority: optional\nDescription: Culinary Restaurant for CulinaryOS\n Replaces the application files. Does not touch branch data, keys or networking.\n'
+    control = f'Package: culinary-restaurant\nVersion: {version}\nArchitecture: amd64\nMaintainer: PizzaDev (Culinary Services)\nSection: misc\nPriority: optional\nDescription: Culinary Restaurant for CulinaryOS\n Replaces the application files. Does not touch branch data, keys or networking.\n'
     md5 = ''.join(hashlib.md5(data).hexdigest() + '  ' + name + '\n' for name, data, _ in sorted(entries))
     # dpkg creates no parents on its own: each directory needs its entry.
     folders = {parent.as_posix() + '/' for path, _, _ in entries for parent in Path(path).parents if parent != Path('.')}
