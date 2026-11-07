@@ -2,11 +2,15 @@
 """Root side of a Linux update. The kiosk user only drops files: nothing is installed until the installed backend
 verifies the signed offer against a private copy of the package.
 
-An update is a journaled transaction in state.json: received → verified → snapshot → installing → installed → healthy.
-Before dpkg touches anything the installed application is copied aside. A dpkg that fails, a power cut in the middle
+An update is a journaled transaction in state.json: received → verified → backup → snapshot → installing → installed →
+healthy; a step that fails before dpkg ends it as failed, so no screen waits for it. Before dpkg touches anything the branch
+database is dumped (the last three dumps are kept, and nothing installs without room for one) and the installed
+application is copied aside. A dpkg that fails, a power cut in the middle
 (--recover, at boot before the backend) or a backend that does not come up healthy after the reboot (--health) puts
 that copy back, so the branch always boots a version that worked. The package carries no branch data and no schema
-migration (that is --upgrade-schema, run by hand with its own pg_dump), so going back to the old binaries is safe."""
+migration (that is --upgrade-schema, run by hand with its own pg_dump), so going back to the old binaries is safe and the
+dump is never restored on its own: sales made after it would be lost. Support restores it with pg_restore if ever needed.
+The state file is readable by the kiosk and the backend, which show the progress on every screen of the branch."""
 import json
 import os
 from pathlib import Path
@@ -28,6 +32,11 @@ SITE = Path('/etc/culinaryos/site.json')
 HEALTH = 'https://127.0.0.1:8443/api/health'
 CA = Path('/etc/culinaryos/restaurant-ca.crt')
 HEALTH_SECONDS = 600
+BACKUPS = SPOOL / 'backups'
+KEEP_BACKUPS = 3
+DATABASE = 'culinaryos'
+# Stages that fail before dpkg touches anything: the update simply did not happen.
+BEFORE_INSTALL = ('received', 'verified', 'backup', 'snapshot')
 
 def run(args, **kwargs):
     return subprocess.run(args, check=True, **kwargs)
@@ -59,6 +68,31 @@ def take(name):
         with (WORK / name).open('wb') as target:
             shutil.copyfileobj(file, target)
     return WORK / name
+
+def database_bytes():
+    out = subprocess.run(['runuser', '-u', 'postgres', '--', 'psql', '-tAc', "SELECT pg_database_size('" + DATABASE + "')"], check=True, capture_output=True, text=True, timeout=60).stdout
+    return int(out.strip() or 0)
+
+def backup(version):
+    """A custom-format dump of the branch database, written aside and renamed only when complete."""
+    BACKUPS.mkdir(mode=0o700, exist_ok=True)
+    need = database_bytes() * 2 + 64 * 1024 * 1024
+    free = shutil.disk_usage(BACKUPS).free
+    if free < need:
+        raise RuntimeError('Sin espacio para respaldar la base antes de actualizar: hacen falta %d MB y hay %d MB libres' % (need // 2**20, free // 2**20))
+    name = 'culinaryos-antes-de-%s-%s.dump' % (version or 'actualizar', time.strftime('%Y%m%d-%H%M%S'))
+    temp = BACKUPS / (name + '.partial')
+    with temp.open('wb') as out:
+        os.chmod(temp, 0o600)
+        run(['runuser', '-u', 'postgres', '--', 'pg_dump', '--format=custom', '--no-owner', '--dbname', DATABASE], stdout=out, timeout=1800)
+        out.flush()
+        os.fsync(out.fileno())
+    os.replace(temp, BACKUPS / name)
+    for old in sorted((f for f in BACKUPS.iterdir() if f.suffix == '.dump'), key=lambda f: (f.stat().st_mtime, f.name))[:-KEEP_BACKUPS]:
+        old.unlink()
+    for partial in BACKUPS.glob('*.partial'):
+        partial.unlink()
+    return BACKUPS / name
 
 def snapshot():
     temp = PREVIOUS.with_name('previous.new')
@@ -101,18 +135,42 @@ def main():
         finally:
             for entry in INBOX.iterdir():
                 entry.unlink()
-        mark('received', offer=json.loads(offer.read_text(encoding='utf-8')).get('version', ''))
+        version = offered(offer)
+        mark('received', offer=version, reason='')
         site = json.loads(SITE.read_text())['site_id']
+        # The installed backend refuses a version that is not newer than itself; nothing below runs then.
         run([API, '--verify-update', str(offer), '--package', str(package), '--site', site], timeout=300)
         mark('verified')
+        mark('backup', file=str(backup(version)))
         snapshot()
         mark('snapshot')
         mark('installing')
         install(package)
         # The package's postinst reboots; --health decides after that boot whether it stays.
         mark('installed')
+    except Exception as error:
+        if state()['stage'] in BEFORE_INSTALL:
+            mark('failed', reason=failure(error))
+        raise
     finally:
         shutil.rmtree(WORK, ignore_errors=True)
+
+def offered(offer):
+    """The version the signed offer carries, for the screens; the backend checks the signature itself."""
+    try:
+        data = json.loads(offer.read_text(encoding='utf-8'))
+        if data.get('version'):
+            return data['version']
+        import base64
+        payload = data['update'].split('.')[1]
+        return json.loads(base64.urlsafe_b64decode(payload + '=' * (-len(payload) % 4))).get('version', '')
+    except (KeyError, IndexError, ValueError):
+        return ''
+
+def failure(error):
+    if isinstance(error, subprocess.CalledProcessError) and error.cmd and error.cmd[0] == API:
+        return 'La actualización no pasó la comprobación: firma, paquete o versión no más nueva que la instalada'
+    return str(error) or error.__class__.__name__
 
 def recover():
     """At boot, before the backend: an update cut off while dpkg was running is finished or undone."""

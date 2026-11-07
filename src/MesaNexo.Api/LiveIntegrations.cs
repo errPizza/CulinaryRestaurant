@@ -34,6 +34,8 @@ public sealed class IntegrationConfig {
 
     }
     public JsonObject? File(string key) => files.GetValueOrDefault(key);
+    // Credentials from the vault, for a provider without a file of its own.
+    public void Fill(string key, JsonObject credentials) { files[key] = credentials; Status[key] = "sin credenciales"; }
     // Builds a provider's service from its file; a validation error marks the provider instead of failing the startup.
     public T? Use<T>(string key, Func<JsonObject, T> build) where T : class {
 

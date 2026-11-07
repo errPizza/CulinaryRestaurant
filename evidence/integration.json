@@ -600,11 +600,11 @@
     "result": "passed"
   },
   {
-    "test": "central no longer serves provider route api/backups/dcbf32c3c8e246d9b778b8ac3d1933b6",
+    "test": "central no longer serves provider route api/backups/78bc08288e194c5cab4934413d5c1a9b",
     "result": "passed"
   },
   {
-    "test": "central no longer serves provider route api/operations/75d082571a174a9491ee849981e2dcea",
+    "test": "central no longer serves provider route api/operations/5fa91c75fba5437d82bdd592d9fffb95",
     "result": "passed"
   },
   {
@@ -3990,7 +3990,7 @@
     "pac": "synthetic; no network"
   },
   {
-    "test": "an expired CSD is refused before it reaches the PAC (El CSD venci\u00F3 el 2026-11-05; tramita uno nuevo en CertiSAT)",
+    "test": "an expired CSD is refused before it reaches the PAC (El CSD venci\u00F3 el 2026-11-06; tramita uno nuevo en CertiSAT)",
     "result": "passed",
     "pac": "synthetic; no network"
   },
@@ -5207,5 +5207,97 @@
     "test": "production Facturama e-mails the CFDI from api.facturama.mx",
     "result": "passed",
     "providers": "simulated HTTP APIs; no network"
+  },
+  {
+    "test": "a license signed before the list keeps every integration except the Delivery Hub platforms",
+    "result": "passed"
+  },
+  {
+    "test": "/api/state lists only the integrations the license includes",
+    "result": "passed"
+  },
+  {
+    "test": "an integration outside the license cannot be switched on (Tu licencia no incluye esta integraci\u00F3n; p\u00EDdela a Culinary)",
+    "result": "passed"
+  },
+  {
+    "test": "an integration the license dropped stops working even if it was on (Activa la simulaci\u00F3n de mapas en Integraciones)",
+    "result": "passed"
+  },
+  {
+    "test": "switching off an integration outside the license stays allowed",
+    "result": "passed"
+  },
+  {
+    "test": "without a vault the server says support must place the credentials (Este servidor no puede guardar credenciales; pide a soporte que las coloque)",
+    "result": "passed"
+  },
+  {
+    "test": "credentials for an integration outside the license are refused (Tu licencia no incluye esta integraci\u00F3n; p\u00EDdela a Culinary)",
+    "result": "passed"
+  },
+  {
+    "test": "credentials the provider\u0027s own builder rejects are refused before they are stored (Revisa los datos: Agrega al menos una terminal en terminals)",
+    "result": "passed"
+  },
+  {
+    "test": "only a manager enters credentials (Solo un gerente puede activar integraciones)",
+    "result": "passed"
+  },
+  {
+    "test": "nothing reaches the vault from a refused attempt",
+    "result": "passed"
+  },
+  {
+    "test": "the record keeps the mode and the last four characters, nothing more",
+    "result": "passed"
+  },
+  {
+    "test": "the vault opens what was saved under the branch keyring",
+    "result": "passed"
+  },
+  {
+    "test": "the vault file holds no readable secret",
+    "result": "passed"
+  },
+  {
+    "test": "the secret never enters the branch store or a client\u0027s state",
+    "result": "passed"
+  },
+  {
+    "test": "saving credentials asks the host to restart its live services",
+    "result": "passed"
+  },
+  {
+    "test": "the integration log records who saved credentials, without them",
+    "result": "passed"
+  },
+  {
+    "test": "a sealed file opens only for its site",
+    "result": "passed"
+  },
+  {
+    "test": "on start the vault fills the providers without a file of their own",
+    "result": "passed"
+  },
+  {
+    "test": "an update on its way is active, with the version it installs",
+    "result": "passed"
+  },
+  {
+    "test": "a stalled update stops covering the screens",
+    "result": "passed"
+  },
+  {
+    "test": "a rollback is reported with its reason",
+    "result": "passed"
+  },
+  {
+    "test": "old endings and an empty journal show nothing",
+    "result": "passed"
+  },
+  {
+    "test": "every terminal learns from the server that it is installing an update",
+    "result": "passed"
   }
 ]

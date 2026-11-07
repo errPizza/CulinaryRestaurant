@@ -1216,7 +1216,7 @@ a.ui-button{text-decoration:none}
 .integration-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px;margin:0 0 22px}
 .integration-card{display:flex;flex-direction:column;gap:10px;padding:18px 20px;transition:box-shadow var(--fast)}
 .integration-card.on{box-shadow:var(--e2),inset 0 0 0 1.5px color-mix(in srgb,var(--amber-bar) 55%,transparent)}
-.integration-card.live{box-shadow:var(--e2),inset 0 0 0 1.5px color-mix(in srgb,var(--green) 55%,transparent)}
+.integration-card.live{white-space:normal;box-shadow:var(--e2),inset 0 0 0 1.5px color-mix(in srgb,var(--green) 55%,transparent)}
 .integration-card .seg{align-self:flex-start}
 .integration-card header{display:flex;align-items:center;gap:12px}
 .integration-card header .w{flex:1;min-width:0}
@@ -1229,6 +1229,26 @@ a.ui-button{text-decoration:none}
 .integration-real summary{cursor:pointer;color:var(--faint);font-weight:600;width:fit-content}
 .integration-real span{display:block;margin-top:4px;line-height:1.45}
 .integration-card .row-actions{justify-content:flex-start;margin-top:auto;padding-top:4px}
+.integration-hint{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;align-self:center}
+.integrations-intro{cursor:default}
+.integrations-missing{display:flex;align-items:center;gap:8px;margin:0;color:var(--muted);font-size:12.5px}
+.setup-dialog{width:min(640px,100%)}
+.setup-progress{display:flex;gap:6px;list-style:none;margin:0 0 16px;padding:0;counter-reset:step}
+.setup-progress li{flex:1;counter-increment:step;padding:8px 0 0;border-top:3px solid var(--line);color:var(--faint);font-size:12px;font-weight:600}
+.setup-progress li::before{content:counter(step) ". "}
+.setup-progress li.done{border-color:color-mix(in srgb,var(--green) 70%,transparent);color:var(--muted)}
+.setup-progress li.current{border-color:var(--accent);color:var(--ink)}
+.setup-section{margin:0 0 14px}
+.setup-section h3{margin:0 0 6px;font-size:13.5px;color:var(--ink)}
+.setup-section ul,.setup-section ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;color:var(--text);font-size:13px;line-height:1.5}
+.setup-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:12px}
+.setup-fields>label{display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:12.5px;font-weight:600;min-width:0}
+.setup-fields>label small{font-weight:400;color:var(--faint);line-height:1.4}
+.setup-fields>label.check{flex-direction:row;align-items:center;gap:10px;align-self:end;min-height:42px}
+.setup-fields>label.check input{width:18px;height:18px;accent-color:var(--accent-bottom)}
+.setup-fields textarea{grid-column:1/-1;min-height:76px;resize:vertical;font:inherit}
+.setup-done{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border-radius:12px;background:var(--green-bg);color:var(--text);font-size:13px;line-height:1.5;margin-bottom:14px}
+.setup-done b{color:var(--green);font-size:14px}
 .g.start{align-items:start}
 .rows .r.outbox{align-items:flex-start}
 .r.outbox .w span{white-space:normal;line-height:1.45}
@@ -1276,3 +1296,22 @@ a.ui-button{text-decoration:none}
 .update-notice .text-button+.dismiss-notice{margin-left:4px}
 /* What is left when the window itself fails: no shell, so it carries its own page. */
 .fault-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;background:var(--canvas);color:var(--text);text-align:center}
+/* Full-screen update progress. No animation: WebKitGTK flashes the kiosk when one ends. */
+.update-screen{position:fixed;inset:0;z-index:9000;display:grid;place-items:center;padding:24px 16px;background:var(--canvas);overflow:auto}
+.update-panel{width:min(520px,100%);display:flex;flex-direction:column;align-items:flex-start;gap:12px;padding:28px;border-radius:18px;background:var(--surface);box-shadow:var(--e3)}
+.update-mark{display:grid;place-items:center;width:48px;height:48px;border-radius:14px;background:var(--amber-bg);color:var(--amber)}
+.update-mark.ok{background:var(--green-bg);color:var(--green)}
+.update-mark.bad{background:var(--red-bg);color:var(--red)}
+.update-panel h1{margin:4px 0 0;font-size:24px;line-height:30px;color:var(--ink);letter-spacing:-.02em}
+.update-version{margin:0;color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.update-note{margin:0;color:var(--text);font-size:14px;line-height:1.55}
+.update-steps{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:10px;width:100%}
+.update-steps li{display:flex;align-items:center;gap:12px;color:var(--faint);font-size:14px;font-weight:600}
+.update-steps li span{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;flex:none;box-shadow:inset 0 0 0 1.5px var(--line);font-size:12px;font-variant-numeric:tabular-nums}
+.update-steps li.done{color:var(--muted)}
+.update-steps li.done span{background:var(--green-bg);color:var(--green);box-shadow:none}
+.update-steps li.current{color:var(--ink)}
+.update-steps li.current span{background:var(--accent);color:var(--accent-ink);box-shadow:none}
+.update-verdict{margin:0 0 12px;font-size:13.5px;line-height:1.5;color:var(--text)}
+.update-verdict.ok b{color:var(--green)}
+.update-verdict.newer b{color:var(--amber)}

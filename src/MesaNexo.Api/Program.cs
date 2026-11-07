@@ -49,16 +49,37 @@ public static class Program {
             if (Arg("initialize") is string initial) { var config = JsonNode.Parse(await File.ReadAllTextAsync(initial))!.AsObject(); await service.Initialize(config); if (lab) File.WriteAllText(Path.Combine(options.LabDirectory!, "initialized"), site); Console.WriteLine("Sucursal inicializada. Retira el archivo de aprovisionamiento que contiene credenciales."); return 0; }
             if (Arg("enrollment-file") is string enrollment) { await service.RotateEnrollment((await File.ReadAllTextAsync(enrollment)).Trim()); Console.WriteLine("Código de alta actualizado."); return 0; }
             X509Certificate2 certificate = lab ? LabCertificate.Create(options.LabDirectory!) : X509Certificate2.CreateFromPemFile(Path.Combine(options.Credentials ?? throw new Exception("CREDENTIALS_DIRECTORY requerido"), "tls-cert"), Path.Combine(options.Credentials!, "tls-key"));
-            // Live integrations are optional: their credentials directory, plus the printer and PAC files from before it existed.
-            // A broken file only marks its provider; the backend still starts.
-            var integrations = IntegrationConfig.Load(Arg("integrations-dir") ?? (lab ? null : IntegrationConfig.Directory))
-                .Adopt("printer", Arg("printer-config") ?? (lab ? null : "/etc/culinaryos/printer.json"), Arg("printer-config") is not null)
-                .Adopt("pac", Arg("fiscal-config") ?? (lab ? null : "/etc/culinaryos/fiscal.json"), Arg("fiscal-config") is not null);
-            var printer = integrations.Use<IPrintDriver>("printer", o => new EscPosPrintDriver(PrinterOptions.From(o)));
-            var fiscal = integrations.Use("pac", FiscalOptions.From);
             // The license key lives in the backend's own state directory, outside the synchronized store.
             var licensing = new LicenseOptions(lab ? Path.Combine(options.LabDirectory!, "license") : "/var/lib/culinaryos-app/license", Arg("license-server"), Arg("hardware-file") ?? (lab ? Path.Combine(options.LabDirectory!, "hardware.json") : HardwareIdentity.DefaultFile), UseTpm: !lab, CentralCertificate: options.Credentials is null ? null : Path.Combine(options.Credentials, "central-cert"));
-            using (certificate) { await using var app = ApiHost.Build(options, store, certificate, licensing, Arg("cloud-url") is string cloudUrl ? new CloudOptions(cloudUrl, options.Credentials ?? throw new Exception(), Arg("central-public-key") ?? throw new Exception()) : null, printer, fiscal, integrations, checkpoints, backups, PrivacyPurge.From(Arg("privacy-config") ?? (lab ? null : PrivacyPurge.DefaultFile))); var running = app.Services.GetRequiredService<BranchService>().Faults; AppDomain.CurrentDomain.UnhandledException += (_, e) => running.Record("api", "critical", "El servidor de la sucursal se cerró: " + (e.ExceptionObject as Exception)?.GetType().Name, "Las terminales pierden la conexión hasta que el servicio reinicia", e.ExceptionObject.ToString() ?? ""); await app.RunAsync(); }
+            // What a manager enters in Integraciones, sealed under the branch keyring; an operator's file wins over it.
+            var vault = store is PostgresBranchStore sealedStore ? new IntegrationVault(lab ? Path.Combine(options.LabDirectory!, "integrations") : IntegrationVault.CulinaryOs, sealedStore.Keys, site) : null;
+            FaultLog? running = null;
+            AppDomain.CurrentDomain.UnhandledException += (_, e) => running?.Record("api", "critical", "El servidor de la sucursal se cerró: " + (e.ExceptionObject as Exception)?.GetType().Name, "Las terminales pierden la conexión hasta que el servicio reinicia", e.ExceptionObject.ToString() ?? "");
+            using (certificate) {
+
+                // The live services start once with their credentials: new ones from Integraciones rebuild the host in this same
+                // process, so systemd sees no exit and the terminals only reconnect.
+                for (var restart = true; restart;) {
+
+                    restart = false;
+                    // Live integrations are optional: their credentials directory, plus the printer and PAC files from before it
+                    // existed. A broken file only marks its provider; the backend still starts.
+                    var integrations = IntegrationConfig.Load(Arg("integrations-dir") ?? (lab ? null : IntegrationConfig.Directory))
+                        .Adopt("printer", Arg("printer-config") ?? (lab ? null : "/etc/culinaryos/printer.json"), Arg("printer-config") is not null)
+                        .Adopt("pac", Arg("fiscal-config") ?? (lab ? null : "/etc/culinaryos/fiscal.json"), Arg("fiscal-config") is not null);
+                    vault?.Into(integrations);
+                    var printer = integrations.Use<IPrintDriver>("printer", o => new EscPosPrintDriver(PrinterOptions.From(o)));
+                    var fiscal = integrations.Use("pac", FiscalOptions.From);
+                    await using var app = ApiHost.Build(options, store, certificate, licensing, Arg("cloud-url") is string cloudUrl ? new CloudOptions(cloudUrl, options.Credentials ?? throw new Exception(), Arg("central-public-key") ?? throw new Exception()) : null, printer, fiscal, integrations, checkpoints, backups, PrivacyPurge.From(Arg("privacy-config") ?? (lab ? null : PrivacyPurge.DefaultFile)));
+                    var branchService = app.Services.GetRequiredService<BranchService>();
+                    branchService.Vault = vault;
+                    branchService.RestartForIntegrations = () => { restart = true; app.Services.GetRequiredService<IHostApplicationLifetime>().StopApplication(); };
+                    running = branchService.Faults;
+                    await app.RunAsync();
+
+                }
+
+            }
             return 0;
 
         } catch (BusinessException e) { Console.Error.WriteLine(e.Message); return 1; } catch (Exception e) { Console.Error.WriteLine("No se pudo iniciar Culinary Restaurant. Comprueba identidad, configuración, credenciales y runtime."); if (args.Contains("--lab")) Console.Error.WriteLine(e); else new FaultLog(FaultLog.DefaultFile).Record("api", "critical", "El servidor de la sucursal no pudo iniciar: " + e.GetType().Name, "Ninguna terminal puede conectarse a la sucursal", e.ToString()); return 1; }

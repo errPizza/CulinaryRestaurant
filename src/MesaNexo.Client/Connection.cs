@@ -151,6 +151,8 @@ public sealed partial class NativeSession: IDisposable {
 
             if (await HasPending()) throw new InvalidOperationException("Hay una operación incierta; reconcilia antes de continuar");
             var pending = J.O("operationId", J.Id(), "type", type, "payload", payload, "userId", UserId);
+            // Provider credentials are never written to this device: a lost answer is simply entered again.
+            if (type == "integration.credentials") { var direct = await Request(HttpMethod.Post, "api/action", pending, ct); if (direct.S("local") != "committed") throw new IOException("Confirmación ambigua; vuelve a guardar las credenciales"); return direct; }
             await vault.Write(PendingKey, pending.ToJsonString());
             return await SendPending(pending, ct);
 

@@ -158,6 +158,16 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
         return result;
 
     }
+    // The Linux update journal, read at most every two seconds; a lab or Windows server has none.
+    public string UpdateJournal { get; set; } = UpdateProgress.StateFile;
+    Tuple<DateTimeOffset, JsonObject?>? install;
+    JsonObject? InstallProgress() {
+
+        var cached = Volatile.Read(ref install);
+        if (cached is null || DateTimeOffset.UtcNow - cached.Item1 > TimeSpan.FromSeconds(2)) Volatile.Write(ref install, cached = Tuple.Create(DateTimeOffset.UtcNow, UpdateProgress.Read(UpdateJournal)));
+        return cached.Item2?.DeepClone().AsObject();
+
+    }
     // Serializes every request that mutates the branch; Commit inside it does not wait again.
     async Task<T> Exclusive<T>(Func<Task<T>> work, CancellationToken ct) {
 
@@ -250,6 +260,8 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
         if (auditAlert is { } alert && u.S("role") == "manager") connection["auditAlert"] = alert.DeepClone();
         if (u.S("role") == "manager") { var server = ServerAlerts(); if (OutboxAlert((JsonObject)cached.Item2) is { } outbox) server.Add(outbox); connection["server"] = server; }
         if (u.S("role") == "manager") connection["updates"] = Volatile.Read(ref releases).DeepClone();
+        // Every terminal learns that the server is updating while it still answers, and keeps that screen when it goes down.
+        if (InstallProgress() is { } installing) connection["installing"] = installing;
         result["connection"] = connection;
         return result;
 
@@ -261,6 +273,8 @@ public sealed partial class BranchService(IBranchStore store, string siteId, IPa
         Need(auditAlert is null || type != "authorize.pin" && !Restaurant.PinActions.Contains(type), "Autorizaciones detenidas: la bitácora no coincide con los puntos de control externos", 409);
         var p = request.Obj("payload");
         Need(!p.Any(x => new[] { "cvv", "pin", "pan", "cardNumber" }.Contains(x.Key, StringComparer.OrdinalIgnoreCase)), "No se admiten datos bancarios sensibles");
+        // Provider credentials never reach the domain or the store: the server seals them apart (IntegrationVault).
+        if (type == "integration.credentials") return await SaveIntegrationCredentials(token, eventId, p, ct);
         return await Exclusive(async () => {
 
             for (var attempt = 0; attempt < 3; attempt++) {

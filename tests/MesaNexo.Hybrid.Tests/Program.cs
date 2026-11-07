@@ -30,6 +30,7 @@ using var store = LabPostgres.Test(root, directory, site);
 var options = new ApiOptions(site, Port: port, Bind: "127.0.0.1", LabPython: python, LabScript: Path.Combine(root, "runtime", "lab_host.py"), LabDirectory: directory, ReadySocket: null);
 await using var app = ApiHost.Build(options, store, certificate);
 var service = app.Services.GetRequiredService<BranchService>();
+service.Vault = new IntegrationVault(Path.Combine(directory, "integrations"), store.Keys, site);
 await TestLicense.Initialize(service, J.O("siteId", site, "name", "Culinary Restaurant · prueba aislada", "mode", "licencia", "managerName", "Gerencia", "managerUsername", "gerencia", "managerPassword", password, "enrollmentCode", code, "modules", Restaurant.Modules));
 await app.StartAsync();
 var profile = new ConnectionProfile($"https://localhost:{port}", site, Path.Combine(directory, "lab-ca.crt"), certificate.GetCertHashString(HashAlgorithmName.SHA256));
@@ -58,6 +59,8 @@ var issuer = J.O("expeditionPlace", "06600", "product", J.O("productCode", "9010
 var licenseRevision = 1L;
 async Task<JsonNode?> Fixture(string command, JsonObject a) {
 
+    // The integrations a license includes; without a list the license predates it and keeps all of them.
+    if (command == "license.integrations") { var payload = TestLicense.Payload(service, Restaurant.Modules, revision: ++licenseRevision); if (a["list"] is JsonArray list) payload["integrations"] = list.DeepClone(); await service.InstallLicense(TestLicense.Sign(Jws.License, payload), true); return J.O("installed", true); }
     if (command == "integration.ready") { service.Integrations.Ready(a.S("key")); service.UseIntegrations(service.Integrations, (JsonArray)service.Domain.LiveCatalog.A("terminals").DeepClone()); return J.O("ready", a.S("key")); }
     // The provider lets the license lapse, then renews it: revisions only grow, as CulinaryServer issues them.
     if (command is "license.expire" or "license.expiring" or "license.restore") { await service.InstallLicense(TestLicense.Sign(Jws.License, TestLicense.Payload(service, Restaurant.Modules, plan: "annual", expires: command switch { "license.expire" => DateTimeOffset.UtcNow.AddDays(-2), "license.expiring" => DateTimeOffset.UtcNow.AddDays(2), _ => DateTimeOffset.UtcNow.AddYears(1) }, revision: ++licenseRevision))); return await service.LicenseStatus(); }

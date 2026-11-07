@@ -222,11 +222,15 @@ test('a manager searches from Version and one confirmation downloads, signs ever
     await signedInAs(page, 'manager', { 'updates.look': { update: true, version: '0.3.4', notes: 'Corrige la caja', bytes: 10, blocked: '', otherSessions: 2 }, 'updates.prepare': { update: true }, 'updates.install': { started: true } });
     const dialog = await openVersion(page);
     await dialog.getByRole('button', { name: 'Buscar actualización' }).click();
-    await expect(dialog).toContainText('Versión 0.3.4 disponible');
+    await expect(dialog).toContainText('Versión 0.3.04 disponible');
     await expect(dialog).toContainText('Corrige la caja');
     await expect(dialog).toContainText('2 dispositivos más');
     await dialog.getByRole('button', { name: 'Actualizar ahora' }).click();
-    await expect.poll(() => page.evaluate(() => (window as any).calls.filter((c: string) => c.startsWith('updates.') && c !== 'updates.arrived'))).toEqual(['updates.look', 'updates.prepare', 'updates.install']);
+    await expect.poll(() => page.evaluate(() => (window as any).calls.filter((c: string) => c.startsWith('updates.') && !['updates.arrived', 'updates.status'].includes(c)))).toEqual(['updates.look', 'updates.prepare', 'updates.install']);
+    // The app covers the screen with the progress until the installer takes over.
+    const screen = page.getByRole('alertdialog', { name: 'Actualizando Culinary Restaurant' });
+    await expect(screen).toContainText('Versión 0.3.04');
+    await expect(screen.locator('li[aria-current="step"]')).toHaveText(/Instalar/);
 
 });
 
@@ -243,10 +247,61 @@ test('an open account or register stops the update before anything downloads', a
 
 test('with nothing new the dialog says so, and only a manager can search', async ({ page }) => {
 
-    await signedInAs(page, 'manager', { 'updates.look': { update: null } });
+    await signedInAs(page, 'manager', { 'updates.look': { update: null, latestVersion: '0.3.4', currentVersion: '0.3.4' } });
     const dialog = await openVersion(page);
     await dialog.getByRole('button', { name: 'Buscar actualización' }).click();
-    await expect(dialog).toContainText('Ya tienes la versión más reciente');
+    await expect(dialog).toContainText('Ya estás al día.');
+    await expect(dialog).toContainText('Tienes la versión 0.3.04');
+
+});
+
+test('a device newer than the published version says so and installs nothing', async ({ page }) => {
+
+    await signedInAs(page, 'manager', { 'updates.look': { update: null, latestVersion: '0.3.3', currentVersion: '0.3.4' } });
+    const dialog = await openVersion(page);
+    await dialog.getByRole('button', { name: 'Buscar actualización' }).click();
+    await expect(dialog).toContainText('Tu equipo tiene una versión más nueva (0.3.04) que la publicada (0.3.03).');
+    await expect(dialog.getByRole('button', { name: 'Actualizar ahora' })).toHaveCount(0);
+
+});
+
+test('with nothing published for the license the dialog says that instead', async ({ page }) => {
+
+    await signedInAs(page, 'manager', { 'updates.look': { update: null, latestVersion: null, currentVersion: '0.3.4' } });
+    const dialog = await openVersion(page);
+    await dialog.getByRole('button', { name: 'Buscar actualización' }).click();
+    await expect(dialog).toContainText('No hay versiones publicadas para tu licencia · tienes la 0.3.04.');
+
+});
+
+test('the server shows each step of its update and how it ended, once', async ({ page }) => {
+
+    await signedInAs(page, 'manager', { 'updates.status': { progress: { stage: 'backup', active: true, version: '0.3.5', at: '2026-11-07T10:00:00Z' } } });
+    await page.evaluate(() => window.dispatchEvent(new Event('culinary-update-started')));
+    const screen = page.getByRole('alertdialog', { name: 'Actualizando Culinary Restaurant' });
+    await expect(screen).toContainText('Versión 0.3.05');
+    await expect(screen.locator('li[aria-current="step"]')).toHaveText(/Respaldar la base de datos/);
+    await expect(screen.locator('li.done')).toHaveCount(1);
+    await page.screenshot({ path: '../../evidence/update-server-1360.png' });
+    await page.evaluate(() => { const w = window as any, invoke = w.__TAURI_INTERNALS__.invoke; w.__TAURI_INTERNALS__.invoke = async (name: string, p: any) => p.command === 'updates.status' ? { ok: true, data: { progress: { stage: 'healthy', active: false, version: '0.3.5', at: '2026-11-07T10:05:00Z' } } } : invoke(name, p); });
+    const done = page.getByRole('alertdialog', { name: 'Actualización terminada' });
+    await expect(done).toContainText('Culinary Restaurant 0.3.05 ya está funcionando.');
+    await done.getByRole('button', { name: 'Continuar' }).click();
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    await page.evaluate(() => window.dispatchEvent(new Event('culinary-update-started')));
+    await page.waitForTimeout(1500);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+
+});
+
+test('a terminal keeps the update screen while the branch server updates', async ({ page }) => {
+
+    await signedInAs(page, 'mesero', {}, { connection: { installing: { stage: 'installing', active: true, version: '0.3.5', at: '2026-11-07T10:00:00Z' } } });
+    const screen = page.getByRole('alertdialog', { name: 'La sucursal se está actualizando' });
+    await expect(screen).toContainText('instala la versión 0.3.05');
+    await expect(screen.locator('li[aria-current="step"]')).toHaveText(/Instalar/);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: '../../evidence/update-remote-390.png' });
 
 });
 
@@ -287,7 +342,7 @@ test('after an update the app says what arrived', async ({ page }) => {
 
     await page.addInitScript(() => { (window as any).arrived = { arrived: true, version: '0.3.4', notes: 'Corrige la caja' }; });
     await kiosk(page);
-    const dialog = page.getByRole('dialog', { name: /se actualizó a 0\.3\.4/ });
+    const dialog = page.getByRole('dialog', { name: /se actualizó a 0\.3\.04/ });
     await expect(dialog).toContainText('Corrige la caja');
 
 });

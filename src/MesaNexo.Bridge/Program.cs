@@ -223,16 +223,18 @@ public sealed class BridgeHost(ISecureVault vault): IDisposable {
 
                     var running = Updates.Current.ToString(3);
                     var seen = await vault.Read("update.seen");
-                    if (seen == running) return J.O("arrived", false);
+                    if (seen == running) return J.O("arrived", false, "version", running);
                     await vault.Write("update.seen", running);
                     return J.O("arrived", seen is not null, "version", running, "notes", await vault.Read("update.notes") ?? "");
 
                 }
+            // The kiosk reads the update journal itself: it keeps showing the progress while the backend restarts.
+            case "updates.status": return J.O("progress", OperatingSystem.IsLinux() ? UpdateProgress.Read() : null);
             // Signed in: what is on offer and what stands in the way. Nothing downloads or closes yet.
             case "updates.look": {
 
                     var reply = await Session.LookForUpdate(UpdatePlatform);
-                    if (reply["update"] is not JsonValue) return J.O("update", null);
+                    if (reply["update"] is not JsonValue) return J.O("update", null, "latestVersion", reply["latestVersion"]?.DeepClone(), "currentVersion", Updates.Running);
                     return J.O("update", true, "version", reply.S("version"), "notes", reply.S("notes"), "bytes", reply.L("bytes"), "blocked", reply.S("blocked"), "otherSessions", reply.L("otherSessions"));
 
                 }
@@ -243,8 +245,9 @@ public sealed class BridgeHost(ISecureVault vault): IDisposable {
                     preparedManifest = null;
                     var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MesaNexo", "updates", "tauri", J.Id());
                     if (session is null) await EndStrandedSessions(p);
-                    var update = await Updates.Fetch(p, await Device(p), UpdatePlatform, directory, token: session?.Token);
-                    if (update is null) return J.O("update", null);
+                    string? latest = null;
+                    var update = await Updates.Fetch(p, await Device(p), UpdatePlatform, directory, token: session?.Token, published: v => latest = v);
+                    if (update is null) return J.O("update", null, "latestVersion", latest, "currentVersion", Updates.Running);
                     preparedPackage = Path.Combine(directory, update.S("filename"));
                     preparedManifest = update;
                     return J.O("update", true, "version", update.S("version"), "notes", update.S("notes"), "bytes", update.L("bytes"));

@@ -26,7 +26,10 @@ class UpdateTransaction(unittest.TestCase):
         site = base / 'site.json'
         site.write_text(json.dumps({'site_id': 'sucursal-1'}))
         self.paths = dict(SPOOL=spool, INBOX=spool / 'inbox', WORK=spool / 'work', STATE=spool / 'state.json', PREVIOUS=spool / 'previous', APP=app, SITE=site)
+        self.paths['BACKUPS'] = spool / 'backups'
         self.patches = [patch.object(apply, k, v) for k, v in self.paths.items()]
+        # The branch database is 10 MB; pg_dump runs as postgres through runuser (faked below).
+        self.patches.append(patch.object(apply, 'database_bytes', lambda: 10 * 2**20))
         # The appliance is Linux; on Windows the flag does not exist.
         self.patches.append(patch.object(apply.os, 'O_NOFOLLOW', getattr(apply.os, 'O_NOFOLLOW', 0), create=True))
         for p in self.patches:
@@ -45,7 +48,10 @@ class UpdateTransaction(unittest.TestCase):
         (apply.INBOX / 'ready').write_text('')
     def fake(self, args, **kwargs):
         self.calls.append(args[0] if args[0] != 'dpkg' else 'dpkg ' + args[1])
-        if args[0] == apply.API:
+        if args[0] == 'runuser':
+            assert 'pg_dump' in args and kwargs.get('stdout') is not None
+            kwargs['stdout'].write(b'PGDMP custom dump')
+        elif args[0] == apply.API:
             if not self.verify_ok:
                 raise subprocess.CalledProcessError(4, args)
         elif args[:2] == ['dpkg', '-i']:
@@ -68,7 +74,11 @@ class UpdateTransaction(unittest.TestCase):
         self.drop()
         with patch.object(apply, 'run', side_effect=self.fake):
             apply.main()
-        self.assertEqual(self.stages(), ['received', 'verified', 'snapshot', 'installing', 'installed'])
+        self.assertEqual(self.stages(), ['received', 'verified', 'backup', 'snapshot', 'installing', 'installed'])
+        dumps = list(apply.BACKUPS.glob('*.dump'))
+        self.assertEqual(len(dumps), 1, 'the branch database is dumped before anything is installed')
+        self.assertEqual(dumps[0].read_bytes(), b'PGDMP custom dump')
+        self.assertIn('0.3.04', dumps[0].name)
         self.assertEqual(self.version(), ('version 0.3.04', 'new'))
         self.assertTrue(apply.PREVIOUS.exists(), 'the previous version is kept until the new one proves healthy')
         self.assertEqual(list(apply.INBOX.iterdir()), [])
@@ -90,7 +100,8 @@ class UpdateTransaction(unittest.TestCase):
         with patch.object(apply, 'run', side_effect=self.fake), self.assertRaises(subprocess.CalledProcessError):
             apply.main()
         self.assertEqual((self.calls, self.version()), ([apply.API], ('version 0.3.03', 'old')))
-        self.assertEqual(apply.state()['stage'], 'received')
+        self.assertEqual(apply.state()['stage'], 'failed', 'a refused offer ends the update so no screen keeps waiting')
+        self.assertIn('no más nueva', apply.state()['reason'])
         self.assertFalse(apply.WORK.exists(), 'the private copy of the package does not stay behind')
 
     def test_interrupted_snapshot_is_redone(self):
@@ -175,7 +186,47 @@ class UpdateTransaction(unittest.TestCase):
             return self.fake(args, **kwargs)
         with patch.object(apply, 'run', side_effect=watch):
             apply.main()
-        self.assertEqual(seen, {apply.API: 'received', 'dpkg -i': 'installing'})
+        self.assertEqual(seen, {apply.API: 'received', 'runuser': 'verified', 'dpkg -i': 'installing'})
+
+    def test_only_the_last_three_dumps_are_kept(self):
+        for i in range(5):
+            self.drop()
+            with patch.object(apply, 'run', side_effect=self.fake), patch.object(apply.time, 'strftime', return_value='2026110%d-120000' % i):
+                apply.main()
+        kept = sorted(f.name for f in apply.BACKUPS.glob('*.dump'))
+        self.assertEqual(kept, ['culinaryos-antes-de-0.3.04-2026110%d-120000.dump' % i for i in (2, 3, 4)])
+
+    def test_no_room_for_the_backup_installs_nothing(self):
+        self.drop()
+        full = type('Usage', (), {'free': 20 * 2**20})()
+        with patch.object(apply, 'run', side_effect=self.fake), patch.object(apply.shutil, 'disk_usage', return_value=full), self.assertRaises(RuntimeError):
+            apply.main()
+        self.assertEqual((self.calls, self.version()), ([apply.API], ('version 0.3.03', 'old')))
+        self.assertEqual(apply.state()['stage'], 'failed')
+        self.assertIn('Sin espacio', apply.state()['reason'])
+        self.assertEqual(list(apply.BACKUPS.glob('*')), [])
+
+    def test_a_failed_dump_installs_nothing(self):
+        self.drop()
+        def broken(args, **kwargs):
+            if args[0] == 'runuser':
+                self.calls.append('runuser')
+                raise subprocess.CalledProcessError(1, args)
+            return self.fake(args, **kwargs)
+        with patch.object(apply, 'run', side_effect=broken), self.assertRaises(subprocess.CalledProcessError):
+            apply.main()
+        self.assertEqual((apply.state()['stage'], self.version()), ('failed', ('version 0.3.03', 'old')))
+        self.assertNotIn('dpkg -i', self.calls)
+        self.assertEqual(list(apply.BACKUPS.glob('*.dump')), [], 'a half-written dump is never kept as a backup')
+
+    def test_offer_version_is_read_from_the_signed_update(self):
+        import base64
+        body = base64.urlsafe_b64encode(json.dumps({'version': '0.3.5'}).encode()).decode().rstrip('=')
+        (apply.INBOX / 'offer.json').write_text(json.dumps({'update': 'h.' + body + '.s'}))
+        (apply.INBOX / 'package.deb').write_bytes(b'!<arch>\n')
+        with patch.object(apply, 'run', side_effect=self.fake):
+            apply.main()
+        self.assertEqual(apply.state()['history'][0]['offer'], '0.3.5')
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -232,7 +232,8 @@ public sealed partial class BranchService {
         var platform = Choice(p, "platform", "win-x64", "linux-x64", "android-arm64");
         Need(System.Text.RegularExpressions.Regex.IsMatch(p.S("currentVersion"), "^\\d{1,5}\\.\\d{1,5}\\.\\d{1,5}$"), "Versión actual inválida");
         var reply = await Call(HttpMethod.Post, "/branch/v1/updates/check", J.O("platform", platform, "currentVersion", p.S("currentVersion")), ct);
-        if (reply["update"] is not JsonValue) return J.O("update", null);
+        // Nothing newer: CulinaryServer says which version is published, so the screen tells "up to date" from "newer here".
+        if (reply["update"] is not JsonValue) return J.O("update", null, "latestVersion", reply["latestVersion"]?.DeepClone(), "currentVersion", p.S("currentVersion"));
         var update = Jws.VerifyUpdate(reply, floor);
         Need(update.S("siteId") == siteId && update.S("platform") == platform, "La actualización no es para esta sucursal", 403);
         lock (downloads) downloads[update.S("releaseId")] = reply.Obj("download");

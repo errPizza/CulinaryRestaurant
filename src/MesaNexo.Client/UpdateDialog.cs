@@ -12,8 +12,9 @@ public sealed partial class MainView {
 
             var device = JsonNode.Parse(await vault.Read("device_" + profile.SiteId) ?? throw new InvalidOperationException("Este dispositivo todavía no fue autorizado"))!.AsObject();
             var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MesaNexo", "updates", J.Id());
-            var update = await Updates.Fetch(profile, device, "win-x64", directory);
-            if (update is null) { ShowModal("Actualización del cliente", Text("Ya tienes la versión más reciente publicada para tu licencia.")); return; }
+            string? latest = null;
+            var update = await Updates.Fetch(profile, device, "win-x64", directory, published: v => latest = v);
+            if (update is null) { ShowModal("Actualización del cliente", Text(Updates.Verdict(latest))); return; }
             var target = Path.Combine(directory, update.S("filename"));
             ShowModal("Instalar Culinary Restaurant " + update.S("version"), Stack(Text(update.S("notes")), Text("La aplicación se cerrará y se abrirá el instalador nativo. Los datos permanecen en el servidor local.", 13, Muted), Button("Confirmar e instalar", async () => {
 

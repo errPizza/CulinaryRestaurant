@@ -61,6 +61,7 @@ static class Program {
         root = Path.GetFullPath(args[0]);
         python = args[1];
         if (args.Contains("--fiscal-only")) { try { await FiscalTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "fiscal-sandbox.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
+        if (args.Contains("--integration-license-only")) { await IntegrationLicenseTests.Run(root, evidence); return; }
         if (args.Contains("--live-only")) { try { await LiveIntegrationTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "live-integrations.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--print-only")) { try { await PrintTests.Run(root, python, evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "printing.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString()); } return; }
         if (args.Contains("--csd-only")) { try { await CsdTests.Run(evidence); } finally { await File.WriteAllTextAsync(Path.Combine(root, "evidence", "csd.json"), new JsonArray(evidence.Select(x => (JsonNode)x.DeepClone()).ToArray()).ToJsonString()); } return; }
@@ -237,6 +238,7 @@ static class Program {
             await PrintTests.Run(root, python, evidence);
             await Suite("fiscal-sandbox", () => FiscalTests.Run(root, python, evidence));
             await Suite("live-integrations", () => LiveIntegrationTests.Run(root, python, evidence));
+            await Suite("integration-license", () => IntegrationLicenseTests.Run(root, evidence));
             Console.WriteLine($"{evidence.Count} integration/UI checks passed.");
 
         } catch (Exception e) { Console.Error.WriteLine(e); evidence.Add(J.O("result", "failed", "message", e.ToString())); Environment.ExitCode = 1; try { await Stop(); } catch { } } finally { cert.Dispose(); Directory.CreateDirectory(Path.Combine(root, "evidence")); await File.WriteAllTextAsync(Path.Combine(root, "evidence", "integration.json"), new JsonArray(evidence.Select(x => (JsonNode)x).ToArray()).ToJsonString(new JsonSerializerOptions { WriteIndented = true })); }

@@ -3,9 +3,10 @@ import { Button, PanelHeading, Kpis, MetricCard, Pill, Sq, Empty, Notice, DataTa
 import { DialogFrame } from './motion';
 import { cents } from './bridge';
 import { money, type Dialog } from './backoffice';
+import { ActivateDialog } from './integration-setup';
 
-// Third parties: off, simulated or live. Live is offered only when the server reports valid credentials for the provider
-// (connection.integrations); the domain checks it again.
+// Third parties the license includes. A manager activates each one with its credentials (integration-setup.tsx); the
+// simulators stay for support and demos only. Live needs the server to report the provider ready; the domain checks again.
 type Row = { id: string;[key: string]: any };
 type Ctx = { close: () => void; submit: (fn: () => Promise<any>) => void; busy: boolean; error: string };
 type Act = (type: string, payload: any) => Promise<any>;
@@ -47,14 +48,15 @@ function configure(s: any, form: any, key: string) {
 
     const c = settingsOf(s, key), base = { provider: key, mode: modeOf(s, key) === 'live' ? 'live' : 'simulated' };
     const pct = (bps: number) => (bps ?? 0) / 100;
+    const live = base.mode === 'live', title = (name: string) => live ? 'Ajustes · ' + name : name + ' (simulación)';
     switch (key) {
-        case 'pac': return form('Facturación simulada', [{ key: 'issuerRfc', label: 'RFC del emisor', value: c.issuerRfc || 'EKU9003173C9', required: true, hint: 'EKU9003173C9 es el RFC de pruebas publicado por el SAT.' }, { key: 'issuerName', label: 'Razón social', value: c.issuerName || s.restaurant?.name, full: true }, { key: 'series', label: 'Serie', value: c.series || 'A' }, { key: 'autoStamp', label: 'Timbrar al crear la solicitud', type: 'checkbox', value: !!c.autoStamp }], 'integration.configure', base, 'Los timbres simulados no tienen validez fiscal.', (x: any) => ({ settings: x }));
-        case 'terminal': return form('Terminal bancaria simulada', [{ key: 'terminalId', label: 'Identificador de la terminal', value: c.terminalId || 'SIM-01', required: true }], 'integration.configure', base, undefined, (x: any) => ({ settings: x }));
-        case 'onlinepay': return form('Pagos en línea simulados', [{ key: 'provider', label: 'Proveedor', type: 'select', value: c.provider || 'stripe', options: [{ value: 'stripe', label: 'Stripe' }, { value: 'mercadopago', label: 'Mercado Pago' }] }, { key: 'expiresMinutes', label: 'Vigencia de la liga (minutos)', type: 'number', value: c.expiresMinutes || 60, min: 5, max: 1440 }], 'integration.configure', base, undefined, (x: any) => ({ settings: { provider: x.provider, expiresMinutes: Number(x.expiresMinutes) || 60 } }));
-        case 'messaging': return form('Mensajería simulada', [{ key: 'whatsapp', label: 'WhatsApp', type: 'checkbox', value: c.whatsapp !== false }, { key: 'email', label: 'Correo', type: 'checkbox', value: c.email !== false }, { key: 'ownerEmail', label: 'Correo del dueño', value: c.ownerEmail || '', placeholder: 'dueno@turestaurante.mx', hint: 'Recibe los avisos de límite de efectivo, arqueos y conciliaciones.' }, { key: 'ownerPhone', label: 'WhatsApp del dueño', value: c.ownerPhone || '', placeholder: '55 1234 5678' }], 'integration.configure', base, base.mode === 'live' ? 'Los mensajes salen por WhatsApp y correo con las plantillas configuradas en el servidor.' : 'Ningún mensaje sale de la sucursal: quedan en la bandeja de salida.', (x: any) => ({ settings: { whatsapp: !!x.whatsapp, email: !!x.email, ownerEmail: x.ownerEmail || '', ownerPhone: x.ownerPhone || '' } }));
-        case 'aggregators': return form('Plataformas de reparto simuladas', [{ key: 'platforms', label: 'Plataformas', type: 'multi', value: c.platforms || Object.keys(PLATFORMS), options: Object.entries(PLATFORMS).map(([value, p]) => ({ value, label: p.name })) }, { key: 'commission', label: 'Comisión de la plataforma %', type: 'number', value: pct(c.commissionBps ?? 2500), min: 0, max: 50, step: 'any' }, { key: 'autoAccept', label: 'Aceptar pedidos automáticamente', type: 'checkbox', value: !!c.autoAccept, hint: 'Si no, gerencia los acepta en Delivery y clientes.' }], 'integration.configure', base, undefined, (x: any) => ({ settings: { platforms: x.platforms, commissionBps: Math.round(Number(x.commission || 0) * 100), autoAccept: !!x.autoAccept } }));
-        case 'pms': return form('Hotel simulado', [{ key: 'system', label: 'Sistema del hotel', type: 'select', value: c.system || 'opera', options: [{ value: 'opera', label: 'Oracle Opera' }, { value: 'cloudbeds', label: 'Cloudbeds' }] }, { key: 'rooms', label: 'Huéspedes registrados', type: 'rows', value: (c.rooms || []).map((r: Row) => [r.room, r.guest, r.limit ? r.limit / 100 : ''].join('|')).join('\n'), hint: 'Simula lo que respondería el PMS. Crédito vacío = sin límite.', rows: { columns: [{ key: 'room', label: 'Habitación', type: 'text' as const, width: '110px', placeholder: '204' }, { key: 'guest', label: 'Huésped', type: 'text' as const, placeholder: 'Nombre y apellidos' }, { key: 'limit', label: 'Crédito', type: 'number' as const, width: '120px', prefix: '$' }], split: (l: string) => l.split('|'), join: (c: string[]) => c.join('|'), add: 'Agregar habitación', empty: 'Sin huéspedes: el PMS rechazará los cargos.' } }], 'integration.configure', base, undefined, (x: any) => ({ settings: { system: x.system, rooms: String(x.rooms || '').split('\n').map((l: string) => l.split('|')).filter(([room, guest]) => room?.trim() && guest?.trim()).map(([room, guest, limit]) => ({ room: room.trim(), guest: guest.trim(), limit: String(limit ?? '').trim() === '' ? 0 : cents(limit) })) } }));
-        case 'maps': return form('Mapas simulados', [{ key: 'centerLat', label: 'Latitud del restaurante', type: 'number', value: c.centerLat ?? 19.4326, step: 'any', required: true }, { key: 'centerLon', label: 'Longitud del restaurante', type: 'number', value: c.centerLon ?? -99.1332, step: 'any', required: true }, { key: 'radiusKm', label: 'Radio de reparto (km)', type: 'number', value: c.radiusKm || 5, min: 1, max: 30 }], 'integration.configure', base, 'El geocodificador simulado coloca cada dirección siempre en el mismo punto dentro del radio.', (x: any) => ({ settings: { centerLat: String(x.centerLat), centerLon: String(x.centerLon), radiusKm: Number(x.radiusKm) || 5 } }));
+        case 'pac': return form(title('Facturación'), [{ key: 'issuerRfc', label: 'RFC del emisor', value: c.issuerRfc || 'EKU9003173C9', required: true, hint: live ? 'Debe coincidir con el RFC de la licencia y del CSD.' : 'EKU9003173C9 es el RFC de pruebas publicado por el SAT.' }, { key: 'issuerName', label: 'Razón social', value: c.issuerName || s.restaurant?.name, full: true }, { key: 'series', label: 'Serie', value: c.series || 'A' }, { key: 'autoStamp', label: 'Timbrar al crear la solicitud', type: 'checkbox', value: !!c.autoStamp }], 'integration.configure', base, live ? undefined : 'Los timbres simulados no tienen validez fiscal.', (x: any) => ({ settings: x }));
+        case 'terminal': return form(title('Terminal bancaria'), [{ key: 'terminalId', label: 'Identificador de la terminal', value: c.terminalId || 'SIM-01', required: true }], 'integration.configure', base, undefined, (x: any) => ({ settings: x }));
+        case 'onlinepay': return form(title('Pagos en línea'), [{ key: 'provider', label: 'Proveedor', type: 'select', value: c.provider || 'stripe', options: [{ value: 'stripe', label: 'Stripe' }, { value: 'mercadopago', label: 'Mercado Pago' }] }, { key: 'expiresMinutes', label: 'Vigencia de la liga (minutos)', type: 'number', value: c.expiresMinutes || 60, min: 5, max: 1440 }], 'integration.configure', base, undefined, (x: any) => ({ settings: { provider: x.provider, expiresMinutes: Number(x.expiresMinutes) || 60 } }));
+        case 'messaging': return form(title('WhatsApp y correo'), [{ key: 'whatsapp', label: 'WhatsApp', type: 'checkbox', value: c.whatsapp !== false }, { key: 'email', label: 'Correo', type: 'checkbox', value: c.email !== false }, { key: 'ownerEmail', label: 'Correo del dueño', value: c.ownerEmail || '', placeholder: 'dueno@turestaurante.mx', hint: 'Recibe los avisos de límite de efectivo, arqueos y conciliaciones.' }, { key: 'ownerPhone', label: 'WhatsApp del dueño', value: c.ownerPhone || '', placeholder: '55 1234 5678' }], 'integration.configure', base, base.mode === 'live' ? 'Los mensajes salen por WhatsApp y correo con las plantillas configuradas en el servidor.' : 'Ningún mensaje sale de la sucursal: quedan en la bandeja de salida.', (x: any) => ({ settings: { whatsapp: !!x.whatsapp, email: !!x.email, ownerEmail: x.ownerEmail || '', ownerPhone: x.ownerPhone || '' } }));
+        case 'aggregators': return form(title('Plataformas de reparto'), [{ key: 'platforms', label: 'Plataformas', type: 'multi', value: c.platforms || Object.keys(PLATFORMS), options: Object.entries(PLATFORMS).map(([value, p]) => ({ value, label: p.name })) }, { key: 'commission', label: 'Comisión de la plataforma %', type: 'number', value: pct(c.commissionBps ?? 2500), min: 0, max: 50, step: 'any' }, { key: 'autoAccept', label: 'Aceptar pedidos automáticamente', type: 'checkbox', value: !!c.autoAccept, hint: 'Si no, gerencia los acepta en Delivery y clientes.' }], 'integration.configure', base, undefined, (x: any) => ({ settings: { platforms: x.platforms, commissionBps: Math.round(Number(x.commission || 0) * 100), autoAccept: !!x.autoAccept } }));
+        case 'pms': return form(title('Hotel'), [{ key: 'system', label: 'Sistema del hotel', type: 'select', value: c.system || 'opera', options: [{ value: 'opera', label: 'Oracle Opera' }, { value: 'cloudbeds', label: 'Cloudbeds' }] }, { key: 'rooms', label: 'Huéspedes registrados', type: 'rows', value: (c.rooms || []).map((r: Row) => [r.room, r.guest, r.limit ? r.limit / 100 : ''].join('|')).join('\n'), hint: 'Simula lo que respondería el PMS. Crédito vacío = sin límite.', rows: { columns: [{ key: 'room', label: 'Habitación', type: 'text' as const, width: '110px', placeholder: '204' }, { key: 'guest', label: 'Huésped', type: 'text' as const, placeholder: 'Nombre y apellidos' }, { key: 'limit', label: 'Crédito', type: 'number' as const, width: '120px', prefix: '$' }], split: (l: string) => l.split('|'), join: (c: string[]) => c.join('|'), add: 'Agregar habitación', empty: 'Sin huéspedes: el PMS rechazará los cargos.' } }], 'integration.configure', base, undefined, (x: any) => ({ settings: { system: x.system, rooms: String(x.rooms || '').split('\n').map((l: string) => l.split('|')).filter(([room, guest]) => room?.trim() && guest?.trim()).map(([room, guest, limit]) => ({ room: room.trim(), guest: guest.trim(), limit: String(limit ?? '').trim() === '' ? 0 : cents(limit) })) } }));
+        case 'maps': return form(title('Mapas'), [{ key: 'centerLat', label: 'Latitud del restaurante', type: 'number', value: c.centerLat ?? 19.4326, step: 'any', required: true }, { key: 'centerLon', label: 'Longitud del restaurante', type: 'number', value: c.centerLon ?? -99.1332, step: 'any', required: true }, { key: 'radiusKm', label: 'Radio de reparto (km)', type: 'number', value: c.radiusKm || 5, min: 1, max: 30 }], 'integration.configure', base, live ? 'Las direcciones fuera del radio se marcan fuera de zona.' : 'El geocodificador simulado coloca cada dirección siempre en el mismo punto dentro del radio.', (x: any) => ({ settings: { centerLat: String(x.centerLat), centerLon: String(x.centerLon), radiusKm: Number(x.radiusKm) || 5 } }));
     }
 
 }
@@ -62,15 +64,15 @@ function usage(s: any, key: string) {
 
     const logs = list(s, 'integrationlog').filter(l => l.provider === key), today = logs.filter(l => isToday(l.at)).length, c = settingsOf(s, key);
     switch (key) {
-        case 'pac': return plural(list(s, 'fiscal').filter(f => f.status === 'simulated-stamped').length, 'timbre simulado', 'timbres simulados') + ' · serie ' + (c.series || 'A') + (c.autoStamp ? ' · automático' : '');
-        case 'terminal': return (c.terminalId || 'SIM-01') + ' · ' + plural(list(s, 'terminaltxn').filter(t => isToday(t.at)).length, 'cobro hoy', 'cobros hoy');
+        case 'pac': return (liveOn(s, 'pac') ? plural(list(s, 'fiscal').filter(f => f.status === 'stamped').length, 'factura timbrada', 'facturas timbradas') : plural(list(s, 'fiscal').filter(f => f.status === 'simulated-stamped').length, 'timbre simulado', 'timbres simulados')) + ' · serie ' + (c.series || 'A') + (c.autoStamp ? ' · automático' : '');
+        case 'terminal': return (liveOn(s, 'terminal') ? plural((s.connection?.terminals || []).length, 'terminal', 'terminales') : c.terminalId || 'SIM-01') + ' · ' + plural(list(s, 'terminaltxn').filter(t => isToday(t.at)).length, 'cobro hoy', 'cobros hoy');
         case 'onlinepay': return (c.provider === 'mercadopago' ? 'Mercado Pago' : 'Stripe') + ' · ' + plural(list(s, 'paylink').filter(l => l.status === 'pending').length, 'liga vigente', 'ligas vigentes');
         case 'messaging': return plural(list(s, 'message').length, 'mensaje en bandeja', 'mensajes en bandeja') + (c.ownerEmail ? ' · dueño ' + c.ownerEmail : '');
         case 'aggregators': { const last = list(s, 'integration').find(x => x.id === 'aggregators')?.lastSync; return (liveOn(s, 'aggregators') ? 'Deliverect' : (c.platforms || []).map((p: string) => PLATFORMS[p]?.name).join(', ')) + ' · comisión ' + ((c.commissionBps ?? 2500) / 100) + ' %' + (last?.message ? ' · ' + last.message : ''); }
-        case 'pms': return (c.system === 'cloudbeds' ? 'Cloudbeds' : 'Opera') + ' · ' + plural((c.rooms || []).length, 'habitación', 'habitaciones') + ' · ' + plural(list(s, 'pmspost').length, 'cargo', 'cargos');
+        case 'pms': return (c.system === 'cloudbeds' ? 'Cloudbeds' : 'Opera') + ' · ' + (liveOn(s, 'pms') ? '' : plural((c.rooms || []).length, 'habitación', 'habitaciones') + ' · ') + plural(list(s, 'pmspost').length, 'cargo', 'cargos');
         case 'maps': return 'Centro ' + Number(c.centerLat ?? 19.4326).toFixed(4) + ', ' + Number(c.centerLon ?? -99.1332).toFixed(4) + ' · radio ' + (c.radiusKm || 5) + ' km';
         case 'callerid': return plural(list(s, 'call').filter(x => isToday(x.at)).length, 'llamada hoy', 'llamadas hoy');
-        case 'printer': return plural(list(s, 'printjob').filter(j => j.status === 'simulated').length, 'trabajo simulado', 'trabajos simulados');
+        case 'printer': return liveOn(s, 'printer') ? plural(list(s, 'printjob').filter(j => isToday(j.at)).length, 'impresión hoy', 'impresiones hoy') : plural(list(s, 'printjob').filter(j => j.status === 'simulated').length, 'trabajo simulado', 'trabajos simulados');
     }
     return plural(today, 'operación hoy', 'operaciones hoy');
 
@@ -78,47 +80,86 @@ function usage(s: any, key: string) {
 export function simulateCall(form: any) { form('Simular llamada entrante', [{ key: 'number', label: 'Número que llama', required: true, placeholder: '55 1234 5678' }, { key: 'name', label: 'Nombre que envía la línea', placeholder: 'Opcional' }], 'callerid.simulate', {}, 'Aparece como llamada entrante en Delivery y clientes.'); }
 export function simulatePlatformOrder(s: any, form: any) { const c = settingsOf(s, 'aggregators'); form('Simular pedido de plataforma', [{ key: 'platform', label: 'Plataforma', type: 'select', value: (c.platforms || ['uber'])[0], options: (c.platforms || Object.keys(PLATFORMS)).map((p: string) => ({ value: p, label: PLATFORMS[p]?.name || p })) }, { key: 'customerName', label: 'Cliente', placeholder: 'Al azar si lo dejas vacío' }, { key: 'notes', label: 'Indicaciones', placeholder: 'Ej. Sin cebolla' }], 'aggregator.simulate', {}, 'Elige productos al azar del menú publicado.', (x: any) => ({ platform: x.platform, customerName: x.customerName || '', notes: x.notes || '' })); }
 
-export function IntegrationsPage({ state: s, form, action, run }: { state: any; form: any; action: Act; run: any }) {
+// Support and demos can still drive the simulators; a manager never sees them unless support turns this on in the device.
+const SUPPORT_KEY = 'culinary.integrations.support';
+const readSupport = () => { try { return localStorage.getItem(SUPPORT_KEY) === '1'; } catch { return false; } };
+const writeSupport = (on: boolean) => { try { if (on) localStorage.setItem(SUPPORT_KEY, '1'); else localStorage.removeItem(SUPPORT_KEY); } catch { } };
+// Integrations the license includes; a server without the list (older backend) keeps all of them.
+export const licensedKeys = (s: any): string[] => Array.isArray(s.restaurant?.integrations) ? s.restaurant.integrations : PROVIDERS.map(p => p.key).filter(k => k !== 'aggregators' || s.restaurant?.modules?.includes('deliveryHub'));
+type Health = { label: string; tone: string; icon: string; detail?: string };
+function health(s: any, key: string): Health {
 
-    const active = PROVIDERS.filter(p => activeOn(s, p.key)), live = PROVIDERS.filter(p => liveOn(s, p.key)), logs = byTime(list(s, 'integrationlog')), messages = byTime(list(s, 'message')), orders = list(s, 'aggregatororder');
-    const setMode = (key: string, mode: string) => run(() => action('integration.configure', { provider: key, mode }), mode === 'off' ? providerName(key) + ' apagada' : mode === 'live' ? providerName(key) + ': conexión real activa' : 'Simulación de ' + providerName(key) + ' activa');
+    const mode = modeOf(s, key), server = serverState(s, key), row = list(s, 'integration').find(x => x.id === key);
+    if (mode === 'simulated') return { label: 'Simulación', tone: 'blue', icon: 'spark', detail: 'Sólo para soporte: no contacta al proveedor' };
+    if (server.startsWith('error')) return { label: 'Requiere atención', tone: 'red', icon: 'alert', detail: server.replace(/^error:\s*/, '') };
+    if (mode === 'live' && server === 'lista') return { label: 'Activa', tone: 'green', icon: 'check' };
+    if (server === 'reiniciando' || row?.mode === 'live' && server === 'sin credenciales') return { label: 'Conectando…', tone: 'amber', icon: 'refresh', detail: 'El servidor está cargando los datos de conexión' };
+    if (server === 'lista') return { label: 'Lista para encender', tone: 'amber', icon: 'plug', detail: 'Soporte ya colocó sus datos de conexión' };
+    return { label: 'Sin activar', tone: 'neutral', icon: 'plug' };
+
+}
+export function IntegrationsPage({ state: s, form, action, run, dialog }: { state: any; form: any; action: Act; run: any; dialog: Dialog }) {
+
+    const [support, setSupport] = useState(readSupport), [taps, setTaps] = useState(0);
+    const allowed = licensedKeys(s), providers = PROVIDERS.filter(p => allowed.includes(p.key)), missing = PROVIDERS.filter(p => !allowed.includes(p.key) && p.key !== 'aggregators');
+    const live = providers.filter(p => liveOn(s, p.key)), logs = byTime(list(s, 'integrationlog')), messages = byTime(list(s, 'message')), orders = list(s, 'aggregatororder');
+    const setMode = (key: string, mode: string) => run(() => action('integration.configure', { provider: key, mode }), mode === 'off' ? providerName(key) + ' apagada' : mode === 'live' ? providerName(key) + ' encendida' : 'Simulación de ' + providerName(key) + ' activa');
+    const activate = (p: typeof PROVIDERS[number], replacing = false) => dialog(ctx => <ActivateDialog provider={p.key} name={p.name} vendor={p.vendor} close={ctx.close} action={action} replacing={replacing} />);
+    // Five taps on the introduction switch this device's support tools on or off.
+    const tap = () => { const n = taps + 1; setTaps(n >= 5 ? 0 : n); if (n >= 5) { writeSupport(!support); setSupport(!support); } };
     const tests: Record<string, React.ReactNode> = {
-        messaging: <Button className="ghost xs" icon="message" onClick={() => form('Mensaje de prueba', [{ key: 'channel', label: 'Canal', type: 'select', value: 'whatsapp', options: [{ value: 'whatsapp', label: 'WhatsApp' }, { value: 'email', label: 'Correo' }] }, { key: 'to', label: 'Destinatario', required: true, placeholder: '55 1234 5678 o correo' }], 'message.test', {}, 'Queda en la bandeja de salida; no se envía a nadie.')}>Mensaje de prueba</Button>,
-        aggregators: <><Button className="ghost xs" icon="plus" onClick={() => simulatePlatformOrder(s, form)}>Simular pedido</Button><Button className="ghost xs" icon="upload" onClick={() => run(() => action('aggregator.sync', {}), 'Menú publicado en las plataformas (simulado)')}>Publicar menú</Button></>,
+        messaging: <Button className="ghost xs" icon="message" onClick={() => form('Mensaje de prueba', [{ key: 'channel', label: 'Canal', type: 'select', value: 'whatsapp', options: [{ value: 'whatsapp', label: 'WhatsApp' }, { value: 'email', label: 'Correo' }] }, { key: 'to', label: 'Destinatario', required: true, placeholder: '55 1234 5678 o correo@ejemplo.mx' }], 'message.test', {}, undefined, (x: any) => x)}>Enviar prueba</Button>,
         maps: <Button className="ghost xs" icon="search" onClick={() => form('Probar dirección', [{ key: 'text', label: 'Dirección', required: true, full: true, placeholder: 'Calle, número, colonia, ciudad' }], 'geo.lookup', {}, undefined, (x: any) => x)}>Probar dirección</Button>,
-        callerid: <Button className="ghost xs" icon="phone" onClick={() => simulateCall(form)}>Simular llamada</Button>,
+        aggregators: <Button className="ghost xs" icon="upload" onClick={() => run(() => action('aggregator.sync', {}), 'Menú publicado en las plataformas')}>Publicar menú</Button>,
     };
-    const lastGeo = logs.filter(l => l.provider === 'maps').at(-1);
+    const simulations: Record<string, React.ReactNode> = {
+        aggregators: <Button className="ghost xs" icon="plus" onClick={() => simulatePlatformOrder(s, form)}>Simular pedido</Button>,
+        callerid: <Button className="ghost xs" icon="phone" onClick={() => simulateCall(form)}>Simular llamada</Button>,
+        maps: tests.maps,
+        messaging: tests.messaging,
+    };
+    const lastGeo = logs.filter(l => l.provider === 'maps' && !['credentials', 'configure'].includes(l.operation)).at(-1);
     return <>
-        {live.length ? <Notice tone="info" icon="plug"><b>Conexión real: {live.map(p => p.name).join(', ')}.</b> Estas integraciones contactan al proveedor, mueven dinero o emiten documentos de verdad. Las demás siguen apagadas o en simulación.</Notice>
-            : <Notice tone="warn" icon="shield"><b>Todo está en simulación.</b> No se contacta a ningún proveedor, no se mueve dinero y los timbres no tienen validez fiscal. Para conectar una de verdad, guarda sus credenciales en el servidor y elige «Real» en su tarjeta.</Notice>}
+        <div className="integrations-intro" onClick={tap}><Notice tone="info" icon="plug"><b>{live.length ? 'Conectadas: ' + live.map(p => p.name).join(', ') + '.' : 'Conecta los servicios que incluye tu licencia.'}</b> Elige «Activar» en una integración y sigue los pasos: te decimos qué contratar, dónde obtener cada dato y comprobamos la conexión.</Notice></div>
+        {support && <Notice tone="warn" icon="shield"><b>Herramientas de soporte activas en este equipo.</b> La simulación no contacta a ningún proveedor ni tiene validez fiscal. Toca cinco veces el aviso de arriba para ocultarlas.</Notice>}
         <Kpis>
-            <MetricCard className="lead" label="Integraciones activas" value={<>{active.length} <small>/ {PROVIDERS.length}</small></>} note={active.length ? plural(live.length, 'real', 'reales') + ' · ' + plural(active.length - live.length, 'simulada', 'simuladas') : 'Activa las que quieras usar'} icon="plug" tone="amber" />
+            <MetricCard className="lead" label="Integraciones activas" value={<>{live.length} <small>/ {providers.length}</small></>} note={providers.length ? plural(providers.length, 'incluida en tu licencia', 'incluidas en tu licencia') : 'Tu licencia no incluye integraciones'} icon="plug" tone="green" />
             <MetricCard label="Operaciones hoy" value={logs.filter(l => isToday(l.at)).length} note={logs.length ? 'Última: ' + stamp(logs.at(-1)!.at) : 'Sin operaciones todavía'} icon="history" tone="blue" />
-            <MetricCard label="Bandeja de salida" value={messages.filter(m => isToday(m.at)).length} note={plural(messages.filter(m => m.channel === 'whatsapp').length, 'WhatsApp', 'WhatsApp') + ' · ' + plural(messages.filter(m => m.channel === 'email').length, 'correo', 'correos')} icon="message" tone="green" />
-            <MetricCard label="Plataformas hoy" value={money(orders.filter(o => isToday(o.receivedAt) && o.net != null).reduce((t, o) => t + o.net, 0))} note={plural(orders.filter(o => isToday(o.receivedAt)).length, 'pedido', 'pedidos') + ' · neto de comisión'} icon="truck" tone="purple" />
+            {allowed.includes('messaging') && <MetricCard label="Bandeja de salida" value={messages.filter(m => isToday(m.at)).length} note={plural(messages.filter(m => m.channel === 'whatsapp').length, 'WhatsApp', 'WhatsApp') + ' · ' + plural(messages.filter(m => m.channel === 'email').length, 'correo', 'correos')} icon="message" tone="amber" />}
+            {allowed.includes('aggregators') && <MetricCard label="Plataformas hoy" value={money(orders.filter(o => isToday(o.receivedAt) && o.net != null).reduce((t, o) => t + o.net, 0))} note={plural(orders.filter(o => isToday(o.receivedAt)).length, 'pedido', 'pedidos') + ' · neto de comisión'} icon="truck" tone="violet" />}
         </Kpis>
-        <section className="integration-grid stagger" aria-label="Integraciones">{PROVIDERS.filter(p => p.key !== 'aggregators' || s.restaurant?.modules?.includes('deliveryHub')).map(p => {
+        {providers.length ? <section className="integration-grid stagger" aria-label="Integraciones">{providers.map(p => {
 
-            const mode = modeOf(s, p.key), on = mode !== 'off', sim = mode === 'simulated', server = serverState(s, p.key), ready = server === 'lista' || mode === 'live';
+            const mode = modeOf(s, p.key), on = mode !== 'off', h = health(s, p.key), server = serverState(s, p.key), row = list(s, 'integration').find(x => x.id === p.key);
+            const hints = Object.values(row?.hints || {}) as string[], stored = !!row?.credentialsAt;
             return <article className={'card integration-card' + (on ? ' on' : '') + (mode === 'live' ? ' live' : '')} key={p.key}>
-                <header><Sq icon={p.icon} tone={mode === 'live' ? 'green' : on ? 'amber' : undefined} /><div className="w"><b>{p.name}</b><small>{p.vendor}</small></div></header>
-                <div className="seg sm" role="radiogroup" aria-label={'Modo de ' + p.name}>{([['off', 'Apagada'], ['simulated', 'Simulación'], ['live', 'Real']] as const).map(([value, label]) => <Button key={value} type="button" role="radio" aria-checked={mode === value} className={mode === value ? 'active' : ''} icon={false} disabled={value === 'live' && !ready} title={value === 'live' && !ready ? 'Faltan las credenciales en el servidor' : undefined} onClick={() => mode !== value && setMode(p.key, value)}>{label}</Button>)}</div>
+                <header><Sq icon={p.icon} tone={h.tone === 'green' ? 'green' : on ? 'amber' : undefined} /><div className="w"><b>{p.name}</b><small>{p.vendor}</small></div></header>
                 <p>{p.what}</p>
-                <div className="integration-state">{mode === 'live' ? <Pill tone="green" icon="plug">Conexión real</Pill> : sim ? <Pill tone="amber" icon="spark">Simulación activa</Pill> : <Pill>Apagada</Pill>}{server === 'lista' ? <Pill tone="green" icon="check">Credenciales listas</Pill> : server.startsWith('error') ? <Pill tone="red" icon="alert">{server}</Pill> : server === 'sin conexión' ? <Pill tone="amber" icon="alert">Sin conexión con el proveedor</Pill> : <Pill tone="neutral" icon="lock">Sin credenciales</Pill>}</div>
+                <div className="integration-state"><Pill tone={h.tone} icon={h.icon}>{h.label}</Pill>{hints.length > 0 && <small className="integration-hint">Llave {hints[0]}</small>}</div>
+                {h.detail && <small className="integration-usage">{h.detail}</small>}
                 {on && <small className="integration-usage">{usage(s, p.key)}</small>}
                 {on && p.key === 'maps' && lastGeo && <small className="integration-usage">{lastGeo.summary}</small>}
-                <details className="integration-real"><summary>Para conectarlo de verdad</summary><span>Necesita {p.real} Las credenciales van en <code>{fileOf(p.key)}</code>; hay un ejemplo en <code>deploy/integrations</code>.</span></details>
-                {on && <div className="row-actions">{['pac', 'terminal', 'onlinepay', 'messaging', 'aggregators', 'pms', 'maps'].includes(p.key) && <Button className="ghost xs" icon="settings" onClick={() => configure(s, form, p.key)}>Configurar</Button>}{sim && tests[p.key]}{mode === 'live' && p.key === 'aggregators' && <Button className="ghost xs" icon="upload" onClick={() => run(() => action('aggregator.sync', {}), 'Publicando el menú en Deliverect')}>Publicar menú</Button>}</div>}
+                {stored && <small className="integration-usage">Datos guardados el {stamp(row!.credentialsAt)}</small>}
+                {support && <div className="seg sm" role="radiogroup" aria-label={'Modo de ' + p.name}>{([['off', 'Apagada'], ['simulated', 'Simulación'], ['live', 'Real']] as const).map(([value, label]) => <Button key={value} type="button" role="radio" aria-checked={mode === value} className={mode === value ? 'active' : ''} disabled={value === 'live' && server !== 'lista'} onClick={() => mode !== value && setMode(p.key, value)}>{label}</Button>)}</div>}
+                <div className="row-actions">
+                    {!on && server !== 'lista' && <Button className="primary xs" icon="plug" onClick={() => activate(p)}>Activar</Button>}
+                    {!on && server === 'lista' && <Button className="primary xs" icon="plug" onClick={() => setMode(p.key, 'live')}>Encender</Button>}
+                    {on && ['pac', 'terminal', 'onlinepay', 'messaging', 'aggregators', 'pms', 'maps'].includes(p.key) && <Button className="ghost xs" icon="settings" onClick={() => configure(s, form, p.key)}>Ajustes</Button>}
+                    {(mode === 'live' || stored) && <Button className="ghost xs" icon="key" onClick={() => activate(p, true)}>Cambiar datos</Button>}
+                    {mode === 'live' && tests[p.key]}
+                    {mode === 'simulated' && simulations[p.key]}
+                    {on && <Button className="ghost xs" icon="close" onClick={() => setMode(p.key, 'off')}>Apagar</Button>}
+                </div>
             </article>;
 
-        })}</section>
+        })}</section> : <Empty icon="plug" title="Tu licencia no incluye integraciones" text="Facturación, terminal bancaria, WhatsApp y las demás se agregan a la licencia. Pídelas a Culinary desde Soporte." />}
+        {missing.length > 0 && <p className="integrations-missing"><UiIcon name="lock" /> No incluidas en tu licencia: {missing.map(p => p.name).join(', ')}. Pídelas a Culinary desde Soporte.</p>}
         <div className="g g2 start">
-            <section className="card panel"><PanelHeading title="Bandeja de salida" note={liveOn(s, 'messaging') ? 'Mensajes enviados y por enviar' : 'Mensajes simulados · no salieron de la sucursal'} icon="message" />
+            {allowed.includes('messaging') && <section className="card panel"><PanelHeading title="Bandeja de salida" note="Mensajes enviados y por enviar" icon="message" />
                 {messages.length ? <div className="rows">{messages.slice(-12).reverse().map(m => <div className="r outbox" key={m.id}><Sq icon={m.channel === 'whatsapp' ? 'message' : 'file'} tone={m.channel === 'whatsapp' ? 'green' : 'blue'} /><div className="w"><b>{m.to}</b><span>{m.body}</span>{m.message && <small>{m.message}</small>}</div><span className="outbox-meta">{channelPill(m.channel)}{m.status !== 'simulated-sent' && <Pill tone={messageTone[m.status] || 'neutral'}>{messageText[m.status] || m.status}</Pill>}<time>{clock(m.at)}</time></span></div>)}</div>
-                    : <Empty icon="message" title="Sin mensajes" text={simOn(s, 'messaging') ? 'Aparecerán al despachar pedidos, enviar ligas o timbrar facturas.' : 'Activa WhatsApp y correo para ver los avisos que se enviarían.'} />}
-            </section>
-            <section className="card panel"><PanelHeading title="Bitácora de integraciones" note="Cada operación con su referencia; las simuladas van marcadas" icon="history" />
+                    : <Empty icon="message" title="Sin mensajes" text="Aparecerán al despachar pedidos, enviar ligas o timbrar facturas." />}
+            </section>}
+            <section className="card panel"><PanelHeading title="Bitácora de integraciones" note="Cada operación con su referencia" icon="history" />
                 <DataTable columns={['Hora', 'Integración', 'Operación', 'Resultado', 'Referencia']} rows={logs.slice(-25).reverse().map(l => [stamp(l.at), providerName(l.provider), <span className="w"><span style={{ whiteSpace: 'normal' }}>{l.summary}</span>{l.simulated !== false && <small>Simulado</small>}</span>, <Pill tone={logTone[l.status] || 'neutral'}>{statusText[l.status] || l.status}</Pill>, l.reference ? <code>{String(l.reference).slice(0, 18)}</code> : <span className="no">—</span>])} empty="Las operaciones simuladas aparecerán aquí." />
             </section>
         </div>

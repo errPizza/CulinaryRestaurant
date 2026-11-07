@@ -15,7 +15,9 @@ public sealed partial class Restaurant {
     // Services that already ran from their own file before modes existed: without a saved mode they stay live.
     static readonly string[] LiveByDefault = ["pac", "printer"];
     bool Ready(string key) => LiveCatalog.A("providers").Strings().Contains(key);
-    public bool IsLive(BranchState s, string key) { var row = s.Related("integration", "id", key).FirstOrDefault(); return Ready(key) && (row?.S("mode") == "live" || row is null && LiveByDefault.Contains(key)); }
+    // An integration the license no longer includes stops working, live or simulated, but keeps its records and settings.
+    bool Allowed(BranchState s, string key) => License(s).IntegrationAllowed(key);
+    public bool IsLive(BranchState s, string key) { var row = s.Related("integration", "id", key).FirstOrDefault(); return Allowed(s, key) && Ready(key) && (row?.S("mode") == "live" || row is null && LiveByDefault.Contains(key)); }
     // The settings of a provider that is on, simulated or live.
     JsonObject? Active(BranchState s, string key) => Simulated(s, key) ?? (IsLive(s, key) ? s.Related("integration", "id", key).FirstOrDefault() ?? J.O("settings", new JsonObject()) : null);
     JsonObject Enabled(BranchState s, string key, string name) => (Active(s, key) ?? throw new BusinessException(400, "Activa " + name + " en Integraciones")).Obj("settings");
@@ -30,7 +32,7 @@ public sealed partial class Restaurant {
     // Hotels verify the surname: any word after the first name of the registered guest must appear in what the waiter typed.
     public static bool SameGuest(string registered, string given) { var words = Plain(given).Split(' ', StringSplitOptions.RemoveEmptyEntries); var names = Plain(registered).Split(' ', StringSplitOptions.RemoveEmptyEntries); return names.Skip(names.Length > 1 ? 1 : 0).Where(w => w.Length >= 3).Any(words.Contains); }
     static string Pick(JsonObject p, string key, string fallback, params string[] choices) { var value = p.S(key); if (value == "") value = fallback; Need(choices.Contains(value), key + ": valor inválido"); return value; }
-    JsonObject? Simulated(BranchState s, string key) => s.Related("integration", "id", key).FirstOrDefault(x => x.S("mode") == "simulated");
+    JsonObject? Simulated(BranchState s, string key) => Allowed(s, key) ? s.Related("integration", "id", key).FirstOrDefault(x => x.S("mode") == "simulated") : null;
     JsonObject Simulator(BranchState s, string key, string name) => (Simulated(s, key) ?? throw new BusinessException(400, "Activa la simulación de " + name + " en Integraciones")).Obj("settings");
     JsonObject Log(BranchState s, JsonObject u, string provider, string operation, string status, string summary, string reference = "", bool simulated = true) => Add(s, "integrationlog", J.O("provider", provider, "operation", operation, "status", status, "summary", Sanitize(summary, 200), "reference", reference, "actor", u.S("id"), "at", J.Now(), "simulated", simulated));
     // WhatsApp and e-mail: one message per event, reference and channel. Simulated, it is stored as sent without contacting anyone;
@@ -196,6 +198,7 @@ public sealed partial class Restaurant {
                     var key = Choice(p, "provider", IntegrationKeys);
                     var mode = p.S("mode");
                     Need(mode is "simulated" or "off" or "live", "Modo inválido");
+                    Need(mode == "off" || Allowed(s, key), "Tu licencia no incluye esta integración; pídela a Culinary", 403);
                     Need(mode != "live" || Ready(key), "El servidor no tiene credenciales válidas para esta integración: van en /etc/culinaryos/integrations/" + key + ".json");
                     var row = s.Related("integration", "id", key).FirstOrDefault() ?? Add(s, "integration", J.O("id", key, "key", key, "since", J.Now()));
                     row["settings"] = p["settings"] is JsonObject given ? IntegrationSettings(s, key, given) : row["settings"] is JsonObject prior && prior.Count > 0 ? prior.DeepClone() : IntegrationSettings(s, key, new());
@@ -203,6 +206,26 @@ public sealed partial class Restaurant {
                     row["updatedBy"] = u.S("id");
                     row["updatedAt"] = J.Now();
                     Log(s, u, key, "configure", mode, mode == "simulated" ? "Simulación activa" : mode == "live" ? "Conexión real activa" : "Integración apagada", simulated: mode != "live");
+                    result = row;
+                    break;
+
+                }
+            // The server stored the credentials sealed outside the branch store (BranchService.SaveIntegrationCredentials);
+            // the record keeps only who, when and the last characters of each value, and the integration goes live once the
+            // service restarts with them.
+            case "integration.credentials": {
+
+                    Role(u, "manager");
+                    var key = Choice(p, "provider", IntegrationKeys);
+                    Need(Allowed(s, key), "Tu licencia no incluye esta integración; pídela a Culinary", 403);
+                    var row = s.Related("integration", "id", key).FirstOrDefault() ?? Add(s, "integration", J.O("id", key, "key", key, "since", J.Now(), "settings", IntegrationSettings(s, key, new())));
+                    row["hints"] = p["hints"] is JsonObject hints ? hints.DeepClone() : new JsonObject();
+                    row["credentialsAt"] = J.Now();
+                    row["credentialsBy"] = u.S("id");
+                    row["mode"] = "live";
+                    row["updatedBy"] = u.S("id");
+                    row["updatedAt"] = J.Now();
+                    Log(s, u, key, "credentials", "ok", "Credenciales guardadas por " + u.S("name", "un gerente"), simulated: false);
                     result = row;
                     break;
 

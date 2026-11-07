@@ -1,6 +1,8 @@
 ﻿# Instaladores firmados: Windows (Tauri/NSIS) y Android (APK). Antes: tools/New-SigningKeys.ps1. Ver docs/FIRMA.md.
 param([Parameter(Mandatory)][string]$RootPublicKey,[switch]$Windows,[switch]$Android,[string]$Directory=(Join-Path $env:USERPROFILE '.culinary-firma'),[string]$Tools)
 $ErrorActionPreference='Stop'
+# The keys were moved to the Desktop (docs/FIRMA.md); fall back there when the default folder is missing.
+if(-not(Test-Path $Directory)){$Directory=Join-Path $env:USERPROFILE 'Desktop\.culinary-firma'}
 $projectRoot=Split-Path $PSScriptRoot -Parent
 if(-not $Tools){$Tools=Join-Path $projectRoot '.tools'}
 & (Join-Path $PSScriptRoot 'Use-RootKey.ps1') -Path $RootPublicKey

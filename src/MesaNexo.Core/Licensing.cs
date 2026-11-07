@@ -106,6 +106,10 @@ public sealed record LicenseView(string State, JsonObject? Payload, JsonObject? 
     // Commercial level (lite/pro) and paid add-ons (mobileOrdering, deliveryHub, webOrdering) of the 2026 proposal.
     public string Tier => Payload?.S("tier") is "pro" ? "pro" : "lite";
     public string[] Addons => Payload?.A("addons").Strings() ?? [];
+    // Integrations the license includes. A license signed before the list existed carries none and keeps every one, so
+    // nobody loses what they already use. Delivery platforms are the deliveryHub add-on, not part of this list.
+    public string[]? Integrations => Payload?["integrations"] is JsonArray list ? list.Strings() : null;
+    public bool IntegrationAllowed(string key) => key == "aggregators" ? Addons.Contains("deliveryHub") : Integrations is not { } list || list.Contains(key);
     // Everything the branch may switch on: the contracted features, what Pro includes and the add-ons.
     public string[] Modules => [.. Features.Concat(Tier == "pro" ? ["reservations"] : []).Concat(Addons).Distinct().Order()];
     // Fixed terminals; mobile order takers do not count. Older licenses without the field follow the tier.

@@ -175,7 +175,8 @@ test('cashier visibility, reduced motion and no browser token persistence', asyn
     await button.click();
     expect(await button.evaluate(e => e.getAnimations().length)).toBe(0);
     await page.locator('.version-button').click();
-    await expect(page.getByRole('dialog', { name: 'Culinary Restaurant 0.3.03' })).toBeVisible();
+    // The label comes from the running bridge, shown with a two-digit patch.
+    await expect(page.getByRole('dialog', { name: /^Culinary Restaurant \d+\.\d+\.\d{2}$/ })).toBeVisible();
     await page.keyboard.press('Escape');
     expect(await page.evaluate(() => Object.keys(sessionStorage))).toEqual([]);
 
@@ -576,7 +577,11 @@ test('integrations run in simulation: terminal, platform order, PAC stamp, outbo
     const exec = async (type: string, payload: any) => { let r: any; await expect.poll(async () => { r = await call('integrations', 'execute', { type, payload }); return r.ok || !/incierta/.test(r.error || ''); }, { timeout: 15000 }).toBe(true); if (r.ok) await call('integrations', 'ack', { operationId: r.data.operationId }); return r; };
     const shot = async (name: string) => { await page.waitForTimeout(650); await page.screenshot({ path: path.join(evidence, 'etapa4-' + name + '.png'), fullPage: true }); };
     await nav(page, 'Integraciones');
-    await expect(page.getByText('Todo está en simulación.')).toBeVisible();
+    await expect(page.getByText('Conecta los servicios que incluye tu licencia.')).toBeVisible();
+    await expect(page.getByRole('radiogroup', { name: 'Modo de Terminal bancaria' })).toHaveCount(0);
+    // The simulators are support tools: five taps on the introduction turn them on for this device.
+    for (let i = 0; i < 5; i++) await page.locator('.integrations-intro').click();
+    await expect(page.getByText('Herramientas de soporte activas en este equipo.')).toBeVisible();
     for (const name of ['Terminal bancaria', 'Plataformas de reparto', 'Facturación CFDI 4.0', 'WhatsApp y correo', 'Pagos en línea']) { const modes = page.getByRole('radiogroup', { name: 'Modo de ' + name }); await expect(modes.getByRole('radio', { name: 'Real' })).toBeDisabled(); await modes.getByRole('radio', { name: 'Simulación' }).click(); await expect(modes.getByRole('radio', { name: 'Simulación' })).toHaveAttribute('aria-checked', 'true'); }
     const live = await exec('integration.configure', { provider: 'pac', mode: 'live' });
     expect(live.ok).toBe(false);
@@ -646,6 +651,52 @@ test('integrations run in simulation: terminal, platform order, PAC stamp, outbo
     await shot('integraciones-390');
     expect(await page.evaluate(fits)).toBe(true);
     expect(errors).toEqual([]);
+
+});
+test('integrations follow the license and a manager activates one with its credentials', async ({ page }) => {
+
+    const errors: string[] = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await login(page, 'activation');
+    await call('fixture', 'license.integrations', { list: ['maps', 'pac'] });
+    try {
+
+        await nav(page, 'Integraciones');
+        const cards = page.locator('.integration-card');
+        await expect(cards.filter({ hasText: 'Mapas' })).toBeVisible();
+        await expect(cards.filter({ hasText: 'Facturación CFDI 4.0' })).toBeVisible();
+        await expect(cards.filter({ hasText: 'Terminal bancaria' })).toHaveCount(0);
+        await expect(page.locator('.integrations-missing')).toContainText('Terminal bancaria');
+        const maps = cards.filter({ hasText: 'Mapas' });
+        await expect(maps.getByText('Sin activar')).toBeVisible();
+        await maps.getByRole('button', { name: 'Activar' }).click();
+        const wizard = page.getByRole('dialog', { name: 'Activar Mapas' });
+        await expect(wizard.getByRole('heading', { name: 'Qué necesitas' })).toBeVisible();
+        await page.waitForTimeout(650);
+        await page.screenshot({ path: path.join(evidence, 'integraciones-activar-1360.png') });
+        await wizard.getByRole('button', { name: 'Ya los tengo' }).click();
+        const key = 'AIzaSyD' + 'q'.repeat(28) + 'Z9k4';
+        await wizard.getByLabel('Clave de API de Google').fill(key);
+        await wizard.getByRole('button', { name: 'Guardar y conectar' }).click();
+        await expect(wizard.getByText('Datos guardados')).toBeVisible();
+        await wizard.getByRole('button', { name: 'Listo' }).click();
+        await expect(maps.getByText('Activa', { exact: true })).toBeVisible();
+        await expect(maps.getByText('Llave ••••Z9k4')).toBeVisible();
+        const state = (await call('activation', 'state')).data;
+        expect(JSON.stringify(state)).not.toContain(key);
+        expect(state.integrations.find((x: any) => x.id === 'maps').mode).toBe('live');
+        await page.waitForTimeout(650);
+        await page.screenshot({ path: path.join(evidence, 'integraciones-licencia-1360.png'), fullPage: true });
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.waitForTimeout(650);
+        await page.screenshot({ path: path.join(evidence, 'integraciones-licencia-390.png'), fullPage: true });
+        expect(await page.evaluate(fits)).toBe(true);
+        const off = await call('activation', 'execute', { type: 'integration.configure', payload: { provider: 'terminal', mode: 'simulated' } });
+        expect(off.ok).toBe(false);
+        expect(off.error).toContain('no incluye');
+        expect(errors).toEqual([]);
+
+    } finally { await call('fixture', 'license.integrations', {}); }
 
 });
 test('a PAC submission that lost its answer is retried by the manager with the same folio and date', async ({ page }) => {

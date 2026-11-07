@@ -97,6 +97,7 @@ public sealed partial class Restaurant(IPasswordHasher passwords) {
         meta.Remove("enrollmentHash");
         var license = License(s);
         meta["modules"] = J.N(license.Modules);
+        meta["integrations"] = J.N(IntegrationKeys.Where(license.IntegrationAllowed).ToArray());
         meta["tier"] = license.Tier;
         meta["maxTerminals"] = license.MaxTerminals;
         meta["maxUsers"] = license.MaxUsers;

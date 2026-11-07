@@ -163,7 +163,7 @@
       "mesanexo.transport": {
         "type": "Project",
         "dependencies": {
-          "MesaNexo.Core": "[0.3.4, )",
+          "MesaNexo.Core": "[0.3.5, )",
           "Microsoft.AspNetCore.SignalR.Client": "[10.0.13, )"
         }
       }
